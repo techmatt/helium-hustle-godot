@@ -29,7 +29,7 @@ size_flags_vertical = 3
 layout_mode = 2
 size_flags_horizontal = 1
 size_flags_vertical = 3
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(440, 0)
 
 [node name="SidebarScroll" type="ScrollContainer" parent="MainVBox/ContentHBox/LeftSidebar"]
 layout_mode = 2
@@ -37,9 +37,18 @@ size_flags_horizontal = 1
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="NavVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll"]
+[node name="NavMargin" type="MarginContainer" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="NavVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
 
 ; ── Center Panel ──────────────────────────────────────────────────────────────
 
@@ -48,22 +57,32 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="CenterVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/CenterPanel"]
+[node name="CenterMargin" type="MarginContainer" parent="MainVBox/ContentHBox/CenterPanel"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_bottom = 12
 
-[node name="LblBuildingsHeader" type="Label" parent="MainVBox/ContentHBox/CenterPanel/CenterVBox"]
+[node name="CenterVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/CenterPanel/CenterMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="LblBuildingsHeader" type="Label" parent="MainVBox/ContentHBox/CenterPanel/CenterMargin/CenterVBox"]
 layout_mode = 2
 text = "Buildings"
 
-[node name="BuildingsScroll" type="ScrollContainer" parent="MainVBox/ContentHBox/CenterPanel/CenterVBox"]
+[node name="BuildingsScroll" type="ScrollContainer" parent="MainVBox/ContentHBox/CenterPanel/CenterMargin/CenterVBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="LblNoBuildings" type="Label" parent="MainVBox/ContentHBox/CenterPanel/CenterVBox/BuildingsScroll"]
+[node name="LblNoBuildings" type="Label" parent="MainVBox/ContentHBox/CenterPanel/CenterMargin/CenterVBox/BuildingsScroll"]
 layout_mode = 2
 text = "(No buildings yet)"
 
@@ -73,52 +92,62 @@ text = "(No buildings yet)"
 layout_mode = 2
 size_flags_horizontal = 1
 size_flags_vertical = 3
-custom_minimum_size = Vector2(280, 0)
+custom_minimum_size = Vector2(540, 0)
 
-[node name="RightVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/RightPanel"]
+[node name="RightMargin" type="MarginContainer" parent="MainVBox/ContentHBox/RightPanel"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_bottom = 12
 
-[node name="LblProgramsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+[node name="RightVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/RightPanel/RightMargin"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="LblProgramsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
 layout_mode = 2
 text = "Programs"
 
-[node name="ProgramSlots" type="HBoxContainer" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+[node name="ProgramSlots" type="HBoxContainer" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
 layout_mode = 2
 
-[node name="BtnSlot1" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+[node name="BtnSlot1" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
 layout_mode = 2
 text = "1"
 
-[node name="BtnSlot2" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+[node name="BtnSlot2" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
 layout_mode = 2
 text = "2"
 
-[node name="BtnSlot3" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+[node name="BtnSlot3" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
 layout_mode = 2
 text = "3"
 
-[node name="BtnSlot4" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+[node name="BtnSlot4" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
 layout_mode = 2
 text = "4"
 
-[node name="BtnSlot5" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+[node name="BtnSlot5" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
 layout_mode = 2
 text = "5"
 
-[node name="LblProgramEditor" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+[node name="LblProgramEditor" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
 layout_mode = 2
 size_flags_vertical = 3
 text = "(Program editor)"
 
-[node name="SepEvents" type="HSeparator" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+[node name="SepEvents" type="HSeparator" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
 layout_mode = 2
 
-[node name="LblEventsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+[node name="LblEventsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
 layout_mode = 2
 text = "Events"
 
-[node name="LblNoEvents" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+[node name="LblNoEvents" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
 layout_mode = 2
 text = "(No events)"
 
@@ -127,6 +156,13 @@ text = "(No events)"
 [node name="StatusBar" type="PanelContainer" parent="MainVBox"]
 layout_mode = 2
 
-[node name="LblStatus" type="Label" parent="MainVBox/StatusBar"]
+[node name="StatusMargin" type="MarginContainer" parent="MainVBox/StatusBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_bottom = 4
+
+[node name="LblStatus" type="Label" parent="MainVBox/StatusBar/StatusMargin"]
 layout_mode = 2
 text = "System uptime: 0 days"
