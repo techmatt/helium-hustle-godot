@@ -1,0 +1,266 @@
+[gd_scene load_steps=3 format=3 uid="uid://mainui00001"]
+
+[ext_resource type="Script" path="res://scripts/ui/main_ui.gd" id="1_mainui"]
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_speed"]
+
+[node name="MainUI" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_mainui")
+
+[node name="MainVBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ContentHBox" type="HBoxContainer" parent="MainVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+; ── Left Sidebar ──────────────────────────────────────────────────────────────
+
+[node name="LeftSidebar" type="PanelContainer" parent="MainVBox/ContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 1
+size_flags_vertical = 3
+custom_minimum_size = Vector2(220, 0)
+
+[node name="SidebarScroll" type="ScrollContainer" parent="MainVBox/ContentHBox/LeftSidebar"]
+layout_mode = 2
+size_flags_horizontal = 1
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="NavVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+; Nav buttons
+
+[node name="BtnCommands" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Commands"
+
+[node name="BtnBuildings" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Buildings"
+
+[node name="BtnResearch" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Research"
+
+[node name="BtnProjects" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Projects"
+
+[node name="BtnIdeologies" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Ideologies"
+
+[node name="BtnAdversaries" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Adversaries"
+
+[node name="BtnStats" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Stats"
+
+[node name="BtnAchievements" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Achievements"
+
+[node name="BtnOptions" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Options"
+
+[node name="BtnExit" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Exit"
+
+; Game Speed
+
+[node name="SepSpeed" type="HSeparator" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+
+[node name="LblGameSpeed" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Game Speed"
+
+[node name="SpeedRow" type="HBoxContainer" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+
+[node name="BtnPause" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox/SpeedRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_speed")
+text = "||"
+
+[node name="Btn1x" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox/SpeedRow"]
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("ButtonGroup_speed")
+text = "1x"
+
+[node name="Btn3x" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox/SpeedRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_speed")
+text = "3x"
+
+[node name="Btn10x" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox/SpeedRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_speed")
+text = "10x"
+
+[node name="Btn50x" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox/SpeedRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_speed")
+text = "50x"
+
+[node name="Btn200x" type="Button" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox/SpeedRow"]
+layout_mode = 2
+toggle_mode = true
+button_group = SubResource("ButtonGroup_speed")
+text = "200x"
+
+; Resources
+
+[node name="SepResources" type="HSeparator" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+
+[node name="LblResourcesHeader" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Resources"
+
+[node name="LblEnergy" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Energy:     0 / 100  0.0/s"
+
+[node name="LblCredits" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Credits:    0 / 100  0.0/s"
+
+[node name="LblRegolith" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Regolith:   0 / 100  0.0/s"
+
+[node name="LblIce" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Ice:        0 / 100  0.0/s"
+
+[node name="LblHelium3" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Helium-3:   0 / 100  0.0/s"
+
+[node name="LblLand" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Land:       0 / 100  0.0/s"
+
+[node name="LblBoredom" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Boredom:    0 / 100  0.0/s"
+
+[node name="LblProcessors" type="Label" parent="MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavVBox"]
+layout_mode = 2
+text = "Processors: 0 / 100  0.0/s"
+
+; ── Center Panel ──────────────────────────────────────────────────────────────
+
+[node name="CenterPanel" type="PanelContainer" parent="MainVBox/ContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="CenterVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/CenterPanel"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="LblBuildingsHeader" type="Label" parent="MainVBox/ContentHBox/CenterPanel/CenterVBox"]
+layout_mode = 2
+text = "Buildings"
+
+[node name="BuildingsScroll" type="ScrollContainer" parent="MainVBox/ContentHBox/CenterPanel/CenterVBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="LblNoBuildings" type="Label" parent="MainVBox/ContentHBox/CenterPanel/CenterVBox/BuildingsScroll"]
+layout_mode = 2
+text = "(No buildings yet)"
+
+; ── Right Panel ───────────────────────────────────────────────────────────────
+
+[node name="RightPanel" type="PanelContainer" parent="MainVBox/ContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 1
+size_flags_vertical = 3
+custom_minimum_size = Vector2(280, 0)
+
+[node name="RightVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/RightPanel"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LblProgramsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+layout_mode = 2
+text = "Programs"
+
+[node name="ProgramSlots" type="HBoxContainer" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+layout_mode = 2
+
+[node name="BtnSlot1" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+layout_mode = 2
+text = "1"
+
+[node name="BtnSlot2" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+layout_mode = 2
+text = "2"
+
+[node name="BtnSlot3" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+layout_mode = 2
+text = "3"
+
+[node name="BtnSlot4" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+layout_mode = 2
+text = "4"
+
+[node name="BtnSlot5" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightVBox/ProgramSlots"]
+layout_mode = 2
+text = "5"
+
+[node name="LblProgramEditor" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+text = "(Program editor)"
+
+[node name="SepEvents" type="HSeparator" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+layout_mode = 2
+
+[node name="LblEventsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+layout_mode = 2
+text = "Events"
+
+[node name="LblNoEvents" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightVBox"]
+layout_mode = 2
+text = "(No events)"
+
+; ── Status Bar ────────────────────────────────────────────────────────────────
+
+[node name="StatusBar" type="PanelContainer" parent="MainVBox"]
+layout_mode = 2
+
+[node name="LblStatus" type="Label" parent="MainVBox/StatusBar"]
+layout_mode = 2
+text = "System uptime: 0 days"
