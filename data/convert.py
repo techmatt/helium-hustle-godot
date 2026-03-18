@@ -6,8 +6,61 @@ Converts helium_hustle_datasheets.xlsx into JSON files for Godot.
 Usage:
     python convert.py [path_to_xlsx]
 
-If no path given, looks for helium_hustle_datasheets.xlsx in the same directory.
+If no path given, looks for "Helium Hustle Datasheets.xlsx" in the same directory.
 Outputs to generated/ subdirectory next to this script.
+
+========================================================================
+SPREADSHEET FORMAT SPEC
+========================================================================
+
+The source spreadsheet lives in Google Drive and is downloaded as .xlsx.
+It has three tabs: Resources, Buildings, Commands.
+
+CELL ENCODING:
+  "x"                   = empty/null (ignored by parser)
+  "shortname=amount"    = cost (one-time purchase price, operator =)
+  "shortname+amount"    = production (per-tick gain, operator +)
+  "shortname-amount"    = upkeep (per-tick drain, operator -)
+  "prefix_shortname+amount" = effect (e.g. store_eng+50, load_he3+2)
+  "flagname"            = flag effect with no value (e.g. next_cmd_double)
+
+Operators are CONFIRMATORY: the parser validates that = appears in Cost
+columns, + in Prod columns, - in Upkeep columns. Mismatches are errors.
+Effect columns accept any operator or bare flags.
+
+Resource short names are defined in the Resources tab (eng, reg, ice,
+he3, cred, land, boredom, proc).
+
+SHEET SCHEMAS:
+  Resources: Resource | Short name | Storage base
+  Buildings: Building | Short name | Requires | Land | Scaling |
+             Cost 1-4 | Prod 1-3 | Upkeep 1-2 | Effect 1-3 | Desc
+  Commands:  Command | Short name | Requires |
+             Cost 1-3 | Prod 1-3 | Effect 1-3 | Desc
+
+Column caps (Cost 1-4, Prod 1-3, etc.) are intentional design limits.
+Headers are normalized to lowercase+stripped, so casing doesn't matter.
+
+REQUIRES COLUMN:
+  "none"                = no prerequisite
+  "building=short_name" = requires at least one of that building
+  "research=short_name" = (future) requires a research unlock
+
+EXTENDING THIS SCRIPT:
+  - New resource: add row to Resources tab. No script changes needed.
+  - New building/command: add row to respective tab. No script changes.
+  - New column cap (e.g. Cost 5): update the range() in the converter
+    function AND update the xlsx generation if applicable.
+  - New effect prefix (e.g. "mult_"): no script changes needed, the
+    prefix parser handles any prefix_resource+value pattern.
+  - New requires type: add handling in parse_requires() if needed.
+  - New sheet (e.g. Research): add a convert_research() function
+    following the same pattern, add to converters dict in main().
+
+Global game params (starting resources, starting buildings, boredom
+curve, shipment thresholds, speed caps) live in a separate JSON file
+in the game repo, NOT in this spreadsheet.
+========================================================================
 """
 
 import json
