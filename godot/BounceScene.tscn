@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://dbouncescene1"]
+
+[ext_resource type="Texture2D" uid="uid://b5qna8m0befrv" path="res://icon.svg" id="1_icon"]
+[ext_resource type="Script" path="res://BounceScene.cs" id="2_script"]
+
+[node name="BounceScene" type="Node2D"]
+script = ExtResource("2_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("1_icon")

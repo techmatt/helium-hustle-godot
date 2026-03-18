@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Energy",
+    "short_name": "eng",
+    "storage_base": 100.0
+  },
+  {
+    "name": "Regolith",
+    "short_name": "reg",
+    "storage_base": 50.0
+  },
+  {
+    "name": "Ice",
+    "short_name": "ice",
+    "storage_base": 30.0
+  },
+  {
+    "name": "Helium-3",
+    "short_name": "he3",
+    "storage_base": 20.0
+  },
+  {
+    "name": "Credits",
+    "short_name": "cred",
+    "storage_base": 500.0
+  },
+  {
+    "name": "Land",
+    "short_name": "land",
+    "storage_base": null
+  },
+  {
+    "name": "Boredom",
+    "short_name": "boredom",
+    "storage_base": 100.0
+  },
+  {
+    "name": "Processors",
+    "short_name": "proc",
+    "storage_base": 1.0
+  }
+]
