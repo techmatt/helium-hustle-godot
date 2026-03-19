@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="AIComplete"
+config/name="Helium Hustle"
 run/main_scene="uid://mainui00001"
 config/features=PackedStringArray("4.6", "C#", "GL Compatibility")
 config/icon="res://icon.svg"
@@ -27,7 +27,7 @@ window/size/mode=2
 
 [dotnet]
 
-project/assembly_name="AIComplete"
+project/assembly_name="HeliumHustle"
 
 [physics]
 
