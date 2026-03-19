@@ -2,6 +2,7 @@
   {
     "name": "Solar Panel",
     "short_name": "panel",
+    "category": "Power",
     "requires": {
       "type": "none"
     },
@@ -20,6 +21,7 @@
   {
     "name": "Regolith Excavator",
     "short_name": "excavator",
+    "category": "Mining",
     "requires": {
       "type": "none"
     },
@@ -41,6 +43,7 @@
   {
     "name": "Refinery",
     "short_name": "refinery",
+    "category": "Mining",
     "requires": {
       "type": "none"
     },
@@ -64,6 +67,7 @@
   {
     "name": "Electrolysis Plant",
     "short_name": "electrolysis",
+    "category": "Power",
     "requires": {
       "type": "building",
       "value": "refinery"
@@ -86,6 +90,7 @@
   {
     "name": "Launch Pad",
     "short_name": "launch_pad",
+    "category": "Mining",
     "requires": {
       "type": "none"
     },
@@ -105,6 +110,7 @@
   {
     "name": "Battery Array",
     "short_name": "battery",
+    "category": "Storage",
     "requires": {
       "type": "none"
     },
@@ -128,6 +134,7 @@
   {
     "name": "Regolith Silo",
     "short_name": "silo",
+    "category": "Storage",
     "requires": {
       "type": "none"
     },
@@ -164,6 +171,7 @@
   {
     "name": "Comms Tower",
     "short_name": "comms_tower",
+    "category": "Processors",
     "requires": {
       "type": "none"
     },

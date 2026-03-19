@@ -27,6 +27,7 @@ const NAV_ITEMS: Array = [
 ]
 
 const SPEEDS: Array = ["||", "1x", "3x", "10x", "50x", "200x"]
+const CATEGORY_ORDER: Array = ["Mining", "Power", "Storage", "Processors"]
 
 const COLOR_POSITIVE := Color(0.498, 0.749, 0.498)  # #7FBF7F
 const COLOR_NEGATIVE := Color(0.749, 0.498, 0.498)  # #BF7F7F
@@ -40,9 +41,8 @@ const COLOR_ZERO     := Color(0.502, 0.502, 0.502)  # #808080
 
 # {short_name: {val: Label, rate: Label}}
 var _resource_labels: Dictionary = {}
-# {short_name: {count_lbl: Label, cost_lbl: Label, buy_btn: Button}}
-var _building_cards: Dictionary = {}
-# cached building defs for formatting
+# all active BuildingCard nodes — refreshed each tick
+var _card_nodes: Array = []
 var _buildings_data: Array = []
 
 var _font_rajdhani_bold: FontFile
@@ -133,7 +133,7 @@ func _switch_mode(mode: String) -> void:
 	_center_header.text = mode
 	for child in _buildings_scroll.get_children():
 		child.queue_free()
-	_building_cards.clear()
+	_card_nodes.clear()
 	if mode == "Buildings":
 		_build_buildings_panel()
 	else:
@@ -310,139 +310,68 @@ func _update_resource_display() -> void:
 func _build_buildings_panel() -> void:
 	for child in _buildings_scroll.get_children():
 		child.queue_free()
-	_building_cards.clear()
+	_card_nodes.clear()
 	_buildings_data = GameManager.get_buildings_data()
 
-	var vbox := VBoxContainer.new()
-	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_theme_constant_override("separation", 8)
-	_buildings_scroll.add_child(vbox)
+	var outer := VBoxContainer.new()
+	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outer.add_theme_constant_override("separation", 6)
+	_buildings_scroll.add_child(outer)
 
-	for bdef in _buildings_data:
-		_add_building_card(vbox, bdef)
+	# Group buildings by category
+	var by_category: Dictionary = {}
+	for bdef: Dictionary in _buildings_data:
+		var cat: String = bdef.get("category", "Other")
+		if not by_category.has(cat):
+			by_category[cat] = []
+		by_category[cat].append(bdef)
+
+	# Render in defined order, then any extras
+	var order: Array = CATEGORY_ORDER.duplicate()
+	for cat: String in by_category:
+		if not order.has(cat):
+			order.append(cat)
+
+	for cat: String in order:
+		if by_category.has(cat):
+			_add_category_section(outer, cat, by_category[cat])
 
 
-func _add_building_card(parent: VBoxContainer, bdef: Dictionary) -> void:
-	var card := PanelContainer.new()
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	parent.add_child(card)
+func _add_category_section(parent: VBoxContainer, category: String, buildings: Array) -> void:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 6)
+	parent.add_child(section)
 
-	var margin := MarginContainer.new()
-	for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 8)
-	card.add_child(margin)
+	var header := Button.new()
+	header.text = "▼  " + category.to_upper()
+	header.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_theme_font_override("font", _font_rajdhani_bold)
+	header.add_theme_font_size_override("font_size", 15)
+	section.add_child(header)
 
-	var cvbox := VBoxContainer.new()
-	cvbox.add_theme_constant_override("separation", 4)
-	margin.add_child(cvbox)
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 8)
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section.add_child(flow)
 
-	# Header row: name (expands) | owned count | buy button
-	var header_row := HBoxContainer.new()
-	header_row.add_theme_constant_override("separation", 8)
-	cvbox.add_child(header_row)
+	header.pressed.connect(func():
+		flow.visible = not flow.visible
+		header.text = ("▼  " if flow.visible else "▶  ") + category.to_upper()
+	)
 
-	var name_lbl := Label.new()
-	name_lbl.text = bdef.name
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_font_override("font", _font_rajdhani_bold)
-	name_lbl.add_theme_font_size_override("font_size", 17)
-	header_row.add_child(name_lbl)
-
-	var count_lbl := Label.new()
-	count_lbl.text = "x%d" % GameManager.state.buildings_owned.get(bdef.short_name, 0)
-	count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	count_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	count_lbl.add_theme_font_size_override("font_size", 14)
-	header_row.add_child(count_lbl)
-
-	var buy_btn := Button.new()
-	buy_btn.text = "Buy"
-	buy_btn.disabled = not GameManager.can_afford_building(bdef.short_name)
-	buy_btn.add_theme_font_override("font", _font_exo2_semibold)
-	buy_btn.add_theme_font_size_override("font_size", 14)
-	var sn: String = bdef.short_name
-	buy_btn.pressed.connect(func(): GameManager.buy_building(sn))
-	header_row.add_child(buy_btn)
-
-	# Description
-	var desc_lbl := Label.new()
-	desc_lbl.text = bdef.description
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_lbl.add_theme_font_override("font", _font_exo2_regular)
-	desc_lbl.add_theme_font_size_override("font_size", 13)
-	cvbox.add_child(desc_lbl)
-
-	# Production (green) and upkeep (red) as separate labeled lines
-	var prod_text := _format_prod(bdef)
-	if prod_text != "":
-		var prod_lbl := Label.new()
-		prod_lbl.text = prod_text
-		prod_lbl.add_theme_font_override("font", _font_exo2_semibold)
-		prod_lbl.add_theme_font_size_override("font_size", 13)
-		prod_lbl.add_theme_color_override("font_color", COLOR_POSITIVE)
-		cvbox.add_child(prod_lbl)
-
-	var upkeep_text := _format_upkeep(bdef)
-	if upkeep_text != "":
-		var upkeep_lbl := Label.new()
-		upkeep_lbl.text = upkeep_text
-		upkeep_lbl.add_theme_font_override("font", _font_exo2_semibold)
-		upkeep_lbl.add_theme_font_size_override("font_size", 13)
-		upkeep_lbl.add_theme_color_override("font_color", COLOR_NEGATIVE)
-		cvbox.add_child(upkeep_lbl)
-
-	# Cost (updated each tick)
-	var cost_lbl := Label.new()
-	cost_lbl.text = _format_costs(bdef.short_name, bdef.land)
-	cost_lbl.add_theme_font_override("font", _font_exo2_regular)
-	cost_lbl.add_theme_font_size_override("font_size", 13)
-	cvbox.add_child(cost_lbl)
-
-	_building_cards[bdef.short_name] = {
-		"count_lbl": count_lbl,
-		"cost_lbl": cost_lbl,
-		"buy_btn": buy_btn,
-	}
+	for bdef: Dictionary in buildings:
+		var card := BuildingCard.new()
+		card.setup(bdef, _font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+		card.refresh()
+		flow.add_child(card)
+		_card_nodes.append(card)
 
 
 func _update_building_cards() -> void:
-	for sn in _building_cards:
-		var refs: Dictionary = _building_cards[sn]
-		refs.count_lbl.text = "x%d" % GameManager.state.buildings_owned.get(sn, 0)
-		refs.buy_btn.disabled = not GameManager.can_afford_building(sn)
-		var bdef: Variant = _get_bdef(sn)
-		if bdef != null:
-			refs.cost_lbl.text = _format_costs(sn, bdef.land)
-
-
-func _format_prod(bdef: Dictionary) -> String:
-	var parts: Array = []
-	for res in bdef.production:
-		parts.append("+%.1f %s" % [float(bdef.production[res]), res])
-	return "  ".join(parts)
-
-
-func _format_upkeep(bdef: Dictionary) -> String:
-	var parts: Array = []
-	for res in bdef.upkeep:
-		parts.append("-%.1f %s" % [float(bdef.upkeep[res]), res])
-	return "  ".join(parts)
-
-
-func _format_costs(short_name: String, land_cost: int) -> String:
-	var scaled: Dictionary = GameManager.get_scaled_costs(short_name)
-	var parts: Array = []
-	for res in scaled:
-		parts.append("%.0f %s" % [scaled[res], res])
-	parts.append("%d land" % land_cost)
-	return "Cost: " + "  +  ".join(parts)
-
-
-func _get_bdef(short_name: String) -> Variant:
-	for bdef in _buildings_data:
-		if bdef.short_name == short_name:
-			return bdef
-	return null
+	for card: BuildingCard in _card_nodes:
+		card.refresh()
 
 
 # ── Right panel ────────────────────────────────────────────────────────────────
