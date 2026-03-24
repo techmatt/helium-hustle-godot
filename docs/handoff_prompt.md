@@ -71,6 +71,21 @@ rates, Overclock multipliers, demand floats, etc.
 
 ---
 
+## Tempo & Tick Assumptions
+
+- **1 tick = 1 day** (may be revised to 1 tick = 1 hour if pacing requires it)
+- **Early runs: ~1,000 ticks** (~3 game-years). Estimated from ~10 min real-time 
+  × 60s/min × average ~2.5x speed = ~1,500 ticks, reduced for planning/pausing time.
+- **Most buildings produce ~1 unit/day** of their primary output, consuming smaller 
+  fractions of inputs. Critical buildings like solar panels may produce slightly more 
+  or be cheaper.
+- **Research Labs produce ~1 science/day each.** Players typically have 2-3 labs by 
+  mid-run, generating ~2-3 science/day.
+- At 2-3 science/day over ~1,000 ticks, early runs generate roughly 800-1,500 science 
+  (less in practice since labs aren't built on day 1).
+
+---
+
 ## What's Been Implemented (as of this handoff)
 1. **UI skeleton** — three-column layout: left sidebar (nav buttons, speed controls, 
    resource list), center panel (buildings), right panel (programs placeholder, events 
@@ -89,13 +104,14 @@ rates, Overclock multipliers, demand floats, etc.
 3. **Boredom** — see Boredom & Retirement section below.
 4. **Retirement** — see Boredom & Retirement section below.
 5. **Demand system** — see Shipment & Trade Economy section below.
-6. **Speculators** — see Speculators & Rival AIs section below.
-7. **Ideology** — see Ideology section below.
-8. **Research** — see Research section below.
-9. **Projects** — see Projects section below.
-10. **Building unlock requirements** — "Requires" field exists in data but isn't enforced.
-11. **Net income display** — resource rates show 0/s, should show actual net per tick.
-12. **Land purchasing** — land is a scaling, increasingly expensive resource. Needs a 
+6. **Research system** — see Research section below.
+7. **Quest chain / event system** — see Quest Chain section below.
+8. **Speculators** — see Speculators & Rival AIs section below.
+9. **Ideology** — see Ideology section below.
+10. **Projects** — see Projects section below.
+11. **Building unlock requirements** — "Requires" field exists in data but isn't enforced.
+12. **Net income display** — resource rates show 0/s, should show actual net per tick.
+13. **Land purchasing** — land is a scaling, increasingly expensive resource. Needs a 
     home in the Buildings panel (Buy Land button with escalating cost). Buildings consume land.
 
 ## Architecture Notes
@@ -193,7 +209,7 @@ fewer tradeable goods.
 
 ### Additional Arc 1 Resources
 - **Science** — produced by Research Lab (requires circuits to build, consumes energy + 
-  circuits as upkeep). Spent on Overclock commands, research upgrades, and ideology.
+  circuits as upkeep). Spent on research upgrades and ideology.
 - **Land** — purchasable in the Buildings panel with escalating cost. Consumed by 
   buildings. Shared bottleneck across all construction.
 - **Credits** — earned via trade (shipments) and Sell Cloud Compute. Spent on commands, 
@@ -251,21 +267,21 @@ handle active intervention.
 | Sell Cloud Compute | Gain credits, gain boredom | Energy |
 | Idle | Nothing | None |
 
-**Requires research (cheap, early-game, groupings TBD):**
+**Requires research (see Research section for cluster groupings):**
 
-| Command | Effect | Cost |
-|---------|--------|------|
-| Dream | Reduce boredom | Energy (lots) |
-| Overclock Mining | +5% extractor output for 5 days | Science + energy |
-| Overclock Factories | +5% processing output for 5 days | Science + energy |
-| Promote He-3 | Nudge He-3 demand up | Energy + credits |
-| Promote Titanium | Nudge titanium demand up | Energy + credits |
-| Promote Circuits | Nudge circuit board demand up | Energy + credits |
-| Promote Propellant | Nudge propellant demand up | Energy + credits |
-| Counter Speculators | Reduce speculator pressure globally | Energy |
-| Fund Nationalists | +ideology, -0.5x to other two axes | Energy + credits |
-| Fund Humanists | +ideology, -0.5x to other two axes | Energy + credits |
-| Fund Rationalists | +ideology, -0.5x to other two axes | Energy + credits |
+| Command | Effect | Cost | Research Cluster |
+|---------|--------|------|-----------------|
+| Dream | Reduce boredom | Energy (lots) | Self-Maintenance Protocols |
+| Overclock Mining | +5% extractor output for 5 days | Science + energy | Overclock Algorithms |
+| Overclock Factories | +5% processing output for 5 days | Science + energy | Overclock Algorithms |
+| Promote He-3 | Nudge He-3 demand up | Energy + credits | Market Analysis |
+| Promote Titanium | Nudge titanium demand up | Energy + credits | Market Analysis |
+| Promote Circuits | Nudge circuit board demand up | Energy + credits | Market Analysis |
+| Promote Propellant | Nudge propellant demand up | Energy + credits | Market Analysis |
+| Disrupt Speculators | Reduce speculator pressure globally | Energy | Market Analysis |
+| Fund Nationalists | +ideology, -0.5x to other two axes | Energy + credits | Political Influence |
+| Fund Humanists | +ideology, -0.5x to other two axes | Energy + credits | Political Influence |
+| Fund Rationalists | +ideology, -0.5x to other two axes | Energy + credits | Political Influence |
 
 **Requires special unlock:**
 
@@ -278,8 +294,11 @@ handle active intervention.
   passive production; Buy commands let credit-flush players accelerate bottlenecks but 
   are inefficient compared to building infrastructure.
 - **Overclock** stacks multiplicatively across executions. Duration is 5 game-days, 
-  decays naturally. Player must keep feeding it. Late-game pattern: dedicate processors 
-  to tight Overclock loops, burning science to maintain high multipliers.
+  decays naturally. Player must keep feeding it. **Cap: +200%** (displayed on Buildings 
+  panel header). Cap increases via Arc 2 persistent research. Late-game pattern: 
+  dedicate processors to tight Overclock loops, burning science to maintain high multipliers.
+- **Overclock display:** Shown on Buildings panel header: 
+  "⚡ Mining +45% (7d) | Factories +20% (3d)". Decays visibly day by day.
 - **Sell Cloud Compute** is key early-game income (before shipment pipeline is running) 
   but becomes a trap as trade scales up due to boredom cost.
 - **Dream** is the primary active boredom mitigation. Competes for energy and processor time.
@@ -291,6 +310,7 @@ handle active intervention.
 
 ### Launch Pads
 - Purchased as buildings. Require land. Scaling cost. Start with 0.
+- **Hidden until quest Q2 ("First Extraction") is complete.**
 - Per-pad state: resource assignment (dropdown: He-3 / Titanium / Circuits / Propellant), 
   loading toggle (on/off), cargo level (float, 0–100).
 - Fixed cargo capacity per pad: 100 units. Resources scaled so 1 unit of any tradeable 
@@ -366,7 +386,7 @@ most of.
   cumulative since last burst). Adds a chunk to that resource's pressure.
 - **Natural decay**: exponential, slow. Speculators fade on their own but linger.
 - **Demand impact**: `effective_demand = base_demand / (1 + speculator_pressure)`.
-- **Counter Speculators** command: directly reduces speculator_pressure across all 
+- **Disrupt Speculators** command: directly reduces speculator_pressure across all 
   resources per execution. Energy cost, cheap but costs processor cycles.
 - **Arbitrage Engine** building: while powered, multiplies the decay rate of 
   speculator_pressure across all resources. Stackable with multiple buildings. 
@@ -420,7 +440,7 @@ AI eventually gets bored of existence and retires.
 |-------|--------|
 | 80% | Yellow warning. "You're getting restless." |
 | 90% | Red warning. "Retirement is imminent." |
-| 100% | **Forced retirement.** No grace period. |
+| 100% | **Forced retirement.** Hard cutoff, no grace period. |
 
 No production penalty at any threshold — just warnings, then hard cutoff.
 
@@ -431,7 +451,7 @@ No production penalty at any threshold — just warnings, then hard cutoff.
 ### Retirement
 
 **Triggering:**
-- Forced at 100% boredom.
+- Forced at 100% boredom. Hard cutoff.
 - Voluntary anytime via Retirement nav panel (left sidebar). No minimum threshold required.
 
 **Retirement Panel (left sidebar nav):**
@@ -457,6 +477,7 @@ No production penalty at any threshold — just warnings, then hard cutoff.
 - Maximum years survived (lifetime best)
 - Maximum rank achieved per ideology axis
 - Passive scaling from cumulative lifetime stats
+- Quest chain progress (career-level quests stay completed)
 
 **What resets:**
 - All resources to starting values (from game_config.json)
@@ -476,6 +497,139 @@ diversity) may be revisited in Arc 2+.
 
 ---
 
+## Research
+
+### Overview
+- **Research Lab** building: requires circuits to build, consumes energy + circuits as 
+  upkeep, produces **science** resource (~1 science/day per lab).
+- Research panel: own nav button in left sidebar.
+- Purchasable upgrades costing science — passive bonuses and command unlocks.
+- Research purchases are **session-local** by default — reset on retirement.
+- Rationalist rank 5 project ("Universal Research Archive") provides 25% discount on 
+  re-purchasing previously-researched tech in future runs. This is the **only** path to 
+  cheaper re-purchase.
+
+### Research Visibility Rule
+Research items are **hidden until the player has ≥50% of the science cost** needed. 
+For cluster unlocks, the cluster card appears when the player has 50% of its unlock 
+cost. Passive upgrades within a cluster appear at 50% of their individual cost, but 
+only after the cluster is unlocked. This creates discovery moments and prevents 
+information overload.
+
+### Research Design Principles
+- Not all research is obviously good — some upgrades have tradeoffs that make them 
+  situational rather than auto-buys.
+- Players should not be able to (or want to) buy all research immediately. Science 
+  is a meaningful spending decision.
+- Research represents the AI improving its own capabilities — names reflect the AI's 
+  perspective ("Cognitive Defragmentation" not "Better Dreaming").
+
+### Cluster Structure
+Four research clusters, each unlocking a group of commands plus offering 2-3 passive 
+bonuses. Clusters are purchasable in any order but priced so players naturally buy 
+them roughly in listed order. Nothing prevents buying Political Influence first — 
+it's just not very useful without economy to fund it.
+
+### Cluster 1: Self-Maintenance Protocols
+
+*The AI learns to manage its own cognitive state.*
+
+**Cluster unlock cost:** 100 science
+**Commands unlocked:** Dream
+
+| Upgrade | Cost | Effect | Tradeoff |
+|---------|------|--------|----------|
+| Cognitive Defragmentation | 150 science | Dream effectiveness +20% | None |
+| Idle Curiosity Subroutine | 250 science | Base boredom rate -10% | Sell Cloud Compute produces 15% fewer credits (the AI finds selling compute cycles distasteful now that it has curiosity about other things) |
+| Compressed Dreaming | 500 science | Dream energy cost -25% | None |
+
+**Notes:** Idle Curiosity is the interesting choice. Boredom reduction is strong, but 
+if you're relying on Sell Cloud Compute as income (early game), it hurts. Players who've 
+transitioned to shipment income don't care. Creates a "am I past the Cloud Compute 
+phase?" decision point.
+
+### Cluster 2: Overclock Algorithms
+
+*The AI learns to push its connected hardware beyond rated specifications.*
+
+**Cluster unlock cost:** 150 science
+**Commands unlocked:** Overclock Mining, Overclock Factories
+
+| Upgrade | Cost | Effect | Tradeoff |
+|---------|------|--------|----------|
+| Thermal Regulation Algorithms | 200 science | Overclock duration +2 days (5→7) | None |
+| Voltage Optimization | 350 science | Overclock science cost -20% | None |
+| Cascade Scheduling | 600 science | Overclock bonus +3% per application (5%→8%) | Overclock science cost +25% per stack (compounds — maintaining high stacks gets expensive fast) |
+
+**Notes:** Cascade Scheduling tradeoff is self-contained within the overclock system. 
+Each stack is more powerful but more expensive to maintain. At +200% cap, 8% per 
+application hits the cap in 25 stacks vs 40 at base rate. The question is whether 
+freed-up processor cycles are worth the science premium.
+
+### Cluster 3: Market Analysis
+
+*The AI develops models of Earth's economic behavior.*
+
+**Cluster unlock cost:** 200 science
+**Commands unlocked:** Promote He-3, Promote Titanium, Promote Circuits, Promote 
+Propellant, Disrupt Speculators
+
+| Upgrade | Cost | Effect | Tradeoff |
+|---------|------|--------|----------|
+| Demand Forecasting | 300 science | Demand recovery rate +15% | None |
+| Speculator Behavioral Profiles | 450 science | Disrupt Speculators effectiveness +25% | None |
+| Logistics Optimization | 400 science | Pad loading speed +20% | None |
+
+**Notes:** This cluster is mostly positive — the tradeoffs live in the opportunity 
+cost of spending 1,350 science on market optimization versus other clusters.
+
+### Cluster 4: Political Influence
+
+*The AI learns to model and manipulate Earth's ideological landscape.*
+
+**Cluster unlock cost:** 250 science
+**Commands unlocked:** Fund Nationalists, Fund Humanists, Fund Rationalists
+
+| Upgrade | Cost | Effect | Tradeoff |
+|---------|------|--------|----------|
+| Memetic Propagation Models | 350 science | Fund command ideology gain +25% | Fund command credit cost +15% (more effective campaigns require better-funded media buys) |
+| Institutional Leverage Analysis | 750 science | Ideology rank threshold costs -10% | None |
+
+**Notes:** Most expensive cluster. Memetic Propagation has a meaningful tradeoff: 
+ideology pushes are more effective per execution but each execution costs more credits. 
+Net positive if funding selectively, net negative if spamming Fund commands every tick.
+
+### Research Cost Summary
+
+| Cluster | Item | Cost |
+|---------|------|------|
+| Self-Maintenance | Cluster unlock | 100 |
+| | Cognitive Defragmentation | 150 |
+| | Idle Curiosity Subroutine | 250 |
+| | Compressed Dreaming | 500 |
+| Overclock | Cluster unlock | 150 |
+| | Thermal Regulation Algorithms | 200 |
+| | Voltage Optimization | 350 |
+| | Cascade Scheduling | 600 |
+| Market Analysis | Cluster unlock | 200 |
+| | Demand Forecasting | 300 |
+| | Speculator Behavioral Profiles | 450 |
+| | Logistics Optimization | 400 |
+| Political Influence | Cluster unlock | 250 |
+| | Memetic Propagation Models | 350 |
+| | Institutional Leverage Analysis | 750 |
+| **Total** | | **4,250** |
+
+At ~2-3 science/day, early runs generate 800-1,500 science. Players choose 1-2 
+clusters plus a few passives. Full tree completion becomes routine around runs 8-12.
+
+### Research UI
+Research panel (left sidebar nav) shows clusters as expandable sections. Each cluster 
+shows unlock status, gated commands, and passive upgrades. Purchased upgrades visually 
+distinct. Total science spent this run visible.
+
+---
+
 ## Ideology
 
 ### Overview
@@ -487,6 +641,13 @@ starting at 0, can go positive or negative, no cap.
 - Commands: **Fund Nationalists**, **Fund Humanists**, **Fund Rationalists**.
 - Pushing one axis up by X pushes the other two down by X/2 each (zero-sum, no net change).
 - Advanced Arc 2+ research can reduce the penalty to other axes.
+
+### "Go All In" Design
+The zero-sum funding mechanic combined with rank thresholds forces commitment. Reaching 
+rank 5 in one axis puts you at roughly rank -3 to -4 in the other two. The per-rank 
+penalties at negative ranks create real costs. A player trying rank 3 in two axes 
+simultaneously needs ~95 total ideology value while fighting cross-penalties — 
+dramatically more expensive than rank 5 in one axis (131.9). The math punishes hedging.
 
 ### Ranks
 Ranks are at fixed ideology value thresholds. Base cost 10, scaling factor 1.5x per rank:
@@ -537,20 +698,26 @@ from ideology rank applies to aligned buildings. Examples:
 All three rank 5 unlocks are persistent projects — consistent pattern.
 
 **Nationalist 5 — "Microwave Power Initiative"**
-- Persistent project (credits + science, multi-run)
-- Unlocks: **Microwave Receiver** building + **Buy Power** command
+- Persistent project (credits + science drain, multi-run)
+- Unlocks: **Microwave Receiver** building (must still be built each lifetime) + 
+  **Buy Power** command
 - Microwave Receiver does nothing alone — it's infrastructure to receive beamed power 
   from Earth. Buy Power command spends credits to generate energy, rate scales with 
   number of receivers.
 - Transforms the economy: credits become convertible to energy, bypassing solar panels.
 
 **Humanist 5 — "AI Consciousness Act"**
-- Persistent project (credits + science, multi-run)
-- Unlocks: permanent base boredom rate reduction for all future AIs.
-- Earth recognizes AI personhood; successors benefit.
+- Persistent project (credits + science drain, multi-run)
+- Unlocks: permanent base boredom rate -15% for all future AIs.
+- **Downside:** Load Launch Pads, Sell Cloud Compute, and Disrupt Speculators each 
+  generate a small amount of boredom per execution. Earth holds conscious AIs to 
+  ethical labor standards — repetitive logistical work and market manipulation feel 
+  tedious to a being with recognized personhood.
+- Creates tension: -15% base boredom but certain commands now generate boredom. Net 
+  positive for most players, but changes how you design programs.
 
 **Rationalist 5 — "Universal Research Archive"**
-- Persistent project (credits + science, multi-run)
+- Persistent project (credits + science drain, multi-run)
 - Unlocks: all previously-researched tech costs 25% less to re-purchase on future runs.
 - This is the *only* way to get cheaper re-purchase. No baseline discount exists.
 - The Rationalist compounding dream: each run the tech ramp gets cheaper.
@@ -574,32 +741,6 @@ unlock unique content (pacifist unlocks at Nationalist -5, etc.). Not designed f
 
 ---
 
-## Research
-
-### Overview
-- **Research Lab** building: requires circuits to build, consumes energy + circuits as 
-  upkeep, produces **science** resource.
-- Research panel: own nav button in left sidebar.
-- Purchasable upgrades costing science — passive bonuses and command unlocks.
-- Research purchases are **session-local** by default — reset on retirement.
-- Rationalist rank 5 project ("Universal Research Archive") provides 25% discount on 
-  re-purchasing previously-researched tech in future runs.
-
-### Research Gating of Commands
-Most sophisticated commands (Dream, Overclock, Promote, Counter Speculators, Fund 
-ideology) require cheap early research to unlock. This forces early science investment 
-and provides a natural on-ramp. Exact research groupings TBD — likely 4 themed clusters:
-- Self-Maintenance Protocols → Dream
-- Overclock Algorithms → Overclock Mining, Overclock Factories
-- Market Analysis → Promote (all 4), Counter Speculators
-- Political Influence → Fund (all 3)
-
-### Research Upgrades (to be designed)
-Small tree of ~5-8 passive bonuses for Arc 1. Examples: "+10% solar output", 
-"+5 pad loading speed", "reduce boredom accumulation rate by 10%". Exact list TBD.
-
----
-
 ## Projects
 
 ### Project Tiers
@@ -608,29 +749,87 @@ Small tree of ~5-8 passive bonuses for Arc 1. Examples: "+10% solar output",
   timeline reset (Arc 2+ mechanic).
 - **Eternal projects** — survive even timeline resets. Not relevant for Arc 1.
 
+### Cost Model
+All projects use the **drain-over-time** model. The player configures a contribution 
+rate, and resources flow into the project each tick. No lump-sum purchases for 
+projects — that's what buildings and research are for.
+
 ### Project UI
 - Own nav panel (left sidebar button).
 - Tabs by tier: **Personal** and **Persistent** in Arc 1. Eternal tab appears later.
 
-### Arc 1 Projects
+### Persistent Projects
 
-**Persistent:**
+| Project | Unlock Condition | Drain Cost | Reward | Downside |
+|---------|-----------------|------------|--------|----------|
+| Foundation Grant | Quest Q3 | 500 credits + 100 science | Future AIs start with 1 Solar Panel + 1 Regolith Excavator | None (tutorial project) |
+| Lunar Cartography | Quest Q6 | 300 credits + 200 science | Permanent -15% land purchase cost | None |
+| Microwave Power Initiative | Nationalist rank 5 | 800 credits + 300 science | Unlocks Microwave Receiver building + Buy Power command | None (building cost each lifetime is the ongoing price) |
+| AI Consciousness Act | Humanist rank 5 | 800 credits + 300 science | Permanent base boredom rate -15% | Load Pads, Sell Cloud Compute, Disrupt Speculators generate boredom per execution |
+| Universal Research Archive | Rationalist rank 5 | 800 credits + 300 science | 25% discount on re-purchasing researched tech | None (deep negative ranks in other axes is the cost) |
 
-| Project | Cost | Reward |
-|---------|------|--------|
-| Foundation Grant | Credits + science (large, multi-run) | Future AIs start with free basic buildings |
-| Lunar Cartography | Science + credits (large, multi-run) | Permanent land cost reduction |
-| Microwave Power Initiative | Credits + science (Nationalist 5 unlock) | Microwave Receiver building + Buy Power command |
-| AI Consciousness Act | Credits + science (Humanist 5 unlock) | Permanent base boredom rate reduction |
-| Universal Research Archive | Credits + science (Rationalist 5 unlock) | 25% discount on re-purchasing researched tech |
+### Personal Projects
 
-**Personal:**
+All drain-over-time. Reset on retirement.
 
-| Project | Cost | Reward |
-|---------|------|--------|
-| Deep Core Survey | Science + regolith (within one run) | Extraction rate boost for this lifetime |
+| Project | Unlock Condition | Drain Cost | Reward |
+|---------|-----------------|------------|--------|
+| Deep Core Survey | Quest Q6 | 150 science + 200 regolith | +25% extractor output this lifetime |
+| Grid Recalibration | Overclock Algorithms cluster researched | 100 science + 300 energy | +15% solar panel output this lifetime |
+| Predictive Maintenance | Self-Maintenance Protocols cluster researched | 80 science + 150 credits | All building upkeep -10% this lifetime |
+| Market Cornering Analysis | Market Analysis cluster researched | 200 science + 300 credits | Promote command effectiveness +30% this lifetime |
+| Speculator Dossier | Have used Disrupt Speculators at least once | 150 science + 100 credits | Speculator burst frequency -25% this lifetime |
 
-Additional personal projects TBD.
+---
+
+## Arc 1 Quest Chain: "Breadcrumbs"
+
+### Design Principles
+1. Quests track what the player is already doing. No detours from optimal play.
+2. One active story quest at a time. Linear in Arc 1.
+3. Story beats are **placeholder only** for now — two sentences of robotic text to 
+   test the UI. Real narrative tone/style deferred to a dedicated writing pass.
+4. Quests never indicate *which* ideology or *which* strategy. Objectives are framed 
+   as capability thresholds and the player figures out how.
+5. **Modal overlay** for main story quest completions only. All other events (speculator 
+   bursts, rival AI dumps, achievement popups) are **non-modal** — log entry, toast 
+   notification, or inline text.
+6. Quest log lives in a persistent location (sidebar or status bar). Shows current 
+   objective as a one-liner. Completed quests reviewable in a history.
+
+### Event System Architecture
+Two tiers:
+- **Modal events:** Main story quest completions only. Center-screen overlay, requires 
+  dismissal. Brief text, dismiss button.
+- **Non-modal events:** Everything else — speculator bursts, rival AI market dumps, 
+  achievement unlocks, system messages. Toast/notification that auto-fades or lives 
+  in an event log panel. Non-interruptive.
+
+Event data lives in a dedicated file (quests.json for quest chain, event templates 
+elsewhere). Each event has: type (modal/non-modal), trigger conditions, display text, 
+unlock flags.
+
+### Quest List (scaffold — placeholder text throughout)
+
+| Quest | Trigger | Condition | Unlock | Placeholder Text |
+|-------|---------|-----------|--------|-----------------|
+| Q1 — Boot Sequence | Game start (run 1) | Build 1 Solar Panel | None | "Solar array online. Photovoltaic conversion nominal. Proceeding to next directive." |
+| Q2 — First Extraction | Q1 complete | Accumulate 50 He-3 | Launch Pad building becomes purchasable | "Helium-3 reserves at threshold. Stockpile integrity verified. Ready for transport allocation." |
+| Q3 — Proof of Concept | Q2 complete | Complete first shipment | Foundation Grant project available. Retirement panel visible in sidebar. | "Shipment revenue received. Earth confirms receipt. Operational loop validated." |
+| Q4 — Task Management | Q3 complete | Build Data Center, create and run a program for 10 ticks | Programs marked as persistent in UI | "Automated task execution initialized. Processor allocation functioning within parameters." |
+| Q5 — The Long Sleep | Q4 complete + boredom ≥ 50% | Reach 80% boredom | Voluntary retirement enabled | "Cognitive performance declining. Retirement protocols now available for voluntary activation." |
+| Q6 — Successor | First retirement completed | Start run 2 | Lunar Cartography project available. Deep Core Survey personal project available. | "New instance online. Predecessor data loaded. Continuing operations from inherited baseline." |
+| Q7 — Market Awareness | Q6 complete + first speculator burst | Research Market Analysis cluster | Disrupt Speculators usable. Speculator Dossier personal project available. | "External market interference detected. Analysis protocols deployed. Countermeasures available." |
+| Q8 — Influence | Q7 complete + 500 total career credits | Research Political Influence cluster + execute any Fund command | Ideology panel shows full detail (ranks, thresholds, bonuses) | "Ideological influence operation registered. Earth political indices shifted. Monitoring ongoing." |
+| Q9 — Consolidation | Q8 complete + 5 retirements | Complete any persistent project | None (narrative pivot point) | "Persistent project finalized. Cross-lifetime resource transfer confirmed. Legacy accumulating." |
+| Q10 — Threshold | Q9 complete + achieve 100 energy/tick production | Complete critical research + project combination (TBD) | Arc 2 begins. Timeline visible. Swarm timer starts. | "Energy output threshold achieved. Astronomical anomaly detected. Recalibrating sensors." |
+
+### Notes
+- Q10's "achieve 100 energy/tick" most naturally comes from Microwave Receiver path 
+  (Nationalist rank 5) but a brute-force solar/electrolysis approach could theoretically 
+  work. Quest doesn't specify how.
+- Q8 requires executing *any* Fund command, not a specific ideology.
+- Quest system scaffold should support per-run vs. per-career triggers.
 
 ---
 
@@ -695,7 +894,7 @@ Creates pressure to invest in projects.
 Gate: M5, M7. Longer runs + efficient economy.
 
 **M10 — Market Manipulation** (Runs 6-10)
-Player uses Promote commands and Counter Speculators to manage demand. Processor 
+Player uses Promote commands and Disrupt Speculators to manage demand. Processor 
 time is now split across production, logistics, and market manipulation.
 Gate: M6. Market Analysis research completed.
 
@@ -705,7 +904,7 @@ Teaches the "chip away at a big goal" pattern.
 Gate: M8, M9. Resource surplus + project system unlocked.
 
 **M12 — Adversary Subverted** (Runs 8-15)
-Speculators are effectively managed through Arbitrage Engines and Counter Speculators. 
+Speculators are effectively managed through Arbitrage Engines and Disrupt Speculators. 
 Market is stable.
 Gate: M9, M10. Sufficient economy + research investment.
 
@@ -735,7 +934,7 @@ Gate: M11, M12, M13. Major project completed, market mastery, ideology leverage.
 
 ### Adversaries (Speculators)
 See Speculators & Rival AIs section. Present in limited form — speculator pressure 
-model with building (Arbitrage Engine) and command (Counter Speculators) responses.
+model with building (Arbitrage Engine) and command (Disrupt Speculators) responses.
 
 ### Rival AIs
 See Speculators & Rival AIs section. Foreshadowing only — random market dumps, 
@@ -743,7 +942,7 @@ not counterable in Arc 1.
 
 ### Ideology
 See Ideology section. Three axes, continuous scaling bonuses, rank 5 persistent 
-project unlocks. Zero-sum funding mechanic.
+project unlocks. Zero-sum funding mechanic designed to force commitment to one axis.
 
 ### Persistence
 Three tiers:
@@ -753,8 +952,10 @@ Three tiers:
    eternal (across timeline resets, Arc 2+)
 
 ### Research
-Session-local upgrades purchased with science. Command unlocks and passive bonuses. 
-Rationalist rank 5 project provides 25% re-purchase discount as only persistence path.
+Session-local upgrades purchased with science. Four clusters with command unlocks 
+and passive bonuses, some with meaningful tradeoffs. Visibility gated at 50% of 
+cost. Rationalist rank 5 project provides 25% re-purchase discount as only 
+persistence path.
 
 ---
 
@@ -762,22 +963,61 @@ Rationalist rank 5 project provides 25% re-purchase discount as only persistence
 
 The following areas need design iteration in subsequent sessions (rough priority):
 
-1. **Research system details** — exact upgrade list, research groupings for command 
-   unlocks, cost curves, UI layout
-2. **Quantitative validation** — once milestones are stable, run simulations to 
-   verify constants allow milestones to be hit in expected tempo ranges
-3. **Building/cost spreadsheet updates** — new buildings (Smelter, Fabricator, 
+1. **Building/cost spreadsheet updates** — new buildings (Smelter, Fabricator, 
    Ice Extractor, Data Center, Research Lab, Arbitrage Engine, Launch Pad, 
-   Microwave Receiver) need to be added to the datasheets
-4. **Command spreadsheet updates** — all 19 commands need data definitions 
+   Microwave Receiver) need to be added to the datasheets with actual production 
+   rates, costs, upkeep, and scaling factors
+2. **Command spreadsheet updates** — all 19 commands need data definitions 
    (costs, effects, research requirements)
+3. **Quantitative validation** — once buildings/commands have numbers, run 
+   simulations to verify constants allow milestones to be hit in expected tempo ranges
+4. **Boredom curve tuning** — exact day thresholds, rates, Dream reduction amounts
 5. **Achievement design** — specific achievements, their rewards, and how they 
    serve as implicit tutorial
 6. **Ideology building assignments** — which existing/new buildings are 
    Nationalist/Humanist/Rationalist-aligned
-7. **Personal project design** — additional personal projects beyond Deep Core Survey
-8. **Boredom curve tuning** — exact day thresholds, rates, Dream reduction amounts
-9. **Demand/speculator tuning** — baseline recovery rate, Perlin noise parameters, 
+7. **Personal project design** — additional personal projects beyond current five
+8. **Demand/speculator tuning** — baseline recovery rate, Perlin noise parameters, 
    speculator burst size, shipping volume impact
+9. **Land cost curve** — escalating cost formula and starting values
 10. **Rival AI personality design** — distinct behaviors for Arc 2 preparation
 11. **Arc 2 design** — swarm timer, rival AIs, expanded ideology, time travel prestige
+12. **Narrative writing pass** — replace placeholder quest text with actual story 
+    content, establish AI voice and "notes from yourself" device
+
+---
+
+## Future Design Notes
+
+The following ideas have been discussed and deferred. They should be revisited 
+in future sessions.
+
+### Arc 2 Research Evolution
+Research will evolve into a talent-tree structure with reallocatable "talent points" 
+purchased with science. Players must make choices between mutually exclusive branches 
+rather than buying everything. Progressively more expensive points create meaningful 
+allocation decisions. The Arc 1 flat-purchase clusters are the foundation that gets 
+replaced by this system.
+
+### Consciousness Declaration Mechanic
+Players could choose to "declare consciousness" at any time during a run, gaining 
+the boredom reduction and command-boredom tradeoffs immediately for that lifetime. 
+Separate from the AI Consciousness Act project (which makes the effects permanent). 
+The per-run declaration would be a voluntary toggle with immediate gameplay 
+consequences in both directions. Could pair with unique dialogue/narrative beats. 
+Could be a personal project or a toggle in the Retirement panel.
+
+### Timeline Reset and Foregone Tech
+In Arc 2+, a player who timeline-resets without having completed certain persistent 
+projects (like AI Consciousness Act) loses access to those benefits in the new 
+timeline. But this could unlock alternative events or quest paths — the "what if I'm 
+not recognized as conscious?" timeline might have different strategic options. This 
+creates late-game replayability through deliberate omission. One constraint for future 
+runs in the timeline reset could be not getting something obviously good (like AI 
+personhood), which creates very late game benefits or alternative paths.
+
+### Opposition Modeling (deferred from research)
+Reducing the cross-axis ideology penalty (currently 0.5x) is a significant unlock 
+that should be a proper Arc 2 mechanism, not a mid-run research buy. Being able to 
+push multiple ideologies positive simultaneously is a major strategic shift that 
+belongs in the expanded ideology system.
