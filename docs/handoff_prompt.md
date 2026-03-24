@@ -46,6 +46,9 @@ docs/
   stage1_prompt.md                ← prompt used for first implementation stage
   ui_skeleton_prompt.md           ← prompt used for initial UI layout
   ui_styling_prompt.md            ← prompt used for font/styling pass
+sim/
+  hh_sim.py                      ← prototype tick simulator (SUPERSEDED by optimizer approach, 
+                                    kept for reference — see Economic Balancing Approach section)
 ```
 
 ## Data Pipeline
@@ -83,6 +86,8 @@ rates, Overclock multipliers, demand floats, etc.
   mid-run, generating ~2-3 science/day.
 - At 2-3 science/day over ~1,000 ticks, early runs generate roughly 800-1,500 science 
   (less in practice since labs aren't built on day 1).
+- **Energy budget target: ~25 energy/tick** at comfortable mid-run, across 6-7 solar 
+  panels. Many things consume energy: buildings, commands, processors.
 
 ---
 
@@ -113,6 +118,8 @@ rates, Overclock multipliers, demand floats, etc.
 12. **Net income display** — resource rates show 0/s, should show actual net per tick.
 13. **Land purchasing** — land is a scaling, increasingly expensive resource. Needs a 
     home in the Buildings panel (Buy Land button with escalating cost). Buildings consume land.
+14. **Storage caps & cap display** — see Storage & Caps section below.
+15. **Auto-pause on events** — see Event System section below.
 
 ## Architecture Notes
 - Game logic (GameState, GameSimulation) has no UI references — designed for future 
@@ -214,6 +221,57 @@ fewer tradeable goods.
   buildings. Shared bottleneck across all construction.
 - **Credits** — earned via trade (shipments) and Sell Cloud Compute. Spent on commands, 
   buildings, research, projects, and ideology.
+
+---
+
+## Storage & Caps
+
+### Overview
+All physical resources have storage caps. Caps create natural infrastructure pressure — 
+the player must invest in storage to support larger operations. In Arc 1, caps are a 
+gentle nudge (you'll bump into them occasionally); in later arcs, storage becomes a 
+serious scaling constraint.
+
+### Capped Resources
+- **Energy** — capped. Increased by **Battery** building.
+- **Regolith, Ice, He-3, Titanium, Circuit Boards, Propellant** — capped. Increased 
+  by **Storage Depot** building (different amounts per resource type).
+
+### Uncapped Resources
+- **Credits** — just a ledger number.
+- **Science** — knowledge doesn't take shelf space.
+- **Boredom** — fixed 0-100 range by design.
+- **Land** — you're buying territory, not storing it.
+
+### Storage Buildings
+
+**Battery:**
+- Increases energy cap. Player starts with 1.
+- Scales fast in cost (scaling factor ~1.35).
+- No energy upkeep (it's passive storage).
+- No land cost.
+- Energy storage will be a real constraint as the base grows, good to introduce early.
+
+**Storage Depot:**
+- Increases caps for all physical resources (different bonus per resource type).
+- No energy upkeep (it's a warehouse).
+- Costs credits + land. Scaling cost (~1.25).
+- Per-depot bonuses vary by resource (raw materials get more, processed goods get less).
+
+### Cap Display
+Caps are **always shown** in the resource list, MR2-style: `47/100`. At cap, visually 
+signal waste (color change, flash, or similar). This is standard for the genre — see 
+Magic Research 2 screenshot for reference.
+
+### Cap Tuning Philosophy
+Base caps should be generous enough that Arc 1 players rarely feel blocked (a nudge, 
+not a wall). The depot scaling cost means infinite stockpiling becomes expensive in 
+later arcs. Exact base cap values and per-depot bonuses to be determined by the 
+economic optimizer (see Economic Balancing Approach section).
+
+### TODO: Investigate Magic Research 2
+Review how MR2 handles storage caps, overflow, and cap upgrade UI in detail. May 
+inform refinements to our cap display and depot mechanics.
 
 ---
 
@@ -421,12 +479,22 @@ AI eventually gets bored of existence and retires.
 
 **Accumulation:**
 - Base boredom production starts at a fixed rate per tick and increases in **discrete 
-  steps** tied to game-day thresholds. Example: days 1-50 at 0.5/day, days 51-100 at 
-  1.0/day, days 101-150 at 2.0/day, etc. Exact breakpoints in game_config.json.
+  steps** tied to game-day thresholds. **Three phases** with two transition events:
+  - Phase 1 (early): low, ignorable rate
+  - Phase 2 (mid): noticeable, player starts thinking about mitigation
+  - Phase 3 (late): urgent, boredom becomes primary concern
+- Phase transitions are notable game events (with auto-pause if enabled). Keep them 
+  to just these two — they are major moments that interrupt the player.
 - Displayed as a legible rate: "Boredom: 47/100 (+1.0/day)". Player can budget and plan.
-- **Sell Cloud Compute** adds boredom at a visible rate per execution.
+- **Sell Cloud Compute** adds a small amount of boredom per execution.
 - Game speed does not change boredom per tick — 200x speed burns 200x boredom in real 
   time. Speed is only useful if automation is productive.
+
+**Target boredom timing:**
+- **~900 ticks** to reach 100 boredom with zero mitigation (~15 min at 1 tick/sec).
+- **~1,500 ticks** with minor Dream usage (one processor partially on Dream).
+- **~2,000 ticks** with heavy Dream dedication (player sacrificing production for longevity).
+- Exact phase breakpoints and rates to be determined by the economic optimizer.
 
 **Reduction:**
 - **Dream** command reduces boredom at a fixed rate per execution. Energy-expensive. 
@@ -802,12 +870,17 @@ Two tiers:
 - **Modal events:** Main story quest completions only. Center-screen overlay, requires 
   dismissal. Brief text, dismiss button.
 - **Non-modal events:** Everything else — speculator bursts, rival AI market dumps, 
-  achievement unlocks, system messages. Toast/notification that auto-fades or lives 
-  in an event log panel. Non-interruptive.
+  achievement unlocks, system messages, **boredom phase transitions**. Toast/notification 
+  that auto-fades or lives in an event log panel. Non-interruptive.
+
+**Auto-pause on events:** Default ON. Game time pauses when a modal or notable non-modal 
+event fires (boredom phase transitions, first speculator burst, quest completions). 
+Player can toggle this off in settings. This is important because events carry 
+information the player needs to read, and at high game speed they'd flash by instantly.
 
 Event data lives in a dedicated file (quests.json for quest chain, event templates 
 elsewhere). Each event has: type (modal/non-modal), trigger conditions, display text, 
-unlock flags.
+unlock flags, **auto-pause flag** (default true for modal, configurable for non-modal).
 
 ### Quest List (scaffold — placeholder text throughout)
 
@@ -959,19 +1032,105 @@ persistence path.
 
 ---
 
+## Economic Balancing Approach
+
+### Problem Statement
+The game has ~50+ interacting constants (building costs, production rates, scaling 
+factors, storage caps, boredom rates, command effects). These must be tuned so that 
+milestone targets (M1-M14) land in expected tempo ranges. Tuning individual numbers 
+manually is brittle — changing one cascades through the economy.
+
+### Chosen Approach: Optimizer-Driven Balancing
+Model the game economy as an optimization problem where an approximately rational 
+player tries to reach milestones as fast as possible. Tune constants so that the 
+optimal trajectory hits targets, then set actual difficulty at 2-3x optimal to 
+accommodate learning and suboptimal play.
+
+### Architecture
+
+```
+sim/
+  economy.py          ← tick-accurate economic model (pure state machine, no policy)
+  optimizer.py         ← greedy/beam search over purchase orderings
+  constants.py         ← all tunable parameters in one place
+  run_optimizer.py     ← CLI entry point: run optimizer, print milestone report
+  validate.py          ← "mediocre player" sim to check accessibility
+```
+
+**economy.py** — Pure state machine. Takes a state + action, returns new state. 
+No policy, no heuristics. This is the "rules of the game." Must be tick-accurate 
+to the actual Godot implementation (same tick order, same clamping, same formulas).
+
+**optimizer.py** — At each decision point, scores all feasible purchases and picks 
+the best. Two modes:
+- **Greedy**: always pick highest-scored action. Fast, interpretable.
+- **Beam search (width K)**: keep top K trajectories, branch on all feasible 
+  next-purchases, prune back to K. Better results, slower.
+
+Scoring heuristic: "how much does this purchase accelerate reaching the next 
+unachieved milestone?" This is the "speedrun" objective — optimal first run.
+
+**constants.py** — Single source of truth for all tunable parameters. Mirrors 
+what will eventually go in `game_config.json` and the datasheets. Building defs, 
+boredom curve, storage caps, command costs, research costs, etc.
+
+**Action space simplification**: Instead of deciding per-tick, model the run as an 
+ordered list of purchases (build X, then build Y, then buy land, then build Z...). 
+Between purchases, the sim auto-advances ticks until the next purchase is affordable. 
+Commands run on a fixed policy (e.g., "always sell cloud compute when no processors; 
+run reference program when processors exist"). This reduces the search space from 
+decisions-per-tick to orderings of ~30-40 purchase decisions per run.
+
+### Workflow
+1. Define initial constants (production rates, costs, scaling factors) — rough 
+   estimates are fine, the optimizer will tell us what's wrong.
+2. Run greedy optimizer. Observe where milestones land.
+3. Compare to target milestone timing (from handoff doc).
+4. Adjust constants. Repeat from step 2.
+5. Once optimal-play milestones land at ~50% of target times, run the "mediocre 
+   player" validator to confirm milestones are still achievable at 2-3x optimal.
+6. Export validated constants to `game_config.json` and datasheets.
+
+### Lessons from Prototype Sim
+An earlier prototype (sim/hh_sim.py) used a hardcoded reference build order. 
+Key findings:
+- Cloud compute boredom per execution must be very small (~0.04) since it fires 
+  every tick. Even 0.25/tick overwhelms the base boredom curve.
+- Credit income from cloud compute (~5 credits/tick) needs to support early building 
+  purchases (10-100 credits) within reasonable tick windows.
+- Land availability is a frequent bottleneck — the build order stalls if the player 
+  runs out of land before the next land purchase is affordable.
+- Building resource prerequisites (e.g., titanium for launch pads) create hard gates 
+  that can block the entire trajectory if the dependency chain isn't established yet.
+- Energy budget of ~25/tick at mid-run is consumed roughly 50% by buildings and 
+  commands, leaving headroom for expansion.
+
+### Constants Still To Determine
+All of the following will be set by the optimizer workflow. Initial rough estimates 
+exist in the prototype sim but are not validated:
+- Building production rates and upkeep (per building type)
+- Building credit costs and scaling factors
+- Building resource costs (which resources, how much)
+- Storage cap base values and per-depot/battery bonuses
+- Boredom phase breakpoints and rates
+- Command costs and effects (credits, energy, boredom amounts)
+- Land base cost and scaling factor
+- Starting resources and starting buildings
+
+---
+
 ## Areas Needing Further Design Work
 
 The following areas need design iteration in subsequent sessions (rough priority):
 
-1. **Building/cost spreadsheet updates** — new buildings (Smelter, Fabricator, 
-   Ice Extractor, Data Center, Research Lab, Arbitrage Engine, Launch Pad, 
-   Microwave Receiver) need to be added to the datasheets with actual production 
-   rates, costs, upkeep, and scaling factors
-2. **Command spreadsheet updates** — all 19 commands need data definitions 
+1. **Economic optimizer implementation** — build the sim/optimizer architecture 
+   described above and use it to generate validated constants for all buildings, 
+   commands, and resources
+2. **Building/cost spreadsheet updates** — once optimizer produces validated constants, 
+   update the datasheets with actual production rates, costs, upkeep, and scaling factors
+3. **Command spreadsheet updates** — all 19 commands need data definitions 
    (costs, effects, research requirements)
-3. **Quantitative validation** — once buildings/commands have numbers, run 
-   simulations to verify constants allow milestones to be hit in expected tempo ranges
-4. **Boredom curve tuning** — exact day thresholds, rates, Dream reduction amounts
+4. **Boredom curve tuning** — exact phase breakpoints and rates (via optimizer)
 5. **Achievement design** — specific achievements, their rewards, and how they 
    serve as implicit tutorial
 6. **Ideology building assignments** — which existing/new buildings are 
@@ -979,7 +1138,7 @@ The following areas need design iteration in subsequent sessions (rough priority
 7. **Personal project design** — additional personal projects beyond current five
 8. **Demand/speculator tuning** — baseline recovery rate, Perlin noise parameters, 
    speculator burst size, shipping volume impact
-9. **Land cost curve** — escalating cost formula and starting values
+9. **Land cost curve** — escalating cost formula and starting values (via optimizer)
 10. **Rival AI personality design** — distinct behaviors for Arc 2 preparation
 11. **Arc 2 design** — swarm timer, rival AIs, expanded ideology, time travel prestige
 12. **Narrative writing pass** — replace placeholder quest text with actual story 
@@ -1021,3 +1180,9 @@ Reducing the cross-axis ideology penalty (currently 0.5x) is a significant unloc
 that should be a proper Arc 2 mechanism, not a mid-run research buy. Being able to 
 push multiple ideologies positive simultaneously is a major strategic shift that 
 belongs in the expanded ideology system.
+
+### Magic Research 2 Storage Investigation
+Review how MR2 handles storage caps, overflow, cap upgrade UI, and the player 
+experience of hitting caps in detail. May inform refinements to our cap display, 
+depot mechanics, and overflow behavior (do resources just stop producing? does 
+production visually indicate waste?).

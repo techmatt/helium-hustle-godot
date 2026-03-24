@@ -64,7 +64,7 @@ func refresh() -> void:
 # ── UI construction ────────────────────────────────────────────────────────────
 
 func _build_ui() -> void:
-	custom_minimum_size = Vector2(240, 0)
+	custom_minimum_size = Vector2(310, 0)
 	size_flags_horizontal = Control.SIZE_FILL
 
 	_bg_style = StyleBoxFlat.new()
@@ -77,11 +77,11 @@ func _build_ui() -> void:
 
 	var margin := MarginContainer.new()
 	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 8)
+		margin.add_theme_constant_override(side, 10)
 	add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 3)
+	vbox.add_theme_constant_override("separation", 4)
 	margin.add_child(vbox)
 
 	_build_header(vbox)
@@ -102,21 +102,21 @@ func _build_header(parent: VBoxContainer) -> void:
 	name_lbl.text = _bdef.name
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.add_theme_font_override("font", _font_rajdhani_bold)
-	name_lbl.add_theme_font_size_override("font_size", 16)
+	name_lbl.add_theme_font_size_override("font_size", 21)
 	row.add_child(name_lbl)
 
 	_count_lbl = Label.new()
 	_count_lbl.text = "(0)"
 	_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_count_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	_count_lbl.add_theme_font_size_override("font_size", 12)
+	_count_lbl.add_theme_font_size_override("font_size", 15)
 	_count_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	row.add_child(_count_lbl)
 
 	_buy_btn = Button.new()
 	_buy_btn.text = "Buy"
 	_buy_btn.add_theme_font_override("font", _font_exo2_semibold)
-	_buy_btn.add_theme_font_size_override("font_size", 12)
+	_buy_btn.add_theme_font_size_override("font_size", 15)
 	var sn: String = _bdef.short_name
 	_buy_btn.pressed.connect(func(): GameManager.buy_building(sn))
 	row.add_child(_buy_btn)
@@ -127,7 +127,7 @@ func _build_description(parent: VBoxContainer) -> void:
 	lbl.text = _bdef.description
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", Color(0.70, 0.70, 0.70))
 	parent.add_child(lbl)
 
@@ -137,7 +137,7 @@ func _build_production(parent: VBoxContainer) -> void:
 		var lbl := Label.new()
 		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), res]
 		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_font_size_override("font_size", 14)
 		lbl.add_theme_color_override("font_color", COLOR_POSITIVE)
 		parent.add_child(lbl)
 
@@ -147,7 +147,7 @@ func _build_upkeep(parent: VBoxContainer) -> void:
 		var lbl := Label.new()
 		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), res]
 		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_font_size_override("font_size", 14)
 		lbl.add_theme_color_override("font_color", COLOR_NEGATIVE)
 		parent.add_child(lbl)
 
@@ -158,7 +158,7 @@ func _build_effects(parent: VBoxContainer) -> void:
 			var lbl := Label.new()
 			lbl.text = "  +%.0f %s storage" % [float(effect.value), effect.resource]
 			lbl.add_theme_font_override("font", _font_exo2_regular)
-			lbl.add_theme_font_size_override("font_size", 11)
+			lbl.add_theme_font_size_override("font_size", 14)
 			lbl.add_theme_color_override("font_color", Color(0.80, 0.80, 0.50))
 			parent.add_child(lbl)
 
@@ -178,7 +178,7 @@ func _build_cost_grid(parent: VBoxContainer) -> void:
 func _add_cost_row(grid: GridContainer, res: String) -> void:
 	var icon := ColorRect.new()
 	icon.color = RESOURCE_COLORS.get(res, Color.WHITE)
-	icon.custom_minimum_size = Vector2(10, 10)
+	icon.custom_minimum_size = Vector2(13, 13)
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	grid.add_child(icon)
 
@@ -186,13 +186,13 @@ func _add_cost_row(grid: GridContainer, res: String) -> void:
 	name_lbl.text = res
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.add_theme_font_override("font", _font_exo2_regular)
-	name_lbl.add_theme_font_size_override("font_size", 11)
+	name_lbl.add_theme_font_size_override("font_size", 14)
 	grid.add_child(name_lbl)
 
 	var amt_lbl := Label.new()
 	amt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	amt_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	amt_lbl.add_theme_font_size_override("font_size", 11)
+	amt_lbl.add_theme_font_size_override("font_size", 14)
 	grid.add_child(amt_lbl)
 
 	_cost_labels[res] = amt_lbl
