@@ -40,24 +40,23 @@ Building processing order matches the row order in `buildings.json`.
 **The JSON files are ground truth.** Do not treat the xlsx or Google Sheet as authoritative — they are human-readable intermediates for visual inspection and editing only.
 
 ```
-data/generated/*.json          ← GROUND TRUTH (committed, edited directly or via xlsx round-trip)
-data/game_config.json          ← hand-edited global parameters (also ground truth)
+godot/data/*.json              ← GROUND TRUTH (committed, edited directly or via xlsx round-trip)
 
 Round-trip for visual editing:
-  python data/json_to_xlsx.py  → data/Helium Hustle Datasheets.xlsx  (JSON → xlsx)
+  python data/json_to_xlsx.py  → data/Helium Hustle Datasheets.xlsx  (JSON → xlsx, 4 tabs)
   (edit xlsx)
-  python data/convert.py       → data/generated/*.json               (xlsx → JSON)
+  python data/convert.py       → godot/data/*.json                   (xlsx → JSON)
 ```
 
-Key data files:
-- `data/generated/buildings.json` — building definitions: `name`, `short_name`, `costs`, `production`, `upkeep`, `effects`, `land`, `cost_scaling`
-- `data/generated/resources.json` — resource definitions: `name`, `short_name`, `storage_base`
-- `data/generated/commands.json` — program command definitions
-- `data/game_config.json` — starting resources/buildings, boredom schedule
+Key data files (all in `godot/data/`):
+- `buildings.json` — building definitions: `name`, `short_name`, `category`, `costs`, `production`, `upkeep`, `effects`, `land`, `cost_scaling`
+- `resources.json` — resource definitions: `name`, `short_name`, `storage_base`
+- `commands.json` — program command definitions
+- `game_config.json` — starting resources/buildings, boredom curve, shipment params, land costs, etc.
 
 Building purchase cost formula: `base_cost × (cost_scaling ^ num_owned)`. Land cost is fixed (doesn't scale). All costs must be affordable simultaneously.
 
-**sim/constants.py** mirrors game data for use by the Python optimizer. It is NOT ground truth — if you change `data/generated/*.json`, update `sim/constants.py` to match (or regenerate it).
+**sim/constants.py** mirrors game data for use by the Python optimizer. It is NOT ground truth — if you change the JSON files, update `sim/constants.py` to match.
 
 ## Repository Structure
 

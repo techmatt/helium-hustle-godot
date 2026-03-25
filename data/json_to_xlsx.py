@@ -2,7 +2,7 @@
 """
 Helium Hustle — Reverse data converter: JSON -> xlsx
 
-Converts data/generated/*.json back into a spreadsheet that data/convert.py
+Converts godot/data/*.json back into a spreadsheet that data/convert.py
 can read. Use this when you want to visually inspect or edit game data:
 
     1. python data/json_to_xlsx.py          # JSON -> xlsx
@@ -26,12 +26,12 @@ except ImportError:
     print("ERROR: openpyxl required. Install with: pip install openpyxl")
     sys.exit(1)
 
-DATA_DIR = Path(__file__).parent
-GENERATED_DIR = DATA_DIR / "generated"
+DATA_DIR    = Path(__file__).parent
+GODOT_DATA  = DATA_DIR.parent / "godot" / "data"
 
 
 # ============================================================================
-# Cell encoding helpers
+# Cell encoding helpers (Resources / Buildings / Commands)
 # ============================================================================
 
 def encode_requires(req: dict) -> str:
@@ -49,11 +49,11 @@ def encode_production(production: dict) -> list:
 
 
 def encode_upkeep(upkeep: dict) -> list:
-    # JSON upkeep values are positive; cell encoding uses '-' operator
     return [f"{res}-{val:g}" for res, val in upkeep.items()]
 
 
-def encode_effects(effects: list) -> list:
+def encode_building_effects(effects: list) -> list:
+    """Encode building effects using prefix_resource+value format."""
     result = []
     for e in effects:
         if set(e.keys()) == {"effect"}:
@@ -65,8 +65,45 @@ def encode_effects(effects: list) -> list:
     return result
 
 
+def encode_command_effect(e: dict) -> str:
+    """
+    Encode a command effect as 'effect_name key=val ...' string.
+
+    Examples:
+      {"effect": "boredom_add", "value": 0.04}  -> 'boredom_add value=0.04'
+      {"effect": "launch_full_pads"}             -> 'launch_full_pads'
+      {"effect": "overclock", "target": "extraction", "bonus": 0.05, "duration": 5}
+                                                 -> 'overclock target=extraction bonus=0.05 duration=5'
+    """
+    parts = [e["effect"]]
+    for k, v in e.items():
+        if k == "effect":
+            continue
+        parts.append(f"{k}={v:g}" if isinstance(v, float) else f"{k}={v}")
+    return " ".join(parts)
+
+
 def pad(lst: list, n: int) -> list:
     return (lst + ["x"] * n)[:n]
+
+
+# ============================================================================
+# Config tab helpers
+# ============================================================================
+
+def _flatten_config(obj, prefix=''):
+    """Yield (dotpath, value) pairs for all leaf nodes of a nested structure."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            new_prefix = f"{prefix}.{k}" if prefix else k
+            yield from _flatten_config(v, new_prefix)
+    elif isinstance(obj, list) and obj and isinstance(obj[0], dict):
+        for i, item in enumerate(obj):
+            yield from _flatten_config(item, f"{prefix}[{i}]")
+    elif isinstance(obj, list):
+        yield prefix, ','.join(str(x) for x in obj)
+    else:
+        yield prefix, obj
 
 
 # ============================================================================
@@ -85,7 +122,7 @@ def write_resources(ws, resources: list) -> None:
 
 def write_buildings(ws, buildings: list) -> None:
     ws.append([
-        "Building", "Short name", "Requires", "Land", "Scaling",
+        "Building", "Short name", "Category", "Requires", "Land", "Scaling",
         "Cost 1", "Cost 2", "Cost 3", "Cost 4",
         "Prod 1", "Prod 2", "Prod 3",
         "Upkeep 1", "Upkeep 2",
@@ -96,6 +133,7 @@ def write_buildings(ws, buildings: list) -> None:
         row = [
             b["name"],
             b["short_name"],
+            b.get("category", ""),
             encode_requires(b.get("requires", {})),
             b["land"],
             b["cost_scaling"],
@@ -103,7 +141,7 @@ def write_buildings(ws, buildings: list) -> None:
         row += pad(encode_costs(b.get("costs", {})), 4)
         row += pad(encode_production(b.get("production", {})), 3)
         row += pad(encode_upkeep(b.get("upkeep", {})), 2)
-        row += pad(encode_effects(b.get("effects", [])), 3)
+        row += pad(encode_building_effects(b.get("effects", [])), 3)
         row += [b.get("description") or "x"]
         ws.append(row)
 
@@ -124,9 +162,18 @@ def write_commands(ws, commands: list) -> None:
         ]
         row += pad(encode_costs(c.get("costs", {})), 3)
         row += pad(encode_production(c.get("production", {})), 3)
-        row += pad(encode_effects(c.get("effects", [])), 3)
+        row += pad([encode_command_effect(e) for e in c.get("effects", [])], 3)
         row += [c.get("description") or "x"]
         ws.append(row)
+
+
+def write_config(ws, config: dict) -> None:
+    ws.append(["Key", "Value"])
+    for i, (section_key, section_val) in enumerate(config.items()):
+        if i > 0:
+            ws.append(["", ""])  # blank separator between top-level sections
+        for key_path, value in _flatten_config({section_key: section_val}):
+            ws.append([key_path, value])
 
 
 def style_header(ws) -> None:
@@ -140,19 +187,18 @@ def style_header(ws) -> None:
 # ============================================================================
 
 def main():
-    missing = [
-        name for name in ("resources.json", "buildings.json", "commands.json")
-        if not (GENERATED_DIR / name).exists()
-    ]
+    required = ["resources.json", "buildings.json", "commands.json", "game_config.json"]
+    missing = [name for name in required if not (GODOT_DATA / name).exists()]
     if missing:
-        print(f"ERROR: Missing JSON files in {GENERATED_DIR}:")
+        print(f"ERROR: Missing JSON files in {GODOT_DATA}:")
         for m in missing:
             print(f"  {m}")
         sys.exit(1)
 
-    resources = json.loads((GENERATED_DIR / "resources.json").read_text(encoding="utf-8"))
-    buildings = json.loads((GENERATED_DIR / "buildings.json").read_text(encoding="utf-8"))
-    commands  = json.loads((GENERATED_DIR / "commands.json").read_text(encoding="utf-8"))
+    resources   = json.loads((GODOT_DATA / "resources.json").read_text(encoding="utf-8"))
+    buildings   = json.loads((GODOT_DATA / "buildings.json").read_text(encoding="utf-8"))
+    commands    = json.loads((GODOT_DATA / "commands.json").read_text(encoding="utf-8"))
+    game_config = json.loads((GODOT_DATA / "game_config.json").read_text(encoding="utf-8"))
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -169,12 +215,17 @@ def main():
     write_commands(ws_c, commands)
     style_header(ws_c)
 
+    ws_cfg = wb.create_sheet("Config")
+    write_config(ws_cfg, game_config)
+    style_header(ws_cfg)
+
     out = DATA_DIR / "Helium Hustle Datasheets.xlsx"
     wb.save(out)
     print(f"Written: {out}")
     print(f"  Resources: {len(resources)}")
     print(f"  Buildings: {len(buildings)}")
     print(f"  Commands:  {len(commands)}")
+    print(f"  Config:    {sum(1 for _ in _flatten_config(game_config))} keys")
     print()
     print("Edit the xlsx, then run: python data/convert.py")
 

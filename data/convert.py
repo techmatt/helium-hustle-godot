@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 Helium Hustle Datasheet Converter
-Converts helium_hustle_datasheets.xlsx into JSON files for Godot.
+Converts Helium Hustle Datasheets.xlsx into JSON files for Godot.
 
-NOTE: The JSON files in generated/ are ground truth. This script converts
+NOTE: The JSON files in godot/data/ are ground truth. This script converts
 an xlsx (human-readable intermediate) back into those JSON files. To edit
 data visually, use the round-trip workflow:
     python data/json_to_xlsx.py   # JSON -> xlsx for editing
@@ -14,16 +14,16 @@ Usage:
     python convert.py [path_to_xlsx]
 
 If no path given, looks for "Helium Hustle Datasheets.xlsx" in the same directory.
-Outputs to generated/ subdirectory next to this script.
+Outputs to godot/data/ (four files: resources.json, buildings.json,
+commands.json, game_config.json).
 
 ========================================================================
 SPREADSHEET FORMAT SPEC
 ========================================================================
 
-The source spreadsheet lives in Google Drive and is downloaded as .xlsx.
-It has three tabs: Resources, Buildings, Commands.
+Four tabs: Resources, Buildings, Commands, Config.
 
-CELL ENCODING:
+CELL ENCODING (Resources / Buildings / Commands tabs):
   "x"                   = empty/null (ignored by parser)
   "shortname=amount"    = cost (one-time purchase price, operator =)
   "shortname+amount"    = production (per-tick gain, operator +)
@@ -35,15 +35,22 @@ Operators are CONFIRMATORY: the parser validates that = appears in Cost
 columns, + in Prod columns, - in Upkeep columns. Mismatches are errors.
 Effect columns accept any operator or bare flags.
 
-Resource short names are defined in the Resources tab (eng, reg, ice,
-he3, cred, land, boredom, proc).
+Resource short names are defined in the Resources tab.
 
 SHEET SCHEMAS:
   Resources: Resource | Short name | Storage base
-  Buildings: Building | Short name | Requires | Land | Scaling |
+  Buildings: Building | Short name | Category | Requires | Land | Scaling |
              Cost 1-4 | Prod 1-3 | Upkeep 1-2 | Effect 1-3 | Desc
   Commands:  Command | Short name | Requires |
              Cost 1-3 | Prod 1-3 | Effect 1-3 | Desc
+  Config:    Key | Value
+             Flat dot-notation key paths, e.g.:
+               starting_resources.eng        100
+               boredom_curve[0].day          0
+               shipment.fuel_per_pad         20
+               ideology.rank_thresholds      70,175,333,570,925
+             Rows with empty/null Key or Key starting with # are skipped.
+             Comma-separated values are parsed as arrays of numbers.
 
 Column caps (Cost 1-4, Prod 1-3, etc.) are intentional design limits.
 Headers are normalized to lowercase+stripped, so casing doesn't matter.
@@ -56,24 +63,20 @@ REQUIRES COLUMN:
 EXTENDING THIS SCRIPT:
   - New resource: add row to Resources tab. No script changes needed.
   - New building/command: add row to respective tab. No script changes.
+  - New config key: add row to Config tab. No script changes needed.
   - New column cap (e.g. Cost 5): update the range() in the converter
     function AND update the xlsx generation if applicable.
   - New effect prefix (e.g. "mult_"): no script changes needed, the
     prefix parser handles any prefix_resource+value pattern.
   - New requires type: add handling in parse_requires() if needed.
   - New sheet (e.g. Research): add a convert_research() function
-    following the same pattern, add to converters dict in main().
-
-Global game params (starting resources, starting buildings, boredom
-curve, shipment thresholds, speed caps) live in a separate JSON file
-in the game repo, NOT in this spreadsheet.
+    following the same pattern, add to converters list in main().
 ========================================================================
 """
 
 import json
-import os
-import sys
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -84,27 +87,16 @@ except ImportError:
     sys.exit(1)
 
 
-# --- Cell Parsing ---
+# ============================================================================
+# Cell parsing (Resources / Buildings / Commands tabs)
+# ============================================================================
 
-# Operators and which column types expect them
 COLUMN_OPERATORS = {
     "cost": "=",
     "prod": "+",
     "upkeep": "-",
 }
 
-def classify_column(header: str) -> Optional[str]:
-    """Map a column header to its type for operator validation."""
-    h = header.lower()
-    if h.startswith("cost"):
-        return "cost"
-    if h.startswith("prod"):
-        return "prod"
-    if h.startswith("upkeep"):
-        return "upkeep"
-    if h.startswith("effect"):
-        return "effect"
-    return None
 
 def parse_resource_cell(raw: str, col_type: Optional[str], context: str) -> Optional[dict]:
     """
@@ -119,17 +111,13 @@ def parse_resource_cell(raw: str, col_type: Optional[str], context: str) -> Opti
 
     raw = str(raw).strip()
 
-    # Handle flag-style effects with no operator (like 'next_cmd_double')
     if col_type == "effect" and not any(op in raw for op in "=+-"):
         return {"effect": raw}
 
-    # Parse: optional_prefix + resource_shortname + operator + value
     match = re.match(r'^([a-z_]*?)([a-z][a-z0-9]*)([=+\-])(.+)$', raw)
     if not match:
         raise ValueError(f"{context}: Cannot parse cell '{raw}'")
 
-    prefix_and_resource = raw
-    # Re-parse: split on the operator
     for op in "=+-":
         if op in raw:
             left, right = raw.split(op, 1)
@@ -138,7 +126,6 @@ def parse_resource_cell(raw: str, col_type: Optional[str], context: str) -> Opti
             except ValueError:
                 raise ValueError(f"{context}: Bad numeric value in '{raw}'")
 
-            # Validate operator matches column type
             if col_type in COLUMN_OPERATORS:
                 expected_op = COLUMN_OPERATORS[col_type]
                 if op != expected_op:
@@ -147,7 +134,6 @@ def parse_resource_cell(raw: str, col_type: Optional[str], context: str) -> Opti
                         f"Column type '{col_type}' expects '{expected_op}', got '{op}'"
                     )
 
-            # Split prefix from resource name (e.g., 'store_eng' -> prefix='store', resource='eng')
             if "_" in left and col_type == "effect":
                 parts = left.rsplit("_", 1)
                 return {"prefix": parts[0], "resource": parts[1], "operator": op, "value": value}
@@ -157,8 +143,34 @@ def parse_resource_cell(raw: str, col_type: Optional[str], context: str) -> Opti
     raise ValueError(f"{context}: No operator found in '{raw}'")
 
 
+def parse_command_effect_cell(raw) -> Optional[dict]:
+    """
+    Parse a command effect cell using 'effect_name key=val ...' format.
+
+    Examples:
+      'boredom_add value=0.04'          -> {"effect": "boredom_add", "value": 0.04}
+      'launch_full_pads'                -> {"effect": "launch_full_pads"}
+      'overclock target=extraction bonus=0.05 duration=5'
+                                        -> {"effect": "overclock", "target": "extraction",
+                                            "bonus": 0.05, "duration": 5}
+    Returns None for 'x' or empty cells.
+    """
+    if raw is None or str(raw).strip().lower() == "x":
+        return None
+    raw = str(raw).strip()
+    parts = raw.split()
+    result: dict = {"effect": parts[0]}
+    for kv in parts[1:]:
+        k, _, v = kv.partition("=")
+        try:
+            fv = float(v)
+            result[k] = int(fv) if fv == int(fv) else fv
+        except ValueError:
+            result[k] = v
+    return result
+
+
 def parse_requires(raw: str) -> dict:
-    """Parse a Requires cell like 'none', 'building=refinery', 'research=something'."""
     if raw is None or str(raw).strip().lower() == "none":
         return {"type": "none"}
     raw = str(raw).strip()
@@ -168,13 +180,13 @@ def parse_requires(raw: str) -> dict:
     raise ValueError(f"Cannot parse Requires value: '{raw}'")
 
 
-# --- Sheet Readers ---
+# ============================================================================
+# Sheet reader
+# ============================================================================
 
 def read_sheet(wb, sheet_name: str) -> tuple:
-    """Read a sheet into (headers, rows). Rows are dicts keyed by normalized header."""
     ws = wb[sheet_name]
     raw_headers = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
-    # Normalize: strip whitespace, lowercase
     headers = [h.strip().lower() if h else "" for h in raw_headers]
 
     rows = []
@@ -187,7 +199,6 @@ def read_sheet(wb, sheet_name: str) -> tuple:
 
 
 def get(row, key, sheet_name, row_index, headers, required=True):
-    """Safely access a row dict key with a clear error on missing columns."""
     if key in row:
         return row[key]
     if required:
@@ -198,6 +209,10 @@ def get(row, key, sheet_name, row_index, headers, required=True):
         )
     return None
 
+
+# ============================================================================
+# Resources / Buildings / Commands converters
+# ============================================================================
 
 def convert_resources(wb) -> list:
     headers, rows = read_sheet(wb, "Resources")
@@ -223,38 +238,34 @@ def convert_buildings(wb) -> list:
         name = g("building")
         ctx = f"Buildings/{name}"
 
-        # Parse grouped columns
         costs = []
         for j in range(1, 5):
-            key = f"cost {j}"
-            parsed = parse_resource_cell(row.get(key), "cost", f"{ctx}/Cost {j}")
+            parsed = parse_resource_cell(row.get(f"cost {j}"), "cost", f"{ctx}/Cost {j}")
             if parsed:
                 costs.append(parsed)
 
         productions = []
         for j in range(1, 4):
-            key = f"prod {j}"
-            parsed = parse_resource_cell(row.get(key), "prod", f"{ctx}/Prod {j}")
+            parsed = parse_resource_cell(row.get(f"prod {j}"), "prod", f"{ctx}/Prod {j}")
             if parsed:
                 productions.append(parsed)
 
         upkeeps = []
         for j in range(1, 3):
-            key = f"upkeep {j}"
-            parsed = parse_resource_cell(row.get(key), "upkeep", f"{ctx}/Upkeep {j}")
+            parsed = parse_resource_cell(row.get(f"upkeep {j}"), "upkeep", f"{ctx}/Upkeep {j}")
             if parsed:
                 upkeeps.append(parsed)
 
         effects = []
         for j in range(1, 4):
-            key = f"effect {j}"
-            parsed = parse_resource_cell(row.get(key), "effect", f"{ctx}/Effect {j}")
+            parsed = parse_resource_cell(row.get(f"effect {j}"), "effect", f"{ctx}/Effect {j}")
             if parsed:
                 effects.append(parsed)
 
         entry = {
             "name": name,
             "short_name": g("short name"),
+            "category": g("category", req=False) or "",
             "requires": parse_requires(g("requires", req=False)),
             "land": int(g("land")),
             "cost_scaling": float(g("scaling")),
@@ -280,22 +291,19 @@ def convert_commands(wb) -> list:
 
         costs = []
         for j in range(1, 4):
-            key = f"cost {j}"
-            parsed = parse_resource_cell(row.get(key), "cost", f"{ctx}/Cost {j}")
+            parsed = parse_resource_cell(row.get(f"cost {j}"), "cost", f"{ctx}/Cost {j}")
             if parsed:
                 costs.append(parsed)
 
         productions = []
         for j in range(1, 4):
-            key = f"prod {j}"
-            parsed = parse_resource_cell(row.get(key), "prod", f"{ctx}/Prod {j}")
+            parsed = parse_resource_cell(row.get(f"prod {j}"), "prod", f"{ctx}/Prod {j}")
             if parsed:
                 productions.append(parsed)
 
         effects = []
         for j in range(1, 4):
-            key = f"effect {j}"
-            parsed = parse_resource_cell(row.get(key), "effect", f"{ctx}/Effect {j}")
+            parsed = parse_command_effect_cell(row.get(f"effect {j}"))
             if parsed:
                 effects.append(parsed)
 
@@ -313,7 +321,88 @@ def convert_commands(wb) -> list:
     return commands
 
 
-# --- Main ---
+# ============================================================================
+# Config tab converter  (Key | Value  dot-notation rows -> nested dict)
+# ============================================================================
+
+_PATH_PART = re.compile(r'([^\.\[\]]+)|\[(\d+)\]')
+
+
+def _auto_type(value):
+    """Convert a cell value to the appropriate Python type."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if value is None:
+        return None
+    s = str(value).strip()
+    if s.lower() == 'true':
+        return True
+    if s.lower() == 'false':
+        return False
+    # Comma-separated list of numbers (e.g. "70,175,333,570,925")
+    if ',' in s:
+        try:
+            parts = [float(x.strip()) for x in s.split(',')]
+            return [int(x) if x == int(x) else x for x in parts]
+        except (ValueError, OverflowError):
+            return s
+    # Integer or float
+    try:
+        f = float(s)
+        return int(f) if f == int(f) else f
+    except ValueError:
+        return s
+
+
+def _set_config_path(root: dict, path: str, value) -> None:
+    """Set a value at a dot/bracket path in a nested dict (mutates root)."""
+    tokens = []
+    for key_part, idx_part in _PATH_PART.findall(path):
+        if key_part:
+            tokens.append(('key', key_part))
+        else:
+            tokens.append(('index', int(idx_part)))
+
+    obj = root
+    for i, (typ, key) in enumerate(tokens[:-1]):
+        next_typ, _ = tokens[i + 1]
+        if typ == 'key':
+            if key not in obj:
+                obj[key] = [] if next_typ == 'index' else {}
+            obj = obj[key]
+        else:  # index
+            while len(obj) <= key:
+                obj.append({})
+            obj = obj[key]
+
+    final_typ, final_key = tokens[-1]
+    typed_val = _auto_type(value)
+    if final_typ == 'key':
+        obj[final_key] = typed_val
+    else:
+        while len(obj) <= final_key:
+            obj.append(None)
+        obj[final_key] = typed_val
+
+
+def convert_config(wb) -> dict:
+    """Parse the Config tab (Key | Value rows) into a nested dict."""
+    ws = wb["Config"]
+    result = {}
+    for r in range(2, ws.max_row + 1):
+        key = ws.cell(row=r, column=1).value
+        value = ws.cell(row=r, column=2).value
+        if not key or str(key).strip().startswith('#'):
+            continue
+        _set_config_path(result, str(key).strip(), value)
+    return result
+
+
+# ============================================================================
+# Main
+# ============================================================================
 
 def main():
     script_dir = Path(__file__).parent
@@ -329,26 +418,28 @@ def main():
     print(f"Reading: {xlsx_path}")
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
 
-    output_dir = script_dir / "generated"
+    output_dir = script_dir.parent / "godot" / "data"
     output_dir.mkdir(exist_ok=True)
 
     errors = []
 
-    # Convert each sheet
-    converters = {
-        "resources.json": lambda: convert_resources(wb),
-        "buildings.json": lambda: convert_buildings(wb),
-        "commands.json": lambda: convert_commands(wb),
-    }
+    converters = [
+        ("resources.json",   lambda: convert_resources(wb)),
+        ("buildings.json",   lambda: convert_buildings(wb)),
+        ("commands.json",    lambda: convert_commands(wb)),
+        ("game_config.json", lambda: convert_config(wb)),
+    ]
 
-    for filename, converter in converters.items():
+    for filename, converter in converters:
         try:
             data = converter()
             out_path = output_dir / filename
-            with open(out_path, "w") as f:
+            with open(out_path, "w", newline="\n") as f:
                 json.dump(data, f, indent=2)
-            print(f"  Wrote {filename}: {len(data)} entries")
-        except ValueError as e:
+                f.write("\n")
+            size = f"{len(data)} entries" if isinstance(data, list) else "ok"
+            print(f"  Wrote {filename}: {size}")
+        except (ValueError, KeyError) as e:
             errors.append(str(e))
             print(f"  ERROR in {filename}: {e}")
 

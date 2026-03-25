@@ -21,8 +21,8 @@ var _buildings_data: Array = []
 
 
 func _ready() -> void:
-	var resources_data: Array = _load_json("res://data/generated/resources.json")
-	_buildings_data = _load_json("res://data/generated/buildings.json")
+	var resources_data: Array = _load_json("res://data/resources.json")
+	_buildings_data = _load_json("res://data/buildings.json")
 	_game_config = _load_json("res://data/game_config.json")
 
 	sim = GameSimulation.new()

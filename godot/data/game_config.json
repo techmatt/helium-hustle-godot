@@ -12,25 +12,39 @@
     "land": 20,
     "boredom": 0
   },
-
   "starting_buildings": {
     "panel": 1,
     "excavator": 1
   },
-
   "starting_processors": 1,
-
   "boredom_curve": [
-    { "day": 0,   "rate": 0.01 },
-    { "day": 60,  "rate": 0.03 },
-    { "day": 180, "rate": 0.06 },
-    { "day": 360, "rate": 0.10 },
-    { "day": 720, "rate": 0.15 },
-    { "day": 900, "rate": 0.20 }
+    {
+      "day": 0,
+      "rate": 0.01
+    },
+    {
+      "day": 60,
+      "rate": 0.03
+    },
+    {
+      "day": 180,
+      "rate": 0.06
+    },
+    {
+      "day": 360,
+      "rate": 0.1
+    },
+    {
+      "day": 720,
+      "rate": 0.15
+    },
+    {
+      "day": 900,
+      "rate": 0.2
+    }
   ],
   "boredom_max": 100,
   "boredom_forced_retire": true,
-
   "shipment": {
     "pad_cargo_capacity": 100,
     "fuel_per_pad": 20,
@@ -42,33 +56,34 @@
       "prop": 8
     }
   },
-
   "demand": {
     "baseline": 0.5,
     "recovery_rate": 0.005,
     "ship_volume_pressure": 0.002,
     "noise_weight": 0.2
   },
-
   "speculators": {
     "burst_window_ticks": 500,
     "burst_pressure": 0.3,
     "natural_decay_rate": 0.01
   },
-
   "rival_ai": {
     "dump_interval_ticks": 300,
     "demand_reduction": 0.15
   },
-
   "land": {
     "base_cost": 15,
     "cost_scaling": 1.15
   },
-
   "ideology": {
     "push_amount": 1,
     "cross_axis_penalty": 0.5,
-    "rank_thresholds": [70, 175, 333, 570, 925]
+    "rank_thresholds": [
+      70,
+      175,
+      333,
+      570,
+      925
+    ]
   }
 }

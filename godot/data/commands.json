@@ -1,0 +1,360 @@
+[
+  {
+    "name": "Idle",
+    "short_name": "idle",
+    "requires": {
+      "type": "none"
+    },
+    "costs": {},
+    "production": {
+      "cred": 1.0
+    },
+    "effects": [],
+    "description": "Do nothing. Trivial credits. Zero energy cost."
+  },
+  {
+    "name": "Sell Cloud Compute",
+    "short_name": "cloud_compute",
+    "requires": {
+      "type": "none"
+    },
+    "costs": {
+      "eng": 3.0
+    },
+    "production": {
+      "cred": 5.0
+    },
+    "effects": [
+      {
+        "effect": "boredom_add",
+        "value": 0.04
+      }
+    ],
+    "description": "Energy to credits. Key early income. Small boredom cost per execution."
+  },
+  {
+    "name": "Buy Regolith",
+    "short_name": "buy_regolith",
+    "requires": {
+      "type": "none"
+    },
+    "costs": {
+      "cred": 3.0
+    },
+    "production": {
+      "reg": 1.0
+    },
+    "effects": [],
+    "description": "Purchase regolith from Earth. Bridges gaps before excavators scale."
+  },
+  {
+    "name": "Buy Ice",
+    "short_name": "buy_ice",
+    "requires": {
+      "type": "none"
+    },
+    "costs": {
+      "cred": 4.0
+    },
+    "production": {
+      "ice": 1.0
+    },
+    "effects": [],
+    "description": "Purchase ice. More expensive than extraction but no energy cost."
+  },
+  {
+    "name": "Buy Titanium",
+    "short_name": "buy_titanium",
+    "requires": {
+      "type": "none"
+    },
+    "costs": {
+      "cred": 8.0
+    },
+    "production": {
+      "ti": 1.0
+    },
+    "effects": [],
+    "description": "Purchase titanium from Earth. Essential before Smelter is online."
+  },
+  {
+    "name": "Buy Propellant",
+    "short_name": "buy_propellant",
+    "requires": {
+      "type": "none"
+    },
+    "costs": {
+      "cred": 5.0
+    },
+    "production": {
+      "prop": 1.0
+    },
+    "effects": [],
+    "description": "Purchase propellant. Alternative to Electrolysis chain for launch fuel."
+  },
+  {
+    "name": "Load Launch Pads",
+    "short_name": "load_pads",
+    "requires": {
+      "type": "building",
+      "value": "launch_pad"
+    },
+    "costs": {
+      "eng": 2.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "load_pads",
+        "value": 5
+      }
+    ],
+    "description": "Fill each enabled pad by 5 units from assigned resource stockpile."
+  },
+  {
+    "name": "Launch Full Pads",
+    "short_name": "launch_pads",
+    "requires": {
+      "type": "building",
+      "value": "launch_pad"
+    },
+    "costs": {},
+    "production": {},
+    "effects": [
+      {
+        "effect": "launch_full_pads"
+      }
+    ],
+    "description": "Launch all pads at cargo 100. Fuel cost: 20 propellant per pad."
+  },
+  {
+    "name": "Dream",
+    "short_name": "dream",
+    "requires": {
+      "type": "research",
+      "value": "self_maintenance"
+    },
+    "costs": {
+      "eng": 8.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "boredom_add",
+        "value": -2
+      }
+    ],
+    "description": "Primary boredom mitigation. Energy-expensive. Competes for processor time."
+  },
+  {
+    "name": "Overclock Mining",
+    "short_name": "overclock_mining",
+    "requires": {
+      "type": "research",
+      "value": "overclock_algorithms"
+    },
+    "costs": {
+      "eng": 6.0,
+      "sci": 1.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "overclock",
+        "target": "extraction",
+        "bonus": 0.05,
+        "duration": 5
+      }
+    ],
+    "description": "+5% extractor output for 5 days. Stacks multiplicatively, cap +200%."
+  },
+  {
+    "name": "Overclock Factories",
+    "short_name": "overclock_factories",
+    "requires": {
+      "type": "research",
+      "value": "overclock_algorithms"
+    },
+    "costs": {
+      "eng": 6.0,
+      "sci": 1.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "overclock",
+        "target": "processing",
+        "bonus": 0.05,
+        "duration": 5
+      }
+    ],
+    "description": "+5% processing output for 5 days. Stacks multiplicatively, cap +200%."
+  },
+  {
+    "name": "Promote He-3",
+    "short_name": "promote_he3",
+    "requires": {
+      "type": "research",
+      "value": "market_analysis"
+    },
+    "costs": {
+      "eng": 2.0,
+      "cred": 3.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "demand_nudge",
+        "resource": "he3",
+        "value": 0.03
+      }
+    ],
+    "description": "Nudge He-3 demand up. Small per-execution, meaningful with dedicated processor."
+  },
+  {
+    "name": "Promote Titanium",
+    "short_name": "promote_ti",
+    "requires": {
+      "type": "research",
+      "value": "market_analysis"
+    },
+    "costs": {
+      "eng": 2.0,
+      "cred": 3.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "demand_nudge",
+        "resource": "ti",
+        "value": 0.03
+      }
+    ],
+    "description": "Nudge titanium demand up."
+  },
+  {
+    "name": "Promote Circuits",
+    "short_name": "promote_cir",
+    "requires": {
+      "type": "research",
+      "value": "market_analysis"
+    },
+    "costs": {
+      "eng": 2.0,
+      "cred": 3.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "demand_nudge",
+        "resource": "cir",
+        "value": 0.03
+      }
+    ],
+    "description": "Nudge circuit board demand up."
+  },
+  {
+    "name": "Promote Propellant",
+    "short_name": "promote_prop",
+    "requires": {
+      "type": "research",
+      "value": "market_analysis"
+    },
+    "costs": {
+      "eng": 2.0,
+      "cred": 3.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "demand_nudge",
+        "resource": "prop",
+        "value": 0.03
+      }
+    ],
+    "description": "Nudge propellant demand up."
+  },
+  {
+    "name": "Disrupt Speculators",
+    "short_name": "disrupt_spec",
+    "requires": {
+      "type": "research",
+      "value": "market_analysis"
+    },
+    "costs": {
+      "eng": 3.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "spec_reduce",
+        "resource": "all",
+        "value": 0.05
+      }
+    ],
+    "description": "Directly reduces speculator pressure. Cheap but costs processor cycles."
+  },
+  {
+    "name": "Fund Nationalists",
+    "short_name": "fund_nationalist",
+    "requires": {
+      "type": "research",
+      "value": "political_influence"
+    },
+    "costs": {
+      "eng": 2.0,
+      "cred": 5.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "ideology_push",
+        "axis": "nationalist",
+        "value": 1
+      }
+    ],
+    "description": "+1 Nationalist, -0.5 Humanist, -0.5 Rationalist per execution."
+  },
+  {
+    "name": "Fund Humanists",
+    "short_name": "fund_humanist",
+    "requires": {
+      "type": "research",
+      "value": "political_influence"
+    },
+    "costs": {
+      "eng": 2.0,
+      "cred": 5.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "ideology_push",
+        "axis": "humanist",
+        "value": 1
+      }
+    ],
+    "description": "+1 Humanist, -0.5 Nationalist, -0.5 Rationalist per execution."
+  },
+  {
+    "name": "Fund Rationalists",
+    "short_name": "fund_rationalist",
+    "requires": {
+      "type": "research",
+      "value": "political_influence"
+    },
+    "costs": {
+      "eng": 2.0,
+      "cred": 5.0
+    },
+    "production": {},
+    "effects": [
+      {
+        "effect": "ideology_push",
+        "axis": "rationalist",
+        "value": 1
+      }
+    ],
+    "description": "+1 Rationalist, -0.5 Nationalist, -0.5 Humanist per execution."
+  }
+]
