@@ -16,7 +16,9 @@ Usage:
     python run_optimizer.py
 """
 
+import csv
 import time
+from pathlib import Path
 from typing import Optional
 
 from constants import (
@@ -294,6 +296,101 @@ def print_structural_summary(state, build_log: list, history: list) -> None:
 
 
 # ============================================================================
+# CSV tick report
+# ============================================================================
+
+def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") -> None:
+    """
+    Write one row per tick to a CSV file.
+
+    Columns: tick, action, credits, boredom, energy/cap, regolith/cap, ice/cap,
+    he3/cap, titanium/cap, circuits/cap, propellant/cap, science, land,
+    net_energy, cum_credits_earned, and per-building counts for key buildings.
+    """
+    # Index build_log by tick for O(1) lookup
+    purchases_by_tick: dict = {}
+    for entry in build_log:
+        t = entry["tick"]
+        purchases_by_tick.setdefault(t, []).append(entry)
+
+    key_buildings = [
+        ("solar_panel",        "n_solar"),
+        ("battery",            "n_battery"),
+        ("storage_depot",      "n_depot"),
+        ("regolith_excavator", "n_excavator"),
+        ("ice_extractor",      "n_ice"),
+        ("refinery",           "n_refinery"),
+        ("smelter",            "n_smelter"),
+        ("electrolysis_plant", "n_electrolysis"),
+        ("fabricator",         "n_fabricator"),
+        ("data_center",        "n_data_center"),
+        ("launch_pad",         "n_launch_pad"),
+        ("research_lab",       "n_research_lab"),
+    ]
+
+    resource_cols = [
+        ("energy",     "energy_cap"),
+        ("regolith",   "regolith_cap"),
+        ("ice",        "ice_cap"),
+        ("he3",        "he3_cap"),
+        ("titanium",   "titanium_cap"),
+        ("circuits",   "circuits_cap"),
+        ("propellant", "propellant_cap"),
+        ("science",    None),
+        ("land",       None),
+    ]
+
+    headers = (
+        ["tick", "action"]
+        + ["credits", "boredom"]
+        + [col for r, cap in resource_cols for col in ([r, cap] if cap else [r])]
+        + ["net_energy", "cum_credits_earned"]
+        + [col for _, col in key_buildings]
+    )
+
+    out = Path(__file__).parent / out_path
+    with open(out, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+
+        for snap in state.history:
+            t = snap["tick"]
+
+            # Action summary for this tick
+            entries = purchases_by_tick.get(t, [])
+            if entries:
+                parts = []
+                for e in entries:
+                    if e["action"] == "build":
+                        parts.append(f"Build {e['label']} x{e['count_after']}")
+                    else:
+                        parts.append("Buy Land")
+                action_str = "; ".join(parts)
+            else:
+                action_str = ""
+
+            row = [t, action_str]
+            row += [round(snap.get("credits", 0), 1), round(snap.get("boredom", 0), 2)]
+
+            for res, cap_key in resource_cols:
+                row.append(round(snap.get(res, 0), 1))
+                if cap_key:
+                    cap_val = snap.get(cap_key)
+                    row.append("" if cap_val is None else int(cap_val))
+
+            row.append(round(snap.get("net_energy", 0), 1))
+            row.append(round(snap.get("total_credits_earned", 0), 1))
+
+            buildings = snap.get("buildings", {})
+            for bkey, _ in key_buildings:
+                row.append(buildings.get(bkey, 0))
+
+            writer.writerow(row)
+
+    print(f"  Tick report written: {out}")
+
+
+# ============================================================================
 # Entry point
 # ============================================================================
 
@@ -317,6 +414,7 @@ def main() -> None:
     print_milestone_report(state, build_log)
     print_snapshots(state, history)
     print_structural_summary(state, build_log, history)
+    write_tick_csv(state, build_log)
 
     print()
     print(_hr("="))

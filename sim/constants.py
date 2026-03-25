@@ -1,7 +1,10 @@
 """
 Helium Hustle — All tunable parameters in one place.
 
-Mirrors what will eventually live in game_config.json and the datasheets.
+NOTE: This file is NOT ground truth. Building definitions, resource caps,
+and other game data should match data/generated/*.json and data/game_config.json.
+If those JSON files change, update this file to match.
+
 Initial values ported from sim/hh_sim.py prototype — not yet validated.
 The optimizer workflow will produce calibrated replacements.
 """

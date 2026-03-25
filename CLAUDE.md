@@ -37,19 +37,27 @@ Building processing order matches the row order in `buildings.json`.
 
 ## Data Pipeline
 
-Game data is authored in a Google Sheet, exported as `.xlsx`, then converted by `python convert.py` to JSON files Godot reads at runtime.
+**The JSON files are ground truth.** Do not treat the xlsx or Google Sheet as authoritative — they are human-readable intermediates for visual inspection and editing only.
 
 ```
-Google Sheet → .xlsx → python convert.py → godot/data/generated/*.json
-godot/data/game_config.json  (hand-edited global parameters)
+data/generated/*.json          ← GROUND TRUTH (committed, edited directly or via xlsx round-trip)
+data/game_config.json          ← hand-edited global parameters (also ground truth)
+
+Round-trip for visual editing:
+  python data/json_to_xlsx.py  → data/Helium Hustle Datasheets.xlsx  (JSON → xlsx)
+  (edit xlsx)
+  python data/convert.py       → data/generated/*.json               (xlsx → JSON)
 ```
 
 Key data files:
-- `godot/data/generated/buildings.json` — building definitions: `name`, `short_name`, `category`, `costs`, `production`, `upkeep`, `effects`, `land`, `cost_scaling`
-- `godot/data/generated/resources.json` — resource definitions: `short_name`, `storage_base`
-- `godot/data/game_config.json` — starting resources/buildings, boredom schedule
+- `data/generated/buildings.json` — building definitions: `name`, `short_name`, `costs`, `production`, `upkeep`, `effects`, `land`, `cost_scaling`
+- `data/generated/resources.json` — resource definitions: `name`, `short_name`, `storage_base`
+- `data/generated/commands.json` — program command definitions
+- `data/game_config.json` — starting resources/buildings, boredom schedule
 
 Building purchase cost formula: `base_cost × (cost_scaling ^ num_owned)`. Land cost is fixed (doesn't scale). All costs must be affordable simultaneously.
+
+**sim/constants.py** mirrors game data for use by the Python optimizer. It is NOT ground truth — if you change `data/generated/*.json`, update `sim/constants.py` to match (or regenerate it).
 
 ## Repository Structure
 

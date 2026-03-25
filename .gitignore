@@ -40,3 +40,4 @@
 # debug information files
 *.dwo
 /sim/__pycache__
+/sim/tick_report.csv

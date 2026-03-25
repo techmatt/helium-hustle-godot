@@ -3,6 +3,13 @@
 Helium Hustle Datasheet Converter
 Converts helium_hustle_datasheets.xlsx into JSON files for Godot.
 
+NOTE: The JSON files in generated/ are ground truth. This script converts
+an xlsx (human-readable intermediate) back into those JSON files. To edit
+data visually, use the round-trip workflow:
+    python data/json_to_xlsx.py   # JSON -> xlsx for editing
+    (edit xlsx)
+    python data/convert.py        # xlsx -> JSON (ground truth)
+
 Usage:
     python convert.py [path_to_xlsx]
 
@@ -201,7 +208,7 @@ def convert_resources(wb) -> list:
         entry = {
             "name": g("resource"),
             "short_name": g("short name"),
-            "storage_base": storage if storage != "x" else None,
+            "storage_base": float(storage) if storage != "x" and storage is not None else None,
         }
         resources.append(entry)
     return resources
