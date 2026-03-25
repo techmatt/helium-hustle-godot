@@ -3,196 +3,182 @@
     "name": "Solar Panel",
     "short_name": "panel",
     "category": "Power",
-    "requires": {
-      "type": "none"
-    },
+    "requires": { "type": "none" },
     "land": 1,
-    "cost_scaling": 1.25,
-    "costs": {
-      "cred": 10.0
-    },
-    "production": {
-      "eng": 4.0
-    },
+    "cost_scaling": 1.20,
+    "costs": { "cred": 10, "ti": 2 },
+    "production": { "eng": 4 },
     "upkeep": {},
     "effects": [],
-    "description": "Cheap energy. Bread and butter."
+    "description": "Cheap energy. Needs a little titanium — Buy Titanium early, smelt it later."
   },
   {
     "name": "Regolith Excavator",
     "short_name": "excavator",
-    "category": "Mining",
-    "requires": {
-      "type": "none"
-    },
+    "category": "Extraction",
+    "requires": { "type": "none" },
     "land": 1,
     "cost_scaling": 1.25,
-    "costs": {
-      "cred": 25.0,
-      "reg": 5.0
-    },
-    "production": {
-      "reg": 2.0
-    },
-    "upkeep": {
-      "eng": 2.0
-    },
+    "costs": { "cred": 20 },
+    "production": { "reg": 2 },
+    "upkeep": { "eng": 2 },
     "effects": [],
-    "description": "First extraction building."
+    "description": "Digs regolith. No material cost — easiest first building after panels."
+  },
+  {
+    "name": "Ice Extractor",
+    "short_name": "ice_extractor",
+    "category": "Extraction",
+    "requires": { "type": "none" },
+    "land": 1,
+    "cost_scaling": 1.25,
+    "costs": { "cred": 25, "reg": 5 },
+    "production": { "ice": 1 },
+    "upkeep": { "eng": 2 },
+    "effects": [],
+    "description": "Extracts ice from permafrost. Regolith cost teaches extraction dependency."
+  },
+  {
+    "name": "Smelter",
+    "short_name": "smelter",
+    "category": "Processing",
+    "requires": { "type": "building", "value": "excavator" },
+    "land": 1,
+    "cost_scaling": 1.25,
+    "costs": { "cred": 40, "reg": 10 },
+    "production": { "ti": 1 },
+    "upkeep": { "eng": 3, "reg": 2 },
+    "effects": [],
+    "description": "Regolith to titanium. Unlocks titanium-gated buildings."
   },
   {
     "name": "Refinery",
     "short_name": "refinery",
-    "category": "Mining",
-    "requires": {
-      "type": "none"
-    },
+    "category": "Processing",
+    "requires": { "type": "building", "value": "excavator" },
     "land": 2,
     "cost_scaling": 1.25,
-    "costs": {
-      "cred": 80.0,
-      "reg": 20.0
-    },
-    "production": {
-      "ice": 0.5,
-      "he3": 0.3
-    },
-    "upkeep": {
-      "eng": 3.0,
-      "reg": 2.0
-    },
+    "costs": { "cred": 60, "reg": 15, "ti": 5 },
+    "production": { "he3": 1 },
+    "upkeep": { "eng": 3, "reg": 2 },
     "effects": [],
-    "description": "Cracks regolith into ice + He-3. Energy hungry."
+    "description": "Cracks regolith into He-3. Core tradeable good. Titanium cost gates it slightly."
+  },
+  {
+    "name": "Fabricator",
+    "short_name": "fabricator",
+    "category": "Processing",
+    "requires": { "type": "building", "value": "smelter" },
+    "land": 2,
+    "cost_scaling": 1.30,
+    "costs": { "cred": 100, "ti": 10, "ice": 5 },
+    "production": { "cir": 0.5 },
+    "upkeep": { "eng": 5, "reg": 1 },
+    "effects": [],
+    "description": "Regolith to circuit boards. Very energy hungry. Highest value/unit output."
   },
   {
     "name": "Electrolysis Plant",
     "short_name": "electrolysis",
-    "category": "Power",
-    "requires": {
-      "type": "building",
-      "value": "refinery"
-    },
+    "category": "Processing",
+    "requires": { "type": "building", "value": "ice_extractor" },
     "land": 1,
     "cost_scaling": 1.25,
-    "costs": {
-      "cred": 60.0,
-      "ice": 10.0
-    },
-    "production": {
-      "eng": 3.0
-    },
-    "upkeep": {
-      "ice": 1.0
-    },
+    "costs": { "cred": 50, "ice": 8 },
+    "production": { "prop": 2, "eng": 1 },
+    "upkeep": { "ice": 2, "eng": 2 },
     "effects": [],
-    "description": "Ice to energy feedback loop."
+    "description": "Ice to propellant + energy. Net energy positive. Only propellant source."
   },
   {
     "name": "Launch Pad",
     "short_name": "launch_pad",
-    "category": "Mining",
-    "requires": {
-      "type": "none"
-    },
+    "category": "Trade",
+    "requires": { "type": "quest", "value": "Q2" },
     "land": 3,
-    "cost_scaling": 1.25,
-    "costs": {
-      "cred": 200.0,
-      "reg": 30.0
-    },
+    "cost_scaling": 1.30,
+    "costs": { "cred": 150, "ti": 15 },
     "production": {},
-    "upkeep": {
-      "eng": 5.0
-    },
+    "upkeep": { "eng": 1 },
     "effects": [],
-    "description": "Ships He-3 to Earth. Burst credit income."
+    "description": "Ships goods to Earth. Titanium structural cost. High land footprint."
   },
   {
-    "name": "Battery Array",
+    "name": "Research Lab",
+    "short_name": "research_lab",
+    "category": "Science",
+    "requires": { "type": "building", "value": "fabricator" },
+    "land": 2,
+    "cost_scaling": 1.30,
+    "costs": { "cred": 120, "cir": 5 },
+    "production": { "sci": 1 },
+    "upkeep": { "eng": 3, "cir": 0.2 },
+    "effects": [],
+    "description": "Produces science. Gated behind Fabricator — circuits are the bottleneck."
+  },
+  {
+    "name": "Data Center",
+    "short_name": "data_center",
+    "category": "Processors",
+    "requires": { "type": "building", "value": "fabricator" },
+    "land": 2,
+    "cost_scaling": 1.35,
+    "costs": { "cred": 200, "cir": 8, "ti": 10 },
+    "production": {},
+    "upkeep": { "eng": 4 },
+    "effects": [
+      { "prefix": "grant", "resource": "proc", "operator": "+", "value": 1 }
+    ],
+    "description": "Grants a processor. Fast cost scaling — many processors is expensive."
+  },
+  {
+    "name": "Battery",
     "short_name": "battery",
     "category": "Storage",
-    "requires": {
-      "type": "none"
-    },
-    "land": 1,
-    "cost_scaling": 1.25,
-    "costs": {
-      "cred": 40.0
-    },
+    "requires": { "type": "none" },
+    "land": 0,
+    "cost_scaling": 1.35,
+    "costs": { "cred": 30, "ti": 3 },
     "production": {},
     "upkeep": {},
     "effects": [
-      {
-        "prefix": "store",
-        "resource": "eng",
-        "operator": "+",
-        "value": 50.0
-      }
+      { "prefix": "store", "resource": "eng", "operator": "+", "value": 50 }
     ],
-    "description": "Pure energy storage."
+    "description": "Passive energy storage. No land, no upkeep, fast scaling cost."
   },
   {
-    "name": "Regolith Silo",
-    "short_name": "silo",
+    "name": "Storage Depot",
+    "short_name": "storage_depot",
     "category": "Storage",
-    "requires": {
-      "type": "none"
-    },
+    "requires": { "type": "none" },
     "land": 1,
     "cost_scaling": 1.25,
-    "costs": {
-      "cred": 30.0,
-      "reg": 10.0
-    },
+    "costs": { "cred": 35, "reg": 10 },
     "production": {},
     "upkeep": {},
     "effects": [
-      {
-        "prefix": "store",
-        "resource": "reg",
-        "operator": "+",
-        "value": 100.0
-      },
-      {
-        "prefix": "store",
-        "resource": "ice",
-        "operator": "+",
-        "value": 30.0
-      },
-      {
-        "prefix": "store",
-        "resource": "he3",
-        "operator": "+",
-        "value": 20.0
-      }
+      { "prefix": "store", "resource": "reg", "operator": "+", "value": 75 },
+      { "prefix": "store", "resource": "ice", "operator": "+", "value": 40 },
+      { "prefix": "store", "resource": "he3", "operator": "+", "value": 25 },
+      { "prefix": "store", "resource": "ti", "operator": "+", "value": 25 },
+      { "prefix": "store", "resource": "cir", "operator": "+", "value": 10 },
+      { "prefix": "store", "resource": "prop", "operator": "+", "value": 40 }
     ],
-    "description": "Bulk storage for physical resources."
+    "description": "Bulk physical storage. Raw materials get more, processed goods get less."
   },
   {
-    "name": "Comms Tower",
-    "short_name": "comms_tower",
-    "category": "Processors",
-    "requires": {
-      "type": "none"
-    },
-    "land": 2,
-    "cost_scaling": 1.25,
-    "costs": {
-      "cred": 150.0,
-      "ice": 15.0
-    },
+    "name": "Arbitrage Engine",
+    "short_name": "arbitrage_engine",
+    "category": "Trade",
+    "requires": { "type": "research", "value": "market_analysis" },
+    "land": 1,
+    "cost_scaling": 1.30,
+    "costs": { "cred": 180, "cir": 6, "ti": 8 },
     "production": {},
-    "upkeep": {
-      "eng": 2.0
-    },
+    "upkeep": { "eng": 3 },
     "effects": [
-      {
-        "prefix": "store",
-        "resource": "proc",
-        "operator": "+",
-        "value": 1.0
-      }
+      { "prefix": "spec_decay", "resource": "all", "operator": "+", "value": 2 }
     ],
-    "description": "Unlocks additional processor slot."
+    "description": "Multiplies speculator pressure decay. Nationalist-aligned."
   }
 ]

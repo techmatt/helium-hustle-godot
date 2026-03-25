@@ -20,9 +20,29 @@
     "storage_base": 20.0
   },
   {
+    "name": "Titanium",
+    "short_name": "ti",
+    "storage_base": 20.0
+  },
+  {
+    "name": "Circuit Boards",
+    "short_name": "cir",
+    "storage_base": 10.0
+  },
+  {
+    "name": "Propellant",
+    "short_name": "prop",
+    "storage_base": 30.0
+  },
+  {
     "name": "Credits",
     "short_name": "cred",
-    "storage_base": 500.0
+    "storage_base": null
+  },
+  {
+    "name": "Science",
+    "short_name": "sci",
+    "storage_base": null
   },
   {
     "name": "Land",
@@ -33,10 +53,5 @@
     "name": "Boredom",
     "short_name": "boredom",
     "storage_base": 100.0
-  },
-  {
-    "name": "Processors",
-    "short_name": "proc",
-    "storage_base": 1.0
   }
 ]
