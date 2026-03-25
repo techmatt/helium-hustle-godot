@@ -39,13 +39,14 @@
       "type": "none"
     },
     "costs": {
-      "cred": 3.0
+      "cred": 8.0,
+      "eng": 2.0
     },
     "production": {
       "reg": 1.0
     },
     "effects": [],
-    "description": "Purchase regolith from Earth. Bridges gaps before excavators scale."
+    "description": "Purchase regolith from Earth. Tactical gap-bridging only — building production is far cheaper."
   },
   {
     "name": "Buy Ice",
@@ -54,13 +55,14 @@
       "type": "none"
     },
     "costs": {
-      "cred": 4.0
+      "cred": 10.0,
+      "eng": 2.0
     },
     "production": {
       "ice": 1.0
     },
     "effects": [],
-    "description": "Purchase ice. More expensive than extraction but no energy cost."
+    "description": "Purchase ice. Tactical gap-bridging only — extraction is far cheaper at scale."
   },
   {
     "name": "Buy Titanium",
@@ -69,13 +71,14 @@
       "type": "none"
     },
     "costs": {
-      "cred": 8.0
+      "cred": 20.0,
+      "eng": 3.0
     },
     "production": {
-      "ti": 1.0
+      "ti": 0.5
     },
     "effects": [],
-    "description": "Purchase titanium from Earth. Essential before Smelter is online."
+    "description": "Purchase titanium from Earth. Rare and expensive — bridge 2-3 units max, then build a Smelter."
   },
   {
     "name": "Buy Propellant",
@@ -84,13 +87,14 @@
       "type": "none"
     },
     "costs": {
-      "cred": 5.0
+      "cred": 12.0,
+      "eng": 2.0
     },
     "production": {
       "prop": 1.0
     },
     "effects": [],
-    "description": "Purchase propellant. Alternative to Electrolysis chain for launch fuel."
+    "description": "Purchase propellant. Tactical gap-bridging only — Electrolysis chain is far cheaper at scale."
   },
   {
     "name": "Load Launch Pads",
@@ -141,7 +145,7 @@
     "effects": [
       {
         "effect": "boredom_add",
-        "value": -2
+        "value": -0.2
       }
     ],
     "description": "Primary boredom mitigation. Energy-expensive. Competes for processor time."

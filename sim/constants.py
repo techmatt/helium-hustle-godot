@@ -193,6 +193,14 @@ SELL_CLOUD_COMPUTE_ENERGY:  float = _cmd_cost("cloud_compute", "eng",  2.0)
 SELL_CLOUD_COMPUTE_CREDITS: float = _cmd_prod("cloud_compute", "cred", 5.0)
 SELL_CLOUD_COMPUTE_BOREDOM: float = _cmd_effect_val("cloud_compute", "boredom_add", 0.04)
 
+# Commands the optimizer can execute as one-shot discrete actions (buy_* resource purchases).
+# Each entry: short_name -> {costs: {res: amt}, production: {res: amt}}
+PURCHASABLE_COMMANDS: dict[str, dict] = {
+    sn: {"name": c["name"], "costs": c.get("costs", {}), "production": c.get("production", {})}
+    for sn, c in _commands.items()
+    if sn.startswith("buy_")
+}
+
 
 # ============================================================================
 # PROGRAM MODEL  (sim-specific — derived from commands.json)
@@ -225,7 +233,7 @@ PROG_LOAD_UNITS_PER_PROC: float = _f_load * _cmd_effect_val("load_pads", "load_p
 # ============================================================================
 
 LOOKAHEAD_TICKS: int       = 60
-MAX_RUN_TICKS:   int       = 1100
+MAX_RUN_TICKS:   int       = 1500
 SNAPSHOT_TICKS:  list[int] = [100, 300, 500, 700, 900]
 
 MILESTONE_TARGETS: dict[str, tuple[int, int]] = {

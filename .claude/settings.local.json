@@ -15,7 +15,8 @@
       "Bash(python data/json_to_xlsx.py)",
       "Bash(python data/convert.py)",
       "Bash(python:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(cd sim && python*)"
     ]
   }
 }

@@ -117,6 +117,51 @@ Implemented: resource tick loop, building purchase with cost scaling, speed cont
 
 Not yet implemented (per tech_spec.md): Programs/processor execution, shipments (Launch Pad firing), boredom system, retirement screen, event system.
 
+## Sim / Optimizer
+
+The `sim/` directory contains a Python economic optimizer used to validate game
+balance headlessly. It does not share code with the Godot runtime — it mirrors
+game data by reading the ground-truth JSON files directly.
+
+**Run the optimizer** (always use absolute paths or run from repo root to avoid
+CWD issues — the Bash tool's working directory persists between invocations):
+
+```
+# From repo root:
+cd C:/Code/helium-hustle-godot && python sim/run_optimizer.py
+
+# Optional debug flags:
+python sim/run_optimizer.py --debug-tick 38 --debug-tick 100
+```
+
+**Trace optimizer decisions at specific ticks** (prints full scoring tables):
+
+```
+python sim/trace.py 38              # single tick
+python sim/trace.py 35-45           # inclusive range
+python sim/trace.py 38 100 200-210  # mix
+```
+
+**Key files:**
+
+| File | Purpose |
+|---|---|
+| `constants.py` | Loads all game data from JSON; mirrors it for the sim. Not ground truth. |
+| `economy.py` | Pure state machine: `EconState`, `tick_once`, `buy_building`, etc. |
+| `optimizer.py` | Greedy scorer: `run_greedy`, `_urgency_bonus`, `score_action_with_baseline`. |
+| `run_optimizer.py` | CLI entry point; produces the 5-section terminal report + `tick_report.csv`. |
+| `trace.py` | Score-trace utility; shows why the optimizer chose (or skipped) each action. |
+
+**Scoring model:** Each tick, every affordable action is scored as
+`marginal_credits(60-tick lookahead) + urgency_bonus`. A `save_threshold`
+(= 0.6 × max urgency of unaffordable buildings) suppresses low-value buys
+while saving for something critical. The optimizer walks the sorted score list
+and picks the first action that clears the threshold — if none clears it, the
+tick is skipped.
+
+**Output:** `sim/tick_report.csv` — one row per tick with all resource levels
+(including `cred` on hand), building counts, net energy, and cumulative credits.
+
 ## Notes
 
 - `project.godot` `config/name` and dotnet assembly are both "Helium Hustle" / "HeliumHustle"

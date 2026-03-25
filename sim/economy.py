@@ -26,7 +26,7 @@ from constants import (
     LAUNCH_CHECK_INTERVAL, TRADE_BASE_VALUES, DEMAND_BASELINE,
     SELL_CLOUD_COMPUTE_ENERGY, SELL_CLOUD_COMPUTE_CREDITS, SELL_CLOUD_COMPUTE_BOREDOM,
     PROG_CREDITS_PER_PROC, PROG_BOREDOM_PER_PROC, PROG_ENERGY_PER_PROC,
-    PROG_LOAD_UNITS_PER_PROC,
+    PROG_LOAD_UNITS_PER_PROC, PURCHASABLE_COMMANDS,
 )
 
 
@@ -180,6 +180,26 @@ def buy_building(state: EconState, key: str) -> dict:
         state.pads_cargo[pad_idx] = 0.0
 
     return costs
+
+
+def can_afford_command(state: EconState, short_name: str) -> bool:
+    cmd = PURCHASABLE_COMMANDS.get(short_name)
+    if cmd is None:
+        return False
+    for res, cost in cmd["costs"].items():
+        if state.resources.get(res, 0) < cost:
+            return False
+    return True
+
+
+def execute_command(state: EconState, short_name: str) -> dict:
+    """Execute one instance of a buy_* command. Returns cost dict."""
+    cmd = PURCHASABLE_COMMANDS[short_name]
+    for res, cost in cmd["costs"].items():
+        state.resources[res] = state.resources.get(res, 0.0) - cost
+    for res, amt in cmd["production"].items():
+        state.resources[res] = state.resources.get(res, 0.0) + amt
+    return dict(cmd["costs"])
 
 
 def buy_land(state: EconState) -> float:

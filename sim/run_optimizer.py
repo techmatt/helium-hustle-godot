@@ -17,6 +17,7 @@ Usage:
 """
 
 import csv
+import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -98,7 +99,10 @@ def print_build_order(build_log: list) -> None:
             cost_parts.append(f"{land_cost:.0f} land")
         cost_str = "  ".join(cost_parts) if cost_parts else "--"
 
-        print(f"{tick:5d}  {action:<10}  {label:<28}  {count:>3}  {cost_str}")
+        action_display = entry["action"].upper()
+        if entry["action"] == "command":
+            action_display = "CMD"
+        print(f"{tick:5d}  {action_display:<10}  {label:<28}  {count:>3}  {cost_str}")
     print(f"\nTotal purchases: {len(build_log)}")
 
 
@@ -329,6 +333,7 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
     ]
 
     resource_cols = [
+        ("cred", None),       # credits on hand
         ("eng",  "eng_cap"),
         ("reg",  "reg_cap"),
         ("ice",  "ice_cap"),
@@ -341,8 +346,7 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
     ]
 
     headers = (
-        ["tick", "action"]
-        + ["credits", "boredom"]
+        ["tick", "action", "boredom"]
         + [col for r, cap in resource_cols for col in ([r, cap] if cap else [r])]
         + ["net_energy", "cum_credits_earned"]
         + [col for _, col in key_buildings]
@@ -363,14 +367,15 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
                 for e in entries:
                     if e["action"] == "build":
                         parts.append(f"Build {e['label']} x{e['count_after']}")
+                    elif e["action"] == "command":
+                        parts.append(f"Cmd {e['label']}")
                     else:
                         parts.append("Buy Land")
                 action_str = "; ".join(parts)
             else:
                 action_str = ""
 
-            row = [t, action_str]
-            row += [round(snap.get("credits", 0), 1), round(snap.get("boredom", 0), 2)]
+            row = [t, action_str, round(snap.get("boredom", 0), 2)]
 
             for res, cap_key in resource_cols:
                 row.append(round(snap.get(res, 0), 1))
@@ -391,18 +396,99 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
 
 
 # ============================================================================
+# Section 5: Score traces (printed only when --debug-tick is used)
+# ============================================================================
+
+def print_score_traces(score_traces: dict) -> None:
+    if not score_traces:
+        return
+    print()
+    print(_header("SECTION 5: SCORE TRACES"))
+
+    for tick in sorted(score_traces):
+        tr = score_traces[tick]
+        res = tr["resources"]
+        bldgs = tr["buildings"]
+
+        print(f"\n  === Tick {tick} ===")
+
+        # Resource summary
+        res_parts = ["cred", "eng", "reg", "ice", "he3", "ti", "cir", "prop"]
+        res_str = "  ".join(f"{r}={res.get(r, 0):.1f}" for r in res_parts)
+        print(f"  Resources: {res_str}")
+        print(f"             boredom={res.get('boredom', 0):.2f}  land={res.get('land', 0):.0f}")
+
+        # Buildings summary
+        bldg_parts = [f"{BUILDINGS[k].name} x{v}" for k, v in bldgs.items() if v > 0]
+        print(f"  Buildings: {', '.join(bldg_parts) or '(none)'}")
+
+        # Threshold info
+        print(f"  max_upcoming_urgency={tr['max_upcoming_urgency']:.0f}  "
+              f"save_threshold={tr['save_threshold']:.1f}  "
+              f"baseline_credits={tr['base_credits']:.1f}")
+
+        chosen_key = tr.get("chosen")
+        if chosen_key:
+            print(f"  Chosen: {chosen_key[0]} {chosen_key[1]}")
+        else:
+            print(f"  Chosen: (none — all actions failed threshold or scored <= 0)")
+
+        # Scoring table
+        print()
+        hdr = (f"  {'Rank':>4}  {'Type':<8}  {'Action':<22}  "
+               f"{'Score':>7}  {'Marginal':>9}  {'Urgency':>8}  {'Passes':>6}  {'':>1}")
+        print(hdr)
+        print("  " + _hr("-", len(hdr) - 2))
+        for i, act in enumerate(tr["actions"], 1):
+            marker = "*" if act["chosen"] else " "
+            passes_str = "YES" if act["passes"] else "no"
+            print(
+                f"  {i:4d}  {act['action_type']:<8}  {act['action_arg']:<22}  "
+                f"{act['score']:7.1f}  {act['marginal']:9.1f}  "
+                f"{act['urgency']:8.1f}  {passes_str:>6}  {marker}"
+            )
+        print()
+
+
+# ============================================================================
+# Argument parsing
+# ============================================================================
+
+def _parse_args(argv: list) -> tuple[list[int], list[str]]:
+    """
+    Parse --debug-tick N (repeatable) from argv.
+    Returns (debug_ticks, remaining_args).
+    """
+    debug_ticks: list[int] = []
+    remaining: list[str] = []
+    i = 0
+    while i < len(argv):
+        if argv[i] in ("--debug-tick", "-d") and i + 1 < len(argv):
+            debug_ticks.append(int(argv[i + 1]))
+            i += 2
+        else:
+            remaining.append(argv[i])
+            i += 1
+    return debug_ticks, remaining
+
+
+# ============================================================================
 # Entry point
 # ============================================================================
 
 def main() -> None:
+    debug_ticks, _ = _parse_args(sys.argv[1:])
+
     print()
     print(_header("HELIUM HUSTLE -- ECONOMIC OPTIMIZER  (Run 1, Greedy Pass)"))
     print(f"  Lookahead: {LOOKAHEAD_TICKS} ticks | Scoring: marginal credits + urgency bonuses")
+    if debug_ticks:
+        print(f"  Debug ticks: {sorted(debug_ticks)}")
     print(_hr("-"))
     print("  Running optimizer...", end="", flush=True)
 
     t0 = time.perf_counter()
-    state, build_log = run_greedy()
+    state, build_log, score_traces = run_greedy(debug_ticks=set(debug_ticks))
     elapsed = time.perf_counter() - t0
 
     print(f" done in {elapsed:.1f}s  ({state.tick} ticks simulated, {len(build_log)} purchases)")
@@ -414,6 +500,8 @@ def main() -> None:
     print_milestone_report(state, build_log)
     print_snapshots(state, history)
     print_structural_summary(state, build_log, history)
+    if score_traces:
+        print_score_traces(score_traces)
     write_tick_csv(state, build_log)
 
     print()

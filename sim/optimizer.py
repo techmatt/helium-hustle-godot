@@ -17,13 +17,14 @@ from typing import Optional
 
 from constants import (
     BUILDINGS, LOOKAHEAD_TICKS, MAX_RUN_TICKS, SNAPSHOT_TICKS,
-    TRADE_BASE_VALUES, DEMAND_BASELINE, MILESTONE_TARGETS,
+    TRADE_BASE_VALUES, DEMAND_BASELINE, MILESTONE_TARGETS, PURCHASABLE_COMMANDS,
+    LAUNCH_FUEL_COST,
 )
 from economy import (
     EconState, init_state, tick_once, sim_forward, take_snapshot,
     get_building_cost, get_land_cost, get_net_energy, get_energy_production, get_energy_upkeep,
-    get_cap, can_afford_building, can_afford_land,
-    buy_building, buy_land, num_processors, num_pads,
+    get_cap, can_afford_building, can_afford_land, can_afford_command,
+    buy_building, buy_land, execute_command, num_processors, num_pads,
     _clone_for_scoring,
 )
 
@@ -40,6 +41,9 @@ def get_feasible_actions(state: EconState) -> list[tuple[str, Optional[str]]]:
             actions.append(("build", key))
     if can_afford_land(state):
         actions.append(("buy_land", None))
+    for sn in PURCHASABLE_COMMANDS:
+        if can_afford_command(state, sn):
+            actions.append(("command", sn))
     return actions
 
 
@@ -91,6 +95,32 @@ def _urgency_bonus(state: EconState, action_type: str, action_arg: Optional[str]
     n_smelters = state.buildings.get("smelter", 0)
     n_fabricators = state.buildings.get("fabricator", 0)
     n_labs = state.buildings.get("research_lab", 0)
+
+    # ── Purchasable commands (buy_titanium, etc.) ──
+    if action_type == "command":
+        key = action_arg
+        cred = res.get("cred", 0)
+        if key == "buy_titanium":
+            # Early game: buy ti to unlock solar panels before smelter is online
+            if n_smelters == 0:
+                if titanium < 2:
+                    bonus += 350  # can't build first panel yet — critical
+                elif titanium < 4 and cred >= 26:
+                    bonus += 200  # room for 2nd panel purchase soon
+                elif titanium < 8:
+                    bonus += 80   # modest stockpile building
+            elif titanium < 4 and n_smelters > 0:
+                bonus += 50   # smelter running but slow; bridge gap
+        elif key == "buy_regolith":
+            if regolith < 10 and (n_smelters == 0 or n_fabricators == 0):
+                bonus += 60   # need reg to buy smelter or ice_extractor
+        elif key == "buy_ice":
+            if res.get("ice", 0) < 5 and n_fabricators == 0 and titanium >= 10:
+                bonus += 150  # ti ready, just need ice to build fabricator
+        elif key == "buy_propellant":
+            if n_p > 0 and res.get("prop", 0) < LAUNCH_FUEL_COST and n_elec == 0:
+                bonus += 100  # pad exists, no electrolysis, need fuel
+        return bonus
 
     # ── Land: hard constraint, always dominant ──
     if action_type == "buy_land":
@@ -185,12 +215,12 @@ def _urgency_bonus(state: EconState, action_type: str, action_arg: Optional[str]
 
     elif key == "refinery":
         if n_refineries == 0:
-            if regolith >= 30:
-                bonus += 60
-            elif regolith >= 15:
-                bonus += 35
+            if n_smelters > 0 and regolith >= 15:
+                bonus += 250  # M2 critical path — same tier as ice_extractor
+            elif n_smelters > 0:
+                bonus += 200
             elif n_excavators >= 1:
-                bonus += 10
+                bonus += 80
 
     elif key == "ice_extractor":
         if n_ice == 0 and n_excavators >= 1:
@@ -280,6 +310,8 @@ def score_action_with_baseline(
     test = _clone_for_scoring(state)
     if action_type == "build":
         buy_building(test, action_arg)
+    elif action_type == "command":
+        execute_command(test, action_arg)
     else:
         buy_land(test)
     after = sim_forward(test, lookahead)
@@ -304,7 +336,10 @@ def estimate_payback(credits_cost: float, marginal_lookahead_delta: float, looka
 # GREEDY OPTIMIZER MAIN LOOP
 # ============================================================================
 
-def run_greedy(max_ticks: int = MAX_RUN_TICKS) -> tuple[EconState, list[dict]]:
+def run_greedy(
+    max_ticks: int = MAX_RUN_TICKS,
+    debug_ticks: set = None,
+) -> tuple[EconState, list[dict], dict]:
     """
     Run one greedy optimisation pass for run 1.
 
@@ -314,11 +349,22 @@ def run_greedy(max_ticks: int = MAX_RUN_TICKS) -> tuple[EconState, list[dict]]:
       3. Score each; buy the highest-scoring one (if any).
       4. Halt when boredom >= 100 or max_ticks reached.
 
+    Args:
+        max_ticks:   hard cap on ticks simulated.
+        debug_ticks: set of tick numbers at which to capture full scoring
+                     tables.  Returned as the third element (score_traces).
+
     Returns:
-        state     — final EconState with full history recorded
-        build_log — list of purchase records:
-                    {tick, action, key, cost, score, marginal_credits, payback_ticks}
+        state        — final EconState with full history recorded
+        build_log    — list of purchase records:
+                       {tick, action, key, cost, score, marginal_credits, payback_ticks}
+        score_traces — dict[tick -> trace_dict] for each tick in debug_ticks.
+                       Each trace_dict contains: save_threshold, max_upcoming_urgency,
+                       base_credits, resources, buildings, actions (list), chosen.
     """
+    _debug_ticks: set = set(debug_ticks or [])
+    score_traces: dict[int, dict] = {}
+
     state = init_state()
     build_log: list[dict] = []
     snapshots: dict[int, dict] = {}
@@ -366,26 +412,61 @@ def run_greedy(max_ticks: int = MAX_RUN_TICKS) -> tuple[EconState, list[dict]]:
             scored.append((s, marginal, action_type, action_arg))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        best_score, best_marginal, best_type, best_arg = scored[0]
 
-        # Only purchase if score is positive (or land is critically low)
+        # Walk the sorted list and pick the best-scored action that passes the
+        # threshold.  Checking only scored[0] caused a deadlock: a tied or
+        # slightly-higher action that fails the threshold would block a lower-
+        # scored action whose urgency clears the threshold (e.g. panel blocking
+        # ice_extractor, or buy_ice blocking ice_extractor).
         free_land = state.resources.get("land", 10)
+        chosen = None
+        for s, marginal, atype, aarg in scored:
+            is_land_critical = (atype == "buy_land" and free_land <= 1)
+            if s <= 0 and not is_land_critical:
+                break
+            urg = _urgency_bonus(state, atype, aarg)
+            if is_land_critical or urg >= save_threshold or s >= save_threshold:
+                chosen = (s, marginal, atype, aarg)
+                break
+        # Capture score trace BEFORE purchase (state is still pre-buy)
+        if state.tick in _debug_ticks:
+            trace_actions = []
+            for s, marginal, atype, aarg in scored:
+                urg = _urgency_bonus(state, atype, aarg)
+                is_lc = (atype == "buy_land" and free_land <= 1)
+                passes = is_lc or urg >= save_threshold or s >= save_threshold
+                is_chosen = (chosen is not None and atype == chosen[2] and aarg == chosen[3])
+                trace_actions.append({
+                    "action_type": atype,
+                    "action_arg":  aarg,
+                    "score":       s,
+                    "marginal":    marginal,
+                    "urgency":     urg,
+                    "passes":      passes,
+                    "chosen":      is_chosen,
+                })
+            score_traces[state.tick] = {
+                "save_threshold":       save_threshold,
+                "max_upcoming_urgency": max_upcoming_urgency,
+                "base_credits":         base_credits,
+                "resources":            dict(state.resources),
+                "buildings":            dict(state.buildings),
+                "actions":              trace_actions,
+                "chosen":               (chosen[2], chosen[3]) if chosen else None,
+            }
+
+        if chosen is None:
+            continue
+
+        best_score, best_marginal, best_type, best_arg = chosen
         land_critical = (best_type == "buy_land" and free_land <= 1)
-
-        if best_score <= 0 and not land_critical:
-            continue
-
-        # Apply saving threshold: if we're saving for something better, skip
-        # cheap buys (unless land is critical or we're buying the high-urgency item)
-        best_urgency = _urgency_bonus(state, best_type, best_arg)
-        if (not land_critical
-                and best_urgency < save_threshold
-                and best_score < save_threshold):
-            continue
 
         # Record cost before applying
         if best_type == "build":
             cost_dict = get_building_cost(state, best_arg)
+            credits_cost = cost_dict.get("cred", 0.0)
+        elif best_type == "command":
+            cost_dict = dict(PURCHASABLE_COMMANDS[best_arg]["costs"])
             credits_cost = cost_dict.get("cred", 0.0)
         else:
             credits_cost = get_land_cost(state)
@@ -397,11 +478,20 @@ def run_greedy(max_ticks: int = MAX_RUN_TICKS) -> tuple[EconState, list[dict]]:
         # Apply purchase
         if best_type == "build":
             buy_building(state, best_arg)
+        elif best_type == "command":
+            execute_command(state, best_arg)
         else:
             buy_land(state)
 
-        label = BUILDINGS[best_arg].name if best_type == "build" else "Land"
-        count_after = state.buildings.get(best_arg, 0) if best_type == "build" else None
+        if best_type == "build":
+            label = BUILDINGS[best_arg].name
+            count_after = state.buildings.get(best_arg, 0)
+        elif best_type == "command":
+            label = PURCHASABLE_COMMANDS[best_arg]["name"]
+            count_after = None
+        else:
+            label = "Land"
+            count_after = None
         urgency = _urgency_bonus(state, best_type, best_arg)
 
         build_log.append({
@@ -430,4 +520,4 @@ def run_greedy(max_ticks: int = MAX_RUN_TICKS) -> tuple[EconState, list[dict]]:
                 snapshots[target] = state.history[-1]
 
     state._snapshots = snapshots  # stash for report
-    return state, build_log
+    return state, build_log, score_traces
