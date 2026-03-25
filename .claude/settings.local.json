@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python run_optimizer.py)",
+      "Bash(python -c \"import sys; print\\(sys.stdout.encoding\\)\")",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(tskill python:*)",
+      "Bash(conda create:*)",
+      "Bash(conda update:*)",
+      "Bash(pip --version)",
+      "Bash(pip list:*)",
+      "Bash(pip show:*)"
     ]
   }
 }

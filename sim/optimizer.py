@@ -1,0 +1,426 @@
+from __future__ import annotations
+"""
+Helium Hustle — Greedy economic optimizer.
+
+At each tick where an action is affordable, scores all feasible options and
+picks the highest-scoring one. Score = marginal credits earned over a lookahead
+window (no new purchases during lookahead) + urgency bonuses for infrastructure
+whose value the pure credit lookahead undersells.
+
+Action space: buy_building(key) for any building, or buy_land.
+Between purchase decisions, the fixed command policy runs (cloud compute /
+program / shipments). One purchase per tick maximum.
+"""
+
+import copy
+from typing import Optional
+
+from constants import (
+    BUILDINGS, LOOKAHEAD_TICKS, MAX_RUN_TICKS, SNAPSHOT_TICKS,
+    TRADE_BASE_VALUES, DEMAND_BASELINE, MILESTONE_TARGETS,
+)
+from economy import (
+    EconState, init_state, tick_once, sim_forward, take_snapshot,
+    get_building_cost, get_land_cost, get_net_energy, get_energy_production, get_energy_upkeep,
+    get_cap, can_afford_building, can_afford_land,
+    buy_building, buy_land, num_processors, num_pads,
+    _clone_for_scoring,
+)
+
+
+# ============================================================================
+# FEASIBLE ACTION ENUMERATION
+# ============================================================================
+
+def get_feasible_actions(state: EconState) -> list[tuple[str, Optional[str]]]:
+    """Return all currently affordable (action_type, arg) pairs."""
+    actions = []
+    for key in BUILDINGS:
+        if can_afford_building(state, key):
+            actions.append(("build", key))
+    if can_afford_land(state):
+        actions.append(("buy_land", None))
+    return actions
+
+
+# ============================================================================
+# URGENCY BONUSES
+# ============================================================================
+
+def _urgency_bonus(state: EconState, action_type: str, action_arg: Optional[str]) -> float:
+    """
+    Milestone-directed urgency bonuses.
+
+    Priority ladder (approximate score levels):
+      100+ data_center (M3 gate — critical)
+       85  fabricator (step to data_center)
+       80  excavator #1 (starts everything)
+       70  smelter (titanium chain for DC)
+       60  refinery (he3 for trade)
+       55  launch pad (once DC chain is progressing)
+       45  electrolysis (propellant / launch fuel)
+       35  ice extractor
+       25  solar (only when energy genuinely tight)
+       20  storage depot (only with real consumers near cap)
+       10  battery (tight energy with consumers)
+        5  land buffer
+
+    The save_threshold in run_greedy (0.6 × max_upcoming_urgency) means:
+      - When smelter has urgency 70, threshold ≈ 42 → solar(25) blocked ✓
+      - When fabricator has urgency 85, threshold ≈ 51 → storage(20) blocked ✓
+      - When DC has urgency 100, threshold ≈ 60 → everything else blocked ✓
+      - Land (70-110) always passes threshold ✓
+    """
+    bonus = 0.0
+    res = state.resources
+    net_e = get_net_energy(state)
+    e_upkeep = get_energy_upkeep(state)
+    free_land = res.get("land", 0)
+    n_procs = num_processors(state)
+    n_p = num_pads(state)
+    he3 = res.get("he3", 0)
+    titanium = res.get("titanium", 0)
+    circuits = res.get("circuits", 0)
+    regolith = res.get("regolith", 0)
+    propellant = res.get("propellant", 0)
+
+    n_excavators = state.buildings.get("regolith_excavator", 0)
+    n_refineries = state.buildings.get("refinery", 0)
+    n_ice = state.buildings.get("ice_extractor", 0)
+    n_elec = state.buildings.get("electrolysis_plant", 0)
+    n_smelters = state.buildings.get("smelter", 0)
+    n_fabricators = state.buildings.get("fabricator", 0)
+    n_labs = state.buildings.get("research_lab", 0)
+
+    # ── Land: hard constraint, always dominant ──
+    if action_type == "buy_land":
+        if free_land <= 0:
+            return 110
+        elif free_land <= 1:
+            return 70
+        elif free_land <= 2:
+            return 25
+        return 5
+
+    if action_type != "build":
+        return 0.0
+
+    key = action_arg
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # DATA CENTER CHAIN: smelter → titanium → fabricator → circuits → DC
+    # This is the critical path to M3 (and M2 via programs loading pads).
+    # Scored highest so save_threshold blocks cheaper diversionary purchases.
+    # ──────────────────────────────────────────────────────────────────────────
+
+    if key == "data_center":
+        if n_procs == 0:
+            if circuits >= 5:
+                bonus += 100  # resource gate passed — M3 critical
+            elif circuits >= 3:
+                bonus += 75
+            elif n_fabricators > 0:
+                bonus += 40   # fabricator running, circuits incoming
+            elif n_smelters > 0:
+                bonus += 20   # titanium chain started
+
+    elif key == "fabricator":
+        if n_fabricators == 0:
+            if titanium >= 20:
+                bonus += 85   # prereq met, build immediately
+            elif n_smelters > 0 and titanium >= 10:
+                bonus += 60   # smelter running, almost there
+            elif n_smelters > 0:
+                bonus += 30   # smelter running
+
+    elif key == "smelter":
+        if n_smelters == 0:
+            if regolith >= 40 and net_e > 3.0:
+                bonus += 70   # regolith + energy available: build titanium chain
+            elif regolith >= 20 and n_excavators >= 1 and net_e > 2.0:
+                bonus += 50
+            elif n_excavators >= 1 and net_e > 2.0:
+                bonus += 25
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # MINING BACKBONE: first excavator + energy start everything
+    # ──────────────────────────────────────────────────────────────────────────
+
+    elif key == "regolith_excavator":
+        if n_excavators == 0:
+            if net_e > 1.5:
+                bonus += 80   # first excavator: start regolith production NOW
+            else:
+                bonus += 25
+        elif n_excavators == 1 and net_e > 3.5:
+            bonus += 30       # second: feeds both refinery and smelter
+        elif n_excavators == 2 and net_e > 6.0:
+            bonus += 20       # third: keeps up with multiple processors
+
+    elif key == "solar_panel":
+        # Only urgent when energy is a genuine bottleneck relative to consumers
+        ratio = net_e / max(e_upkeep, 0.5)
+        if net_e <= 2.0:
+            bonus += 60
+        elif net_e < 4.0 and e_upkeep > 2.0:
+            bonus += 25
+        elif ratio < 1.4 and e_upkeep > 3.0:
+            bonus += 15
+        # No urgency when energy is surplus (ratio >> 1 or very few consumers)
+
+    elif key == "battery":
+        # Only valuable when energy consumers exist and cap is a real constraint
+        if e_upkeep >= 4.0 and net_e < 4.0:
+            energy_cap = get_cap(state, "energy")
+            if energy_cap and res.get("energy", 0) >= energy_cap * 0.90:
+                bonus += 10
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # HE-3 / TRADE PIPELINE: refinery → he3 → launch pad → M2
+    # Lower priority than DC chain but still important
+    # ──────────────────────────────────────────────────────────────────────────
+
+    elif key == "refinery":
+        if n_refineries == 0:
+            if regolith >= 30:
+                bonus += 60
+            elif regolith >= 15:
+                bonus += 35
+            elif n_excavators >= 1:
+                bonus += 10
+
+    elif key == "ice_extractor":
+        if n_ice == 0 and net_e > 3.0 and n_excavators >= 1:
+            bonus += 35
+
+    elif key == "electrolysis_plant":
+        if n_elec == 0:
+            if n_p > 0 and propellant < 40:
+                bonus += 55   # pad exists, no fuel — critical
+            elif n_ice > 0 and net_e > 0.5:
+                bonus += 35
+            elif n_ice > 0:
+                bonus += 15
+
+    elif key == "launch_pad":
+        # Only urgency once we're progressing toward the data center
+        # (without programs, the pad never gets loaded)
+        if n_p == 0:
+            if n_procs > 0:
+                bonus += 80   # DC exists, programs can load immediately
+            elif n_fabricators > 0 and he3 >= 10:
+                bonus += 55   # DC chain nearly done + he3 stocked
+            elif n_smelters > 0 and he3 >= 20:
+                bonus += 35   # titanium chain started + he3 stocked
+            elif n_refineries > 0 and he3 >= 30:
+                bonus += 20   # refinery running but DC not started yet
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # STORAGE: only when active resources hit cap
+    # ──────────────────────────────────────────────────────────────────────────
+
+    elif key == "storage_depot":
+        consumer_map = {
+            "regolith":   n_refineries > 0 or n_smelters > 0,
+            "he3":        n_p > 0,
+            "ice":        n_elec > 0,
+            "titanium":   n_smelters > 0,
+            "propellant": n_p > 0,
+            "circuits":   n_fabricators > 0 or n_procs > 0 or n_labs > 0,
+        }
+        cap_pressure = 0.0
+        for r, has_consumer in consumer_map.items():
+            if not has_consumer:
+                continue
+            cap_val = get_cap(state, r)
+            if cap_val and cap_val > 0:
+                fill = res.get(r, 0) / cap_val
+                if fill > 0.85:
+                    cap_pressure = max(cap_pressure, fill)
+        if cap_pressure > 0.95:
+            bonus += 25
+        elif cap_pressure > 0.85:
+            bonus += 15
+
+    elif key == "research_lab":
+        if n_labs == 0 and n_procs > 0 and circuits >= 3:
+            bonus += 25
+
+    return bonus
+
+
+# ============================================================================
+# ACTION SCORING
+# ============================================================================
+
+def score_action_with_baseline(
+    state: EconState,
+    action_type: str,
+    action_arg: Optional[str],
+    base_credits: float,
+    lookahead: int = LOOKAHEAD_TICKS,
+) -> tuple[float, float]:
+    """
+    Score one action given a pre-computed baseline credit total.
+
+    Returns (total_score, marginal_credits) where:
+      total_score      = marginal_credits + urgency_bonus
+      marginal_credits = credits earned WITH action minus base_credits
+
+    Accepts base_credits so the caller can compute baseline once and reuse
+    it across all candidate actions — avoids redundant sim_forward calls.
+    """
+    test = _clone_for_scoring(state)
+    if action_type == "build":
+        buy_building(test, action_arg)
+    else:
+        buy_land(test)
+    after = sim_forward(test, lookahead)
+    marginal = after.total_credits_earned - base_credits
+    urgency = _urgency_bonus(state, action_type, action_arg)
+    return marginal + urgency, marginal
+
+
+# ============================================================================
+# PAYBACK PERIOD ESTIMATION
+# ============================================================================
+
+def estimate_payback(credits_cost: float, marginal_lookahead_delta: float, lookahead: int) -> Optional[float]:
+    """Estimate ticks to recoup the credit cost from marginal income alone."""
+    if marginal_lookahead_delta <= 0 or credits_cost <= 0:
+        return None
+    income_per_tick = marginal_lookahead_delta / lookahead
+    return credits_cost / income_per_tick
+
+
+# ============================================================================
+# GREEDY OPTIMIZER MAIN LOOP
+# ============================================================================
+
+def run_greedy(max_ticks: int = MAX_RUN_TICKS) -> tuple[EconState, list[dict]]:
+    """
+    Run one greedy optimisation pass for run 1.
+
+    Each tick:
+      1. Advance state by one tick (boredom, buildings, programs, shipments).
+      2. Enumerate affordable actions.
+      3. Score each; buy the highest-scoring one (if any).
+      4. Halt when boredom >= 100 or max_ticks reached.
+
+    Returns:
+        state     — final EconState with full history recorded
+        build_log — list of purchase records:
+                    {tick, action, key, cost, score, marginal_credits, payback_ticks}
+    """
+    state = init_state()
+    build_log: list[dict] = []
+    snapshots: dict[int, dict] = {}
+
+    for _tick in range(max_ticks):
+        tick_once(state, record_history=True)
+
+        # Record snapshots at designated ticks
+        if state.tick in SNAPSHOT_TICKS:
+            snapshots[state.tick] = take_snapshot(state)
+
+        # Halt on retirement
+        if state.resources.get("boredom", 0) >= 100:
+            break
+
+        # Evaluate purchase decisions
+        feasible = get_feasible_actions(state)
+        if not feasible:
+            continue
+
+        # Compute the maximum urgency of desired-but-NOT-yet-affordable buildings.
+        # If an expensive, high-urgency building is almost within reach, we apply
+        # a "saving threshold" so the optimizer doesn't fritter credits on low-value
+        # cheap purchases that would delay the critical buy.
+        max_upcoming_urgency = 0.0
+        for key in BUILDINGS:
+            if not can_afford_building(state, key):
+                urg = _urgency_bonus(state, "build", key)
+                if urg > max_upcoming_urgency:
+                    max_upcoming_urgency = urg
+        # Threshold: require affordable actions to score >= 60% of upcoming urgency
+        # before we'll spend credits on them.  Land buys bypass this gate.
+        save_threshold = max_upcoming_urgency * 0.6
+
+        # Compute baseline ONCE for this tick (reused for all candidates)
+        baseline_result = sim_forward(state, LOOKAHEAD_TICKS)
+        base_credits = baseline_result.total_credits_earned
+
+        # Score all feasible actions
+        scored = []
+        for action_type, action_arg in feasible:
+            s, marginal = score_action_with_baseline(
+                state, action_type, action_arg, base_credits
+            )
+            scored.append((s, marginal, action_type, action_arg))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_marginal, best_type, best_arg = scored[0]
+
+        # Only purchase if score is positive (or land is critically low)
+        free_land = state.resources.get("land", 10)
+        land_critical = (best_type == "buy_land" and free_land <= 1)
+
+        if best_score <= 0 and not land_critical:
+            continue
+
+        # Apply saving threshold: if we're saving for something better, skip
+        # cheap buys (unless land is critical or we're buying the high-urgency item)
+        best_urgency = _urgency_bonus(state, best_type, best_arg)
+        if (not land_critical
+                and best_urgency < save_threshold
+                and best_score < save_threshold):
+            continue
+
+        # Record cost before applying
+        if best_type == "build":
+            cost_dict = get_building_cost(state, best_arg)
+            credits_cost = cost_dict.get("credits", 0.0)
+        else:
+            credits_cost = get_land_cost(state)
+            cost_dict = {"credits": credits_cost}
+
+        marginal_credits = best_marginal
+        payback = estimate_payback(credits_cost, marginal_credits, LOOKAHEAD_TICKS)
+
+        # Apply purchase
+        if best_type == "build":
+            buy_building(state, best_arg)
+        else:
+            buy_land(state)
+
+        label = BUILDINGS[best_arg].name if best_type == "build" else "Land"
+        count_after = state.buildings.get(best_arg, 0) if best_type == "build" else None
+        urgency = _urgency_bonus(state, best_type, best_arg)
+
+        build_log.append({
+            "tick": state.tick,
+            "action": best_type,
+            "key": best_arg,
+            "label": label,
+            "count_after": count_after,
+            "cost": cost_dict,
+            "credits_cost": credits_cost,
+            "score": best_score,
+            "urgency": urgency,
+            "marginal_credits": marginal_credits,
+            "payback_ticks": payback,
+        })
+
+    # Ensure snapshots for all requested ticks (use nearest history entry if
+    # boredom ended before that tick)
+    for target in SNAPSHOT_TICKS:
+        if target not in snapshots:
+            # Find closest recorded tick <= target
+            candidates = [h for h in state.history if h["tick"] <= target]
+            if candidates:
+                snapshots[target] = candidates[-1]
+            elif state.history:
+                snapshots[target] = state.history[-1]
+
+    state._snapshots = snapshots  # stash for report
+    return state, build_log
