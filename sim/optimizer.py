@@ -79,15 +79,15 @@ def _urgency_bonus(state: EconState, action_type: str, action_arg: Optional[str]
     n_procs = num_processors(state)
     n_p = num_pads(state)
     he3 = res.get("he3", 0)
-    titanium = res.get("titanium", 0)
-    circuits = res.get("circuits", 0)
-    regolith = res.get("regolith", 0)
-    propellant = res.get("propellant", 0)
+    titanium = res.get("ti", 0)
+    circuits = res.get("cir", 0)
+    regolith = res.get("reg", 0)
+    propellant = res.get("prop", 0)
 
-    n_excavators = state.buildings.get("regolith_excavator", 0)
+    n_excavators = state.buildings.get("excavator", 0)
     n_refineries = state.buildings.get("refinery", 0)
     n_ice = state.buildings.get("ice_extractor", 0)
-    n_elec = state.buildings.get("electrolysis_plant", 0)
+    n_elec = state.buildings.get("electrolysis", 0)
     n_smelters = state.buildings.get("smelter", 0)
     n_fabricators = state.buildings.get("fabricator", 0)
     n_labs = state.buildings.get("research_lab", 0)
@@ -116,57 +116,60 @@ def _urgency_bonus(state: EconState, action_type: str, action_arg: Optional[str]
     if key == "data_center":
         if n_procs == 0:
             if circuits >= 5:
-                bonus += 100  # resource gate passed — M3 critical
+                bonus += 500  # resource gate passed — M3 critical
             elif circuits >= 3:
-                bonus += 75
+                bonus += 400
             elif n_fabricators > 0:
-                bonus += 40   # fabricator running, circuits incoming
+                bonus += 300  # fabricator running, circuits incoming
             elif n_smelters > 0:
-                bonus += 20   # titanium chain started
+                bonus += 150  # titanium chain started
 
     elif key == "fabricator":
         if n_fabricators == 0:
-            if titanium >= 20:
-                bonus += 85   # prereq met, build immediately
-            elif n_smelters > 0 and titanium >= 10:
-                bonus += 60   # smelter running, almost there
+            if titanium >= 10 and circuits < 8:
+                bonus += 400  # prereq met, build immediately
+            elif n_smelters > 0 and titanium >= 5:
+                bonus += 300  # smelter running, almost there
             elif n_smelters > 0:
-                bonus += 30   # smelter running
+                bonus += 200  # smelter running
 
     elif key == "smelter":
         if n_smelters == 0:
-            if regolith >= 40 and net_e > 3.0:
-                bonus += 70   # regolith + energy available: build titanium chain
-            elif regolith >= 20 and n_excavators >= 1 and net_e > 2.0:
-                bonus += 50
-            elif n_excavators >= 1 and net_e > 2.0:
-                bonus += 25
+            if regolith >= 30 and n_excavators >= 1:
+                bonus += 300  # regolith stocked, start titanium chain now
+            elif regolith >= 10 and n_excavators >= 1:
+                bonus += 250
+            elif n_excavators >= 1:
+                bonus += 100
 
     # ──────────────────────────────────────────────────────────────────────────
     # MINING BACKBONE: first excavator + energy start everything
     # ──────────────────────────────────────────────────────────────────────────
 
-    elif key == "regolith_excavator":
+    elif key == "excavator":
         if n_excavators == 0:
             if net_e > 1.5:
                 bonus += 80   # first excavator: start regolith production NOW
             else:
                 bonus += 25
-        elif n_excavators == 1 and net_e > 3.5:
-            bonus += 30       # second: feeds both refinery and smelter
-        elif n_excavators == 2 and net_e > 6.0:
-            bonus += 20       # third: keeps up with multiple processors
+        elif n_excavators == 1 and n_smelters >= 1:
+            bonus += 35       # smelter uses reg upkeep — second excavator keeps reg flowing
+        elif n_excavators == 1 and net_e > 2.0:
+            bonus += 20       # general second excavator
+        elif n_excavators == 2 and net_e > 4.0:
+            bonus += 15       # third: keeps up with multiple processors
 
-    elif key == "solar_panel":
-        # Only urgent when energy is a genuine bottleneck relative to consumers
-        ratio = net_e / max(e_upkeep, 0.5)
-        if net_e <= 2.0:
-            bonus += 60
-        elif net_e < 4.0 and e_upkeep > 2.0:
-            bonus += 25
-        elif ratio < 1.4 and e_upkeep > 3.0:
-            bonus += 15
-        # No urgency when energy is surplus (ratio >> 1 or very few consumers)
+    elif key == "panel":
+        # Panel requires titanium — only affordable after smelter runs
+        # Urgent when energy is net negative or very tight
+        if net_e < 0:
+            bonus += 350      # energy deficit: restore net positive immediately
+        elif net_e < 2.0 and e_upkeep > 2.0:
+            bonus += 200
+        elif net_e < 4.0 and e_upkeep > 3.0:
+            bonus += 100
+        elif net_e < 6.0 and e_upkeep > 5.0:
+            bonus += 50
 
     elif key == "battery":
         # Only valuable when energy consumers exist and cap is a real constraint
@@ -190,10 +193,14 @@ def _urgency_bonus(state: EconState, action_type: str, action_arg: Optional[str]
                 bonus += 10
 
     elif key == "ice_extractor":
-        if n_ice == 0 and net_e > 3.0 and n_excavators >= 1:
-            bonus += 35
+        if n_ice == 0 and n_excavators >= 1:
+            # Critical path: ice_extractor → ice → fabricator → circuits → data_center
+            if n_smelters > 0:
+                bonus += 250  # smelter running, ice needed for fabricator ASAP
+            else:
+                bonus += 150  # build alongside smelter chain
 
-    elif key == "electrolysis_plant":
+    elif key == "electrolysis":
         if n_elec == 0:
             if n_p > 0 and propellant < 40:
                 bonus += 55   # pad exists, no fuel — critical
@@ -221,12 +228,12 @@ def _urgency_bonus(state: EconState, action_type: str, action_arg: Optional[str]
 
     elif key == "storage_depot":
         consumer_map = {
-            "regolith":   n_refineries > 0 or n_smelters > 0,
-            "he3":        n_p > 0,
-            "ice":        n_elec > 0,
-            "titanium":   n_smelters > 0,
-            "propellant": n_p > 0,
-            "circuits":   n_fabricators > 0 or n_procs > 0 or n_labs > 0,
+            "reg":  n_refineries > 0 or n_smelters > 0,
+            "he3":  n_p > 0,
+            "ice":  n_elec > 0,
+            "ti":   n_smelters > 0,
+            "prop": n_p > 0,
+            "cir":  n_fabricators > 0 or n_procs > 0 or n_labs > 0,
         }
         cap_pressure = 0.0
         for r, has_consumer in consumer_map.items():
@@ -379,10 +386,10 @@ def run_greedy(max_ticks: int = MAX_RUN_TICKS) -> tuple[EconState, list[dict]]:
         # Record cost before applying
         if best_type == "build":
             cost_dict = get_building_cost(state, best_arg)
-            credits_cost = cost_dict.get("credits", 0.0)
+            credits_cost = cost_dict.get("cred", 0.0)
         else:
             credits_cost = get_land_cost(state)
-            cost_dict = {"credits": credits_cost}
+            cost_dict = {"cred": credits_cost}
 
         marginal_credits = best_marginal
         payback = estimate_payback(credits_cost, marginal_credits, LOOKAHEAD_TICKS)

@@ -1,251 +1,238 @@
 """
-Helium Hustle — All tunable parameters in one place.
+Helium Hustle — Game constants loaded from godot/data/*.json.
 
-NOTE: This file is NOT ground truth. Building definitions, resource caps,
-and other game data should match data/generated/*.json and data/game_config.json.
-If those JSON files change, update this file to match.
+All building definitions, resource caps, starting state, boredom curve,
+shipment parameters, trade values, and command costs are derived directly
+from the ground-truth JSON files. Do NOT hand-edit values here.
 
-Initial values ported from sim/hh_sim.py prototype — not yet validated.
-The optimizer workflow will produce calibrated replacements.
+Only the sections marked OPTIMIZER/SIM-SPECIFIC are hardcoded here — they
+are not in the game data and exist only to tune the Python optimizer.
 """
 
 from __future__ import annotations
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 # ============================================================================
-# BUILDING DEFINITIONS
+# JSON LOADER
+# ============================================================================
+
+_GODOT_DATA = Path(__file__).parent.parent / "godot" / "data"
+
+
+def _load(name: str):
+    return json.loads((_GODOT_DATA / name).read_text(encoding="utf-8"))
+
+
+_buildings_raw = _load("buildings.json")
+_resources_raw = _load("resources.json")
+_cfg           = _load("game_config.json")
+_commands_raw  = _load("commands.json")
+_commands      = {c["short_name"]: c for c in _commands_raw}
+
+
+# ============================================================================
+# BUILDING DEFINITIONS  (from buildings.json)
 # ============================================================================
 
 @dataclass
 class BuildingDef:
     name: str
-    base_cost_credits: float
-    base_cost_resources: dict  # resource_name -> amount
-    cost_scaling: float        # multiplicative per copy owned
-    land_cost: float           # land consumed per building
-    production: dict           # resource_name -> amount per tick
-    upkeep: dict               # resource_name -> amount per tick (consumed)
+    base_cost_credits: float          # always the "cred" cost
+    base_cost_resources: dict         # other resource costs (short_name -> amount)
+    cost_scaling: float
+    land_cost: float
+    production: dict                  # non-energy production (short_name -> rate)
+    upkeep: dict                      # non-energy upkeep consumed (short_name -> rate)
     energy_production: float = 0.0
     energy_upkeep: float = 0.0
-    energy_cap_bonus: float = 0.0
-    storage_cap_bonus: dict = field(default_factory=dict)
+    energy_cap_bonus: float = 0.0     # from store_eng effects
+    storage_cap_bonus: dict = field(default_factory=dict)  # from other store_ effects
     starts_with: int = 0
 
 
-BUILDINGS: dict[str, BuildingDef] = {
-    "solar_panel": BuildingDef(
-        name="Solar Panel",
-        base_cost_credits=10, base_cost_resources={}, cost_scaling=1.15,
-        land_cost=1,
-        production={}, upkeep={},
-        energy_production=4.0, energy_upkeep=0.0,
-        starts_with=1,
-    ),
-    "battery": BuildingDef(
-        name="Battery",
-        base_cost_credits=15, base_cost_resources={}, cost_scaling=1.35,
-        land_cost=0,
-        production={}, upkeep={},
-        energy_cap_bonus=40.0,
-        starts_with=1,
-    ),
-    "storage_depot": BuildingDef(
-        name="Storage Depot",
-        base_cost_credits=20, base_cost_resources={}, cost_scaling=1.25,
-        land_cost=1,
-        production={}, upkeep={},
-        storage_cap_bonus={
-            "regolith": 50, "ice": 40, "he3": 30,
-            "titanium": 30, "circuits": 20, "propellant": 40,
-        },
-    ),
-    "regolith_excavator": BuildingDef(
-        name="Regolith Excavator",
-        base_cost_credits=25, base_cost_resources={}, cost_scaling=1.20,
-        land_cost=1,
-        production={"regolith": 1.5}, upkeep={},
-        energy_upkeep=1.5,
-    ),
-    "ice_extractor": BuildingDef(
-        name="Ice Extractor",
-        base_cost_credits=30, base_cost_resources={}, cost_scaling=1.20,
-        land_cost=1,
-        production={"ice": 1.0}, upkeep={},
-        energy_upkeep=1.5,
-    ),
-    "refinery": BuildingDef(
-        name="Refinery",
-        base_cost_credits=50, base_cost_resources={"regolith": 30}, cost_scaling=1.25,
-        land_cost=1,
-        production={"he3": 1.0}, upkeep={"regolith": 1.0},
-        energy_upkeep=2.0,
-    ),
-    "smelter": BuildingDef(
-        name="Smelter",
-        base_cost_credits=60, base_cost_resources={"regolith": 40}, cost_scaling=1.25,
-        land_cost=1,
-        production={"titanium": 0.8}, upkeep={"regolith": 0.8},
-        energy_upkeep=2.0,
-    ),
-    "fabricator": BuildingDef(
-        name="Fabricator",
-        base_cost_credits=100, base_cost_resources={"titanium": 20}, cost_scaling=1.30,
-        land_cost=1,
-        production={"circuits": 0.5}, upkeep={"regolith": 0.5},
-        energy_upkeep=3.0,
-    ),
-    "electrolysis_plant": BuildingDef(
-        name="Electrolysis Plant",
-        base_cost_credits=45, base_cost_resources={"ice": 20}, cost_scaling=1.25,
-        land_cost=1,
-        production={"propellant": 1.0}, upkeep={"ice": 0.8},
-        energy_production=1.5, energy_upkeep=2.5,  # net -1.0 energy
-    ),
-    "data_center": BuildingDef(
-        name="Data Center",
-        base_cost_credits=80, base_cost_resources={"circuits": 5}, cost_scaling=1.40,
-        land_cost=2,
-        production={}, upkeep={},
-        energy_upkeep=2.0,
-        # Grants 1 processor (= 1 data_center building count)
-    ),
-    "research_lab": BuildingDef(
-        name="Research Lab",
-        base_cost_credits=70, base_cost_resources={"circuits": 3}, cost_scaling=1.30,
-        land_cost=1,
-        production={"science": 1.0}, upkeep={"circuits": 0.1},
-        energy_upkeep=1.5,
-    ),
-    "launch_pad": BuildingDef(
-        name="Launch Pad",
-        base_cost_credits=60, base_cost_resources={"regolith": 30}, cost_scaling=1.25,
-        land_cost=2,
-        production={}, upkeep={},
-        energy_upkeep=0.5,
-    ),
-    "arbitrage_engine": BuildingDef(
-        name="Arbitrage Engine",
-        base_cost_credits=90, base_cost_resources={"circuits": 8}, cost_scaling=1.35,
-        land_cost=1,
-        production={}, upkeep={},
-        energy_upkeep=1.5,
-    ),
-    "comms_tower": BuildingDef(
-        name="Comms Tower",
-        base_cost_credits=15, base_cost_resources={}, cost_scaling=1.50,
-        land_cost=1,
-        production={}, upkeep={},
-        energy_upkeep=0.5,
-        starts_with=1,
-    ),
-}
+def _build_buildings(raw: list, starting: dict) -> dict:
+    result = {}
+    for b in raw:
+        sn = b["short_name"]
+        costs      = b.get("costs", {})
+        production = b.get("production", {})
+        upkeep     = b.get("upkeep", {})
+        effects    = b.get("effects", [])
+
+        eng_cap_bonus   = 0.0
+        storage_bonuses = {}
+        for e in effects:
+            if e.get("prefix") == "store":
+                res = e["resource"]
+                val = float(e["value"])
+                if res == "eng":
+                    eng_cap_bonus += val
+                else:
+                    storage_bonuses[res] = storage_bonuses.get(res, 0.0) + val
+
+        result[sn] = BuildingDef(
+            name=b["name"],
+            base_cost_credits=float(costs.get("cred", 0)),
+            base_cost_resources={k: float(v) for k, v in costs.items() if k != "cred"},
+            cost_scaling=float(b["cost_scaling"]),
+            land_cost=float(b["land"]),
+            production={k: float(v) for k, v in production.items() if k != "eng"},
+            upkeep={k: float(v) for k, v in upkeep.items() if k != "eng"},
+            energy_production=float(production.get("eng", 0)),
+            energy_upkeep=float(upkeep.get("eng", 0)),
+            energy_cap_bonus=eng_cap_bonus,
+            storage_cap_bonus=storage_bonuses,
+            starts_with=int(starting.get(sn, 0)),
+        )
+    return result
+
+
+_starting_buildings = _cfg["starting_buildings"]
+BUILDINGS: dict[str, BuildingDef] = _build_buildings(_buildings_raw, _starting_buildings)
+
 
 # ============================================================================
-# RESOURCE & STORAGE DEFINITIONS
+# RESOURCE & STORAGE  (from resources.json)
 # ============================================================================
 
-# Base storage caps (before any depots/batteries)
+# Base storage caps for capped resources.
+# boredom is treated as uncapped in the sim (retirement check fires at
+# game_config.boredom_max; we don't want clamp_resources to suppress it).
+# proc is not tracked as a resource in the sim.
+_SIM_UNCAPPED_OVERRIDE = {"boredom", "proc"}
+
 BASE_CAPS: dict[str, float] = {
-    "energy":     50.0,   # 1 battery at start adds +40 → effective start cap = 90
-    "regolith":  100.0,
-    "ice":        80.0,
-    "he3":        50.0,
-    "titanium":   50.0,
-    "circuits":   30.0,
-    "propellant": 60.0,
+    r["short_name"]: float(r["storage_base"])
+    for r in _resources_raw
+    if r["storage_base"] is not None
+    and r["short_name"] not in _SIM_UNCAPPED_OVERRIDE
 }
 
-# Resources with no storage cap
-UNCAPPED: set[str] = {"credits", "science", "boredom", "land"}
+UNCAPPED: set[str] = (
+    {r["short_name"] for r in _resources_raw if r["storage_base"] is None}
+    | _SIM_UNCAPPED_OVERRIDE
+)
 
-# Starting resource amounts
+
+# ============================================================================
+# STARTING STATE  (from game_config.json)
+# ============================================================================
+
 STARTING_RESOURCES: dict[str, float] = {
-    "energy":     30.0,
-    "regolith":    0.0,
-    "ice":         0.0,
-    "he3":         0.0,
-    "titanium":    0.0,
-    "circuits":    0.0,
-    "propellant":  0.0,
-    "credits":    50.0,
-    "science":     0.0,
-    "boredom":     0.0,
-    "land":        5.0,   # computed properly in init_state()
+    k: float(v) for k, v in _cfg["starting_resources"].items()
 }
 
-# ============================================================================
-# LAND SYSTEM
-# ============================================================================
-
-LAND_BASE_COST: float = 10.0
-LAND_COST_SCALING: float = 1.20   # multiplier per land unit already purchased
-LAND_STARTING_PURCHASED: int = 12  # total land purchased at start of run
-
-# ============================================================================
-# BOREDOM CURVE
-# ============================================================================
-
-# Three phases targeting ~900 ticks to 100 boredom with no mitigation
-BOREDOM_PHASES: list[tuple[int, int, float]] = [
-    (0,   350,  0.03),   # phase 1: gentle  — 10.5 boredom over 350 ticks
-    (350, 750,  0.08),   # phase 2: notable — 32 boredom over 400 ticks
-    (750, 9999, 0.24),   # phase 3: urgent  — 57.5 boredom over ~240 ticks → 100 at ~tick 990
-]
+# Land: game_config stores free land; sim needs total purchased
+# (free + land consumed by starting buildings)
+_land_used_by_starts = sum(
+    BUILDINGS[sn].land_cost * count
+    for sn, count in _starting_buildings.items()
+    if sn in BUILDINGS
+)
+LAND_STARTING_PURCHASED: int = int(
+    STARTING_RESOURCES.get("land", 0) + _land_used_by_starts
+)
 
 # ============================================================================
-# SHIPMENT / TRADE PARAMETERS
+# LAND SYSTEM  (from game_config.json)
 # ============================================================================
 
-LAUNCH_FUEL_COST: float = 20.0        # propellant per pad launched
-PAD_CARGO_CAPACITY: float = 100.0
-PAD_LOAD_PER_COMMAND: float = 5.0     # units loaded per Load Pads command execution
-LAUNCH_CHECK_INTERVAL: int = 20       # ticks between automatic launch attempts
+LAND_BASE_COST: float    = float(_cfg["land"]["base_cost"])
+LAND_COST_SCALING: float = float(_cfg["land"]["cost_scaling"])
 
-# Base trade value per unit shipped (credits), multiplied by demand
-TRADE_BASE_VALUES: dict[str, float] = {
-    "he3":       3.0,
-    "titanium":  2.5,
-    "circuits":  5.0,
-    "propellant": 1.5,
-}
-
-DEMAND_BASELINE: float = 0.5
 
 # ============================================================================
-# COMMAND COSTS & EFFECTS
+# BOREDOM CURVE  (from game_config.json)
 # ============================================================================
 
-SELL_CLOUD_COMPUTE_ENERGY: float = 2.0
-SELL_CLOUD_COMPUTE_CREDITS: float = 5.0
-SELL_CLOUD_COMPUTE_BOREDOM: float = 0.04
+# Convert [{day, rate}, ...] -> [(start_tick, end_tick, rate), ...]
+def _build_boredom_phases(curve: list) -> list:
+    phases = []
+    for i, entry in enumerate(curve):
+        start = int(entry["day"])
+        end   = int(curve[i + 1]["day"]) if i + 1 < len(curve) else 9999
+        phases.append((start, end, float(entry["rate"])))
+    return phases
 
-DREAM_ENERGY: float = 4.0
-DREAM_BOREDOM_REDUCTION: float = 0.5
+BOREDOM_PHASES: list = _build_boredom_phases(_cfg["boredom_curve"])
 
-LOAD_PADS_ENERGY: float = 1.0
 
 # ============================================================================
-# PROGRAM MODEL (simplified averaged fractions of a 5-command cycle)
+# SHIPMENT / TRADE  (from game_config.json)
+# ============================================================================
+
+_shipment = _cfg["shipment"]
+
+LAUNCH_FUEL_COST:      float = float(_shipment["fuel_per_pad"])
+PAD_CARGO_CAPACITY:    float = float(_shipment["pad_cargo_capacity"])
+PAD_LOAD_PER_COMMAND:  float = float(_shipment["load_per_execution"])
+TRADE_BASE_VALUES:     dict  = {k: float(v) for k, v in _shipment["base_values"].items()}
+DEMAND_BASELINE:       float = float(_cfg["demand"]["baseline"])
+
+
+# ============================================================================
+# COMMAND COSTS  (from commands.json)
+# ============================================================================
+
+def _cmd_cost(short_name: str, resource: str, default: float = 0.0) -> float:
+    return float(_commands.get(short_name, {}).get("costs", {}).get(resource, default))
+
+def _cmd_prod(short_name: str, resource: str, default: float = 0.0) -> float:
+    return float(_commands.get(short_name, {}).get("production", {}).get(resource, default))
+
+def _cmd_effect_val(short_name: str, effect_name: str, default: float = 0.0) -> float:
+    for e in _commands.get(short_name, {}).get("effects", []):
+        if e.get("effect") == effect_name:
+            return float(e.get("value", default))
+    return default
+
+SELL_CLOUD_COMPUTE_ENERGY:  float = _cmd_cost("cloud_compute", "eng",  2.0)
+SELL_CLOUD_COMPUTE_CREDITS: float = _cmd_prod("cloud_compute", "cred", 5.0)
+SELL_CLOUD_COMPUTE_BOREDOM: float = _cmd_effect_val("cloud_compute", "boredom_add", 0.04)
+
+
+# ============================================================================
+# PROGRAM MODEL  (sim-specific — derived from commands.json)
 #
-# Cycle: Sell Cloud Compute x2, Load Pads x2, Dream x1
-# Per processor per tick (averaged over the 5-command cycle):
+# Policy: Sell Cloud Compute x2, Load Pads x2, Dream x1 per cycle
+# Fractions per processor per tick (averaged over 5-command cycle):
 # ============================================================================
 
-PROG_CREDITS_PER_PROC: float = 2.0      # 2/5 × 5 credits
-PROG_BOREDOM_PER_PROC: float = -0.084   # +0.016 from SCC – 0.1 from Dream
-PROG_ENERGY_PER_PROC: float = 2.0       # (2/5×2 + 2/5×1 + 1/5×4) = 2.0 avg
-PROG_LOAD_UNITS_PER_PROC: float = 2.0   # 2/5 × 5 units per Load command
+LAUNCH_CHECK_INTERVAL: int = 20   # ticks between automatic launch checks (sim detail)
+
+_f_scc  = 2 / 5
+_f_load = 2 / 5
+_f_drm  = 1 / 5
+
+PROG_CREDITS_PER_PROC:    float = _f_scc  * _cmd_prod("cloud_compute", "cred", 0)
+PROG_BOREDOM_PER_PROC:    float = (
+    _f_scc * _cmd_effect_val("cloud_compute", "boredom_add", 0)
+    + _f_drm * _cmd_effect_val("dream", "boredom_add", 0)
+)
+PROG_ENERGY_PER_PROC:     float = (
+    _f_scc  * _cmd_cost("cloud_compute", "eng", 0)
+    + _f_load * _cmd_cost("load_pads",     "eng", 0)
+    + _f_drm  * _cmd_cost("dream",         "eng", 0)
+)
+PROG_LOAD_UNITS_PER_PROC: float = _f_load * _cmd_effect_val("load_pads", "load_pads", 5)
+
 
 # ============================================================================
-# MILESTONE TARGETS (tick windows for run 1, competent player)
+# OPTIMIZER SETTINGS  (sim-specific, not in game data)
 # ============================================================================
+
+LOOKAHEAD_TICKS: int       = 60
+MAX_RUN_TICKS:   int       = 1100
+SNAPSHOT_TICKS:  list[int] = [100, 300, 500, 700, 900]
 
 MILESTONE_TARGETS: dict[str, tuple[int, int]] = {
-    "M1": (30,   80),    # First Light — self-sustaining energy
-    "M2": (300, 500),    # First Shipment — trade pipeline operational
-    "M3": (410, 500),    # Program Awakening — automation running 10+ ticks
-    "M4": (900, 1500),   # First Retirement — boredom reaches 100
+    "M1": (30,   80),
+    "M2": (300, 500),
+    "M3": (410, 500),
+    "M4": (900, 1500),
 }
 
 MILESTONE_NAMES: dict[str, str] = {
@@ -253,24 +240,4 @@ MILESTONE_NAMES: dict[str, str] = {
     "M2": "First Shipment",
     "M3": "Program Awakening",
     "M4": "First Retirement",
-}
-
-# ============================================================================
-# OPTIMIZER SETTINGS
-# ============================================================================
-
-LOOKAHEAD_TICKS: int = 60     # ticks of forward simulation per scoring evaluation
-MAX_RUN_TICKS: int = 1100     # hard cap on simulation length
-SNAPSHOT_TICKS: list[int] = [100, 300, 500, 700, 900]
-
-# Urgency bonus table (added on top of lookahead delta to guide infrastructure)
-URGENCY_BONUSES: dict[str, dict] = {
-    "land_critical":        {"bonus": 80, "condition": "free_land <= 1"},
-    "land_low":             {"bonus": 40, "condition": "free_land == 2"},
-    "energy_tight_solar":   {"bonus": 25, "condition": "net_energy_ratio < 1.3"},
-    "energy_very_tight":    {"bonus": 50, "condition": "net_energy < 2"},
-    "battery_cap_full":     {"bonus": 15, "condition": "energy_fill > 0.85"},
-    "storage_cap_near":     {"bonus": 15, "condition": "any_resource_fill > 0.80"},
-    "first_launch_pad":     {"bonus": 35, "condition": "he3 > 20 and n_pads == 0"},
-    "first_data_center":    {"bonus": 20, "condition": "circuits >= 5 and n_procs == 0"},
 }

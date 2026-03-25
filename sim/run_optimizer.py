@@ -157,8 +157,8 @@ def print_snapshots(state, history: list) -> None:
     print(_header("SECTION 3: RESOURCE SNAPSHOTS"))
 
     all_resources = [
-        "energy", "regolith", "ice", "he3", "titanium",
-        "circuits", "propellant", "credits", "science", "boredom", "land",
+        "eng", "reg", "ice", "he3", "ti",
+        "cir", "prop", "cred", "sci", "boredom", "land",
     ]
 
     snapshots = getattr(state, "_snapshots", {})
@@ -255,7 +255,7 @@ def print_structural_summary(state, build_log: list, history: list) -> None:
         e_upk = snap.get("energy_upkeep", 0.0)
         net = e_prod - e_upk
         buildings = snap.get("buildings", {})
-        n_solar = buildings.get("solar_panel", 0)
+        n_solar = buildings.get("panel", 0)
         n_proc = buildings.get("data_center", 0)
         print(
             f"  {t:5d}  {e_prod:6.1f}  {e_upk:7.1f}  {net:+6.1f}  "
@@ -314,30 +314,30 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
         purchases_by_tick.setdefault(t, []).append(entry)
 
     key_buildings = [
-        ("solar_panel",        "n_solar"),
-        ("battery",            "n_battery"),
-        ("storage_depot",      "n_depot"),
-        ("regolith_excavator", "n_excavator"),
-        ("ice_extractor",      "n_ice"),
-        ("refinery",           "n_refinery"),
-        ("smelter",            "n_smelter"),
-        ("electrolysis_plant", "n_electrolysis"),
-        ("fabricator",         "n_fabricator"),
-        ("data_center",        "n_data_center"),
-        ("launch_pad",         "n_launch_pad"),
-        ("research_lab",       "n_research_lab"),
+        ("panel",        "n_solar"),
+        ("battery",      "n_battery"),
+        ("storage_depot","n_depot"),
+        ("excavator",    "n_excavator"),
+        ("ice_extractor","n_ice"),
+        ("refinery",     "n_refinery"),
+        ("smelter",      "n_smelter"),
+        ("electrolysis", "n_electrolysis"),
+        ("fabricator",   "n_fabricator"),
+        ("data_center",  "n_data_center"),
+        ("launch_pad",   "n_launch_pad"),
+        ("research_lab", "n_research_lab"),
     ]
 
     resource_cols = [
-        ("energy",     "energy_cap"),
-        ("regolith",   "regolith_cap"),
-        ("ice",        "ice_cap"),
-        ("he3",        "he3_cap"),
-        ("titanium",   "titanium_cap"),
-        ("circuits",   "circuits_cap"),
-        ("propellant", "propellant_cap"),
-        ("science",    None),
-        ("land",       None),
+        ("eng",  "eng_cap"),
+        ("reg",  "reg_cap"),
+        ("ice",  "ice_cap"),
+        ("he3",  "he3_cap"),
+        ("ti",   "ti_cap"),
+        ("cir",  "cir_cap"),
+        ("prop", "prop_cap"),
+        ("sci",  None),
+        ("land", None),
     ]
 
     headers = (

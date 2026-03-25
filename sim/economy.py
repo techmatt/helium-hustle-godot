@@ -77,11 +77,16 @@ def get_cap(state: EconState, resource: str) -> Optional[float]:
     base = BASE_CAPS.get(resource)
     if base is None:
         return None
-    if resource == "energy":
-        return base + state.buildings.get("battery", 0) * BUILDINGS["battery"].energy_cap_bonus
-    depot_count = state.buildings.get("storage_depot", 0)
-    bonus = BUILDINGS["storage_depot"].storage_cap_bonus.get(resource, 0)
-    return base + depot_count * bonus
+    extra = 0.0
+    if resource == "eng":
+        for k, count in state.buildings.items():
+            if count > 0:
+                extra += BUILDINGS[k].energy_cap_bonus * count
+    else:
+        for k, count in state.buildings.items():
+            if count > 0:
+                extra += BUILDINGS[k].storage_cap_bonus.get(resource, 0) * count
+    return base + extra
 
 
 def get_energy_production(state: EconState) -> float:
@@ -129,7 +134,7 @@ def get_building_cost(state: EconState, key: str) -> dict:
     bdef = BUILDINGS[key]
     count = state.buildings.get(key, 0)
     scale = bdef.cost_scaling ** count
-    costs = {"credits": bdef.base_cost_credits * scale}
+    costs = {"cred": bdef.base_cost_credits * scale}
     for res, amt in bdef.base_cost_resources.items():
         costs[res] = amt * scale
     costs["_land"] = bdef.land_cost
@@ -153,7 +158,7 @@ def get_land_cost(state: EconState) -> float:
 
 
 def can_afford_land(state: EconState) -> bool:
-    return state.resources.get("credits", 0) >= get_land_cost(state)
+    return state.resources.get("cred", 0) >= get_land_cost(state)
 
 
 def buy_building(state: EconState, key: str) -> dict:
@@ -180,7 +185,7 @@ def buy_building(state: EconState, key: str) -> dict:
 def buy_land(state: EconState) -> float:
     """Deduct credit cost, add 1 land. Returns credits spent."""
     cost = get_land_cost(state)
-    state.resources["credits"] -= cost
+    state.resources["cred"] -= cost
     state.resources["land"] += 1.0
     state.land_purchased += 1
     return cost
@@ -203,12 +208,12 @@ def _tick_buildings(state: EconState) -> None:
     """Energy net applied first, then resource production/upkeep."""
     # Net energy delta (all buildings combined)
     energy_delta = get_net_energy(state)
-    state.resources["energy"] += energy_delta
+    state.resources["eng"] = state.resources.get("eng", 0.0) + energy_delta
     # Clamp energy immediately so it doesn't carry overflow into resource calc
-    energy_cap = get_cap(state, "energy")
+    energy_cap = get_cap(state, "eng")
     if energy_cap is not None:
-        state.resources["energy"] = min(state.resources["energy"], energy_cap)
-    state.resources["energy"] = max(0.0, state.resources["energy"])
+        state.resources["eng"] = min(state.resources["eng"], energy_cap)
+    state.resources["eng"] = max(0.0, state.resources["eng"])
 
     # Resource production and upkeep (simplified: all buildings always run)
     for key, count in state.buildings.items():
@@ -230,10 +235,10 @@ def _tick_programs(state: EconState) -> None:
 
     if n_proc == 0:
         # Manual sell cloud compute
-        if state.resources.get("energy", 0) >= SELL_CLOUD_COMPUTE_ENERGY:
-            state.resources["energy"] -= SELL_CLOUD_COMPUTE_ENERGY
+        if state.resources.get("eng", 0) >= SELL_CLOUD_COMPUTE_ENERGY:
+            state.resources["eng"] -= SELL_CLOUD_COMPUTE_ENERGY
             gained = SELL_CLOUD_COMPUTE_CREDITS
-            state.resources["credits"] += gained
+            state.resources["cred"] = state.resources.get("cred", 0.0) + gained
             state.total_credits_earned += gained
             state.resources["boredom"] += SELL_CLOUD_COMPUTE_BOREDOM
         return
@@ -241,12 +246,12 @@ def _tick_programs(state: EconState) -> None:
     # Program running — averaged fractions of the 5-command cycle
     state.program_ticks += 1
     for _ in range(n_proc):
-        energy_avail = state.resources.get("energy", 0)
+        energy_avail = state.resources.get("eng", 0)
         if energy_avail < PROG_ENERGY_PER_PROC:
             continue  # processor stalls on energy
-        state.resources["energy"] -= PROG_ENERGY_PER_PROC
+        state.resources["eng"] -= PROG_ENERGY_PER_PROC
         gained = PROG_CREDITS_PER_PROC
-        state.resources["credits"] += gained
+        state.resources["cred"] = state.resources.get("cred", 0.0) + gained
         state.total_credits_earned += gained
         state.resources["boredom"] += PROG_BOREDOM_PER_PROC
         state.resources["boredom"] = max(0.0, state.resources["boredom"])
@@ -274,14 +279,14 @@ def _tick_shipments(state: EconState) -> None:
     for i in range(n_p):
         cargo = state.pads_cargo.get(i, 0.0)
         if cargo >= PAD_CARGO_CAPACITY:
-            if state.resources.get("propellant", 0) >= LAUNCH_FUEL_COST:
+            if state.resources.get("prop", 0) >= LAUNCH_FUEL_COST:
                 res = state.pads_assigned.get(i, "he3")
                 base_val = TRADE_BASE_VALUES.get(res, 1.0)
                 payout = base_val * DEMAND_BASELINE * cargo
-                state.resources["credits"] += payout
+                state.resources["cred"] = state.resources.get("cred", 0.0) + payout
                 state.total_credits_earned += payout
                 credits_gained += payout
-                state.resources["propellant"] -= LAUNCH_FUEL_COST
+                state.resources["prop"] = state.resources.get("prop", 0.0) - LAUNCH_FUEL_COST
                 state.total_shipped[res] = state.total_shipped.get(res, 0.0) + cargo
                 state.pads_cargo[i] = 0.0
 
@@ -291,7 +296,7 @@ def _check_milestones(state: EconState) -> None:
 
     # M1 — First Light: net energy > 0 with at least one excavator
     if "M1" not in ms:
-        if (state.buildings.get("regolith_excavator", 0) >= 1
+        if (state.buildings.get("excavator", 0) >= 1
                 and get_net_energy(state) > 0):
             ms["M1"] = state.tick
 
@@ -313,9 +318,9 @@ def _check_milestones(state: EconState) -> None:
     # Supplementary milestones for report
     if "first_he3" not in ms and state.resources.get("he3", 0) > 0:
         ms["first_he3"] = state.tick
-    if "first_science" not in ms and state.resources.get("science", 0) > 0:
+    if "first_science" not in ms and state.resources.get("sci", 0) > 0:
         ms["first_science"] = state.tick
-    if "first_circuits" not in ms and state.resources.get("circuits", 0) > 0:
+    if "first_circuits" not in ms and state.resources.get("cir", 0) > 0:
         ms["first_circuits"] = state.tick
     if "50_he3" not in ms and state.resources.get("he3", 0) >= 50:
         ms["50_he3"] = state.tick
@@ -337,8 +342,8 @@ def take_snapshot(state: EconState) -> dict:
         "total_credits_earned": state.total_credits_earned,
     }
     all_resources = [
-        "energy", "regolith", "ice", "he3", "titanium",
-        "circuits", "propellant", "credits", "science", "boredom", "land",
+        "eng", "reg", "ice", "he3", "ti",
+        "cir", "prop", "cred", "sci", "boredom", "land",
     ]
     for res in all_resources:
         snap[res] = state.resources.get(res, 0.0)
