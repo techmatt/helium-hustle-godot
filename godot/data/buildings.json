@@ -9,15 +9,14 @@
     "land": 1,
     "cost_scaling": 1.2,
     "costs": {
-      "cred": 10.0,
-      "ti": 2.0
+      "cred": 8.0
     },
     "production": {
-      "eng": 4.0
+      "eng": 6.0
     },
     "upkeep": {},
     "effects": [],
-    "description": "Cheap energy. Needs a little titanium \u2014 Buy Titanium early, smelt it later."
+    "description": "Cheap energy. No material cost \u2014 scale these freely throughout the run."
   },
   {
     "name": "Regolith Excavator",
@@ -29,7 +28,7 @@
     "land": 1,
     "cost_scaling": 1.25,
     "costs": {
-      "cred": 20.0
+      "cred": 12.0
     },
     "production": {
       "reg": 2.0
@@ -293,9 +292,21 @@
         "resource": "he3",
         "operator": "+",
         "value": 25.0
+      },
+      {
+        "prefix": "store",
+        "resource": "ti",
+        "operator": "+",
+        "value": 25.0
+      },
+      {
+        "prefix": "store",
+        "resource": "cir",
+        "operator": "+",
+        "value": 25.0
       }
     ],
-    "description": "Bulk physical storage. Raw materials get more, processed goods get less."
+    "description": "Bulk physical storage. Expands reg, ice, he3, ti, and circuit capacity."
   },
   {
     "name": "Arbitrage Engine",

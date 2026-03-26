@@ -41,3 +41,4 @@
 *.dwo
 /sim/__pycache__
 /sim/tick_report.csv
+/sim/scenarios/run1_fresh.json

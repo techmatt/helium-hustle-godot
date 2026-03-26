@@ -7,16 +7,15 @@
     "ti": 0,
     "cir": 0,
     "prop": 0,
-    "cred": 50,
+    "cred": 0,
     "sci": 0,
-    "land": 20,
+    "land": 40,
     "boredom": 0
   },
   "starting_buildings": {
     "panel": 1,
-    "excavator": 1
+    "data_center": 1
   },
-  "starting_processors": 1,
   "boredom_curve": [
     {
       "day": 0,
@@ -73,7 +72,8 @@
   },
   "land": {
     "base_cost": 15,
-    "cost_scaling": 1.15
+    "cost_scaling": 1.5,
+    "land_per_purchase": 10
   },
   "ideology": {
     "push_amount": 1,

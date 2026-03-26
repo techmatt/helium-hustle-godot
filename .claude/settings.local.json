@@ -16,7 +16,8 @@
       "Bash(python data/convert.py)",
       "Bash(python:*)",
       "Bash(grep:*)",
-      "Bash(cd sim && python*)"
+      "Bash(cd sim && python*)",
+      "WebSearch"
     ]
   }
 }

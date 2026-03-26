@@ -162,6 +162,11 @@ tick is skipped.
 **Output:** `sim/tick_report.csv` — one row per tick with all resource levels
 (including `cred` on hand), building counts, net energy, and cumulative credits.
 
+## Working Style
+
+- **Work incrementally.** After each meaningful change (a new feature, a bug fix, a scoring tweak), stop and report results before continuing. Do not chain more than 5–10 tool calls without checking in with the user.
+- **Python analysis scripts:** When running Python for analysis or debugging, write the code to a temporary `.py` file (e.g., `sim/_debug_tmp.py`) and execute that file — do not use `python -c` with inline code. Inline code is hard to read in tool-call review and can't be easily re-run or inspected.
+
 ## Notes
 
 - `project.godot` `config/name` and dotnet assembly are both "Helium Hustle" / "HeliumHustle"

@@ -8,7 +8,7 @@ No policy, no heuristics. Functions take state + action and return new state
   3. Programs: fixed command policy
   4. Shipments: launch full pads (checked every LAUNCH_CHECK_INTERVAL ticks)
   5. Clamp all resources to storage caps
-  6. Milestone checks
+  6. Event recording
 
 Callers are responsible for purchase actions (buy_building / buy_land) between ticks.
 """
@@ -20,7 +20,7 @@ from typing import Optional
 
 from constants import (
     BUILDINGS, BASE_CAPS, UNCAPPED, STARTING_RESOURCES,
-    LAND_BASE_COST, LAND_COST_SCALING, LAND_STARTING_PURCHASED,
+    LAND_BASE_COST, LAND_COST_SCALING,
     BOREDOM_PHASES,
     LAUNCH_FUEL_COST, PAD_CARGO_CAPACITY, PAD_LOAD_PER_COMMAND,
     LAUNCH_CHECK_INTERVAL, TRADE_BASE_VALUES, DEMAND_BASELINE,
@@ -45,7 +45,7 @@ class EconState:
     total_credits_earned: float = 0.0                 # cumulative (shipments + programs)
     total_shipped: dict = field(default_factory=dict) # resource -> units shipped
     program_ticks: int = 0                            # ticks where programs ran
-    milestones: dict = field(default_factory=dict)    # name -> tick
+    events: dict = field(default_factory=dict)        # event_name -> tick first occurred
     history: list = field(default_factory=list)       # list of snapshot dicts
     # Rolling credit income tracking (last 50 ticks)
     _credit_gains: list = field(default_factory=list)
@@ -57,13 +57,10 @@ def init_state() -> EconState:
     state.resources = dict(STARTING_RESOURCES)
     state.buildings = {k: v.starts_with for k, v in BUILDINGS.items()}
 
-    # Compute free land from purchased total minus what starting buildings use
-    used = sum(
-        BUILDINGS[k].land_cost * state.buildings[k]
-        for k in state.buildings
-    )
-    state.land_purchased = LAND_STARTING_PURCHASED
-    state.resources["land"] = float(LAND_STARTING_PURCHASED - used)
+    # Free land comes directly from starting_resources; land_purchased starts at 0
+    # so purchase cost scaling reflects actual purchases, not starting land.
+    state.land_purchased = 0
+    state.resources["land"] = float(STARTING_RESOURCES.get("land", 0))
     return state
 
 
@@ -203,10 +200,11 @@ def execute_command(state: EconState, short_name: str) -> dict:
 
 
 def buy_land(state: EconState) -> float:
-    """Deduct credit cost, add 1 land. Returns credits spent."""
+    """Deduct credit cost, add LAND_PER_PURCHASE land. Returns credits spent."""
+    from constants import LAND_PER_PURCHASE
     cost = get_land_cost(state)
     state.resources["cred"] -= cost
-    state.resources["land"] += 1.0
+    state.resources["land"] += float(LAND_PER_PURCHASE)
     state.land_purchased += 1
     return cost
 
@@ -311,39 +309,73 @@ def _tick_shipments(state: EconState) -> None:
                 state.pads_cargo[i] = 0.0
 
 
-def _check_milestones(state: EconState) -> None:
-    ms = state.milestones
+def _record_events(state: EconState) -> None:
+    """Record named events the first time their condition becomes true.
 
-    # M1 — First Light: net energy > 0 with at least one excavator
-    if "M1" not in ms:
-        if (state.buildings.get("excavator", 0) >= 1
-                and get_net_energy(state) > 0):
-            ms["M1"] = state.tick
+    Only events that cannot be recovered by scanning history are tracked here —
+    specifically those tied to state that isn't captured in snapshots.
+    Building/resource conditions are resolved by check_objectives() via history.
+    """
+    ev = state.events
+    # shipment_complete: total_shipped is cumulative but not in snapshots
+    if "shipment_complete" not in ev and sum(state.total_shipped.values()) > 0:
+        ev["shipment_complete"] = state.tick
+    # boredom_100: detectable from history but cheap to track here too
+    if "boredom_100" not in ev and state.resources.get("boredom", 0) >= 100:
+        ev["boredom_100"] = state.tick
 
-    # M2 — First Shipment: any resource has been shipped
-    if "M2" not in ms:
-        if sum(state.total_shipped.values()) > 0:
-            ms["M2"] = state.tick
 
-    # M3 — Program Awakening: program has run for 10+ ticks
-    if "M3" not in ms:
-        if state.program_ticks >= 10:
-            ms["M3"] = state.tick
+def check_objectives(state: EconState, objectives: list) -> dict:
+    """Evaluate scenario objectives against run history and events.
 
-    # M4 — First Retirement: boredom maxed
-    if "M4" not in ms:
-        if state.resources.get("boredom", 0) >= 100:
-            ms["M4"] = state.tick
+    Returns {obj_id: tick_first_satisfied} for satisfied objectives,
+    {obj_id: None} for objectives not yet hit.
 
-    # Supplementary milestones for report
-    if "first_he3" not in ms and state.resources.get("he3", 0) > 0:
-        ms["first_he3"] = state.tick
-    if "first_science" not in ms and state.resources.get("sci", 0) > 0:
-        ms["first_science"] = state.tick
-    if "first_circuits" not in ms and state.resources.get("cir", 0) > 0:
-        ms["first_circuits"] = state.tick
-    if "50_he3" not in ms and state.resources.get("he3", 0) >= 50:
-        ms["50_he3"] = state.tick
+    Objective types:
+      "building"  — first tick where buildings[value] >= 1
+      "resource"  — first tick where resource[value] >= threshold
+      "event"     — tick recorded in state.events[value]
+
+    Requires state.history (record_history=True in tick_once) for
+    building and resource objectives.
+    """
+    result: dict = {}
+    for obj in objectives:
+        otype = obj["type"]
+        oid   = obj["id"]
+
+        if otype == "event":
+            result[oid] = state.events.get(obj["value"])
+
+        elif otype == "building":
+            key      = obj["value"]
+            required = obj.get("count", 1)
+            tick = None
+            for snap in state.history:
+                if snap.get("buildings", {}).get(key, 0) >= required:
+                    tick = snap["tick"]
+                    break
+            # Fallback: check current state if history is incomplete
+            if tick is None and state.buildings.get(key, 0) >= required:
+                tick = state.tick
+            result[oid] = tick
+
+        elif otype == "resource":
+            res       = obj["value"]
+            threshold = obj.get("threshold", 1)
+            tick = None
+            for snap in state.history:
+                if snap.get(res, 0) >= threshold:
+                    tick = snap["tick"]
+                    break
+            if tick is None and state.resources.get(res, 0) >= threshold:
+                tick = state.tick
+            result[oid] = tick
+
+        else:
+            result[oid] = None
+
+    return result
 
 
 # ============================================================================
@@ -370,6 +402,7 @@ def take_snapshot(state: EconState) -> dict:
         cap = get_cap(state, res)
         snap[f"{res}_cap"] = cap
     snap["buildings"] = dict(state.buildings)
+    snap["total_credits_earned"] = state.total_credits_earned
     return snap
 
 
@@ -390,7 +423,7 @@ def tick_once(state: EconState, record_history: bool = False) -> None:
     if state.tick % LAUNCH_CHECK_INTERVAL == 0:
         _tick_shipments(state)
     clamp_resources(state)
-    _check_milestones(state)
+    _record_events(state)
     if record_history:
         _record_history(state)
 
@@ -411,19 +444,29 @@ def _clone_for_scoring(state: EconState) -> EconState:
     s.total_credits_earned = state.total_credits_earned
     s.total_shipped = dict(state.total_shipped)
     s.program_ticks = state.program_ticks
-    s.milestones = dict(state.milestones)
+    s.events = dict(state.events)
     # Intentionally omit history and _credit_gains — not needed for scoring
     return s
 
 
-def sim_forward(state: EconState, n_ticks: int, record_history: bool = False) -> EconState:
+def sim_forward(
+    state: EconState,
+    n_ticks: int,
+    buy_policy=None,
+    record_history: bool = False,
+) -> EconState:
     """
-    Return a copy of state advanced by n_ticks with no purchase actions.
+    Return a copy of state advanced by n_ticks.
     Uses a fast clone when record_history=False (for scoring lookaheads).
+
+    buy_policy: optional callable(state) -> None called once per tick after
+    tick_once. Used for sighted lookahead scoring in the optimizer.
     """
     s = _clone_for_scoring(state) if not record_history else copy.deepcopy(state)
     for _ in range(n_ticks):
         tick_once(s, record_history=record_history)
         if s.resources.get("boredom", 0) >= 100:
             break
+        if buy_policy is not None:
+            buy_policy(s)
     return s

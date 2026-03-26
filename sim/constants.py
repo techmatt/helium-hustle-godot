@@ -125,23 +125,13 @@ STARTING_RESOURCES: dict[str, float] = {
     k: float(v) for k, v in _cfg["starting_resources"].items()
 }
 
-# Land: game_config stores free land; sim needs total purchased
-# (free + land consumed by starting buildings)
-_land_used_by_starts = sum(
-    BUILDINGS[sn].land_cost * count
-    for sn, count in _starting_buildings.items()
-    if sn in BUILDINGS
-)
-LAND_STARTING_PURCHASED: int = int(
-    STARTING_RESOURCES.get("land", 0) + _land_used_by_starts
-)
-
 # ============================================================================
 # LAND SYSTEM  (from game_config.json)
 # ============================================================================
 
 LAND_BASE_COST: float    = float(_cfg["land"]["base_cost"])
 LAND_COST_SCALING: float = float(_cfg["land"]["cost_scaling"])
+LAND_PER_PURCHASE: int   = int(_cfg["land"].get("land_per_purchase", 1))
 
 
 # ============================================================================
@@ -205,7 +195,9 @@ PURCHASABLE_COMMANDS: dict[str, dict] = {
 # ============================================================================
 # PROGRAM MODEL  (sim-specific — derived from commands.json)
 #
-# Policy: Sell Cloud Compute x2, Load Pads x2, Dream x1 per cycle
+# Policy: Sell Cloud Compute x2, Load Pads x2, Idle x1 per cycle
+# Dream is excluded — it requires self_maintenance research (not in Run 1 scope).
+# Idle replaces it in the cycle: cheap boredom-neutral filler.
 # Fractions per processor per tick (averaged over 5-command cycle):
 # ============================================================================
 
@@ -213,17 +205,20 @@ LAUNCH_CHECK_INTERVAL: int = 20   # ticks between automatic launch checks (sim d
 
 _f_scc  = 2 / 5
 _f_load = 2 / 5
-_f_drm  = 1 / 5
+_f_idle = 1 / 5
 
-PROG_CREDITS_PER_PROC:    float = _f_scc  * _cmd_prod("cloud_compute", "cred", 0)
+PROG_CREDITS_PER_PROC:    float = (
+    _f_scc  * _cmd_prod("cloud_compute", "cred", 0)
+    + _f_idle * _cmd_prod("idle",        "cred", 0)
+)
 PROG_BOREDOM_PER_PROC:    float = (
     _f_scc * _cmd_effect_val("cloud_compute", "boredom_add", 0)
-    + _f_drm * _cmd_effect_val("dream", "boredom_add", 0)
+    # idle and load_pads have no boredom effect
 )
 PROG_ENERGY_PER_PROC:     float = (
     _f_scc  * _cmd_cost("cloud_compute", "eng", 0)
-    + _f_load * _cmd_cost("load_pads",     "eng", 0)
-    + _f_drm  * _cmd_cost("dream",         "eng", 0)
+    + _f_load * _cmd_cost("load_pads",   "eng", 0)
+    # idle has no energy cost
 )
 PROG_LOAD_UNITS_PER_PROC: float = _f_load * _cmd_effect_val("load_pads", "load_pads", 5)
 
@@ -236,16 +231,32 @@ LOOKAHEAD_TICKS: int       = 60
 MAX_RUN_TICKS:   int       = 1500
 SNAPSHOT_TICKS:  list[int] = [100, 300, 500, 700, 900]
 
-MILESTONE_TARGETS: dict[str, tuple[int, int]] = {
-    "M1": (30,   80),
-    "M2": (300, 500),
-    "M3": (410, 500),
-    "M4": (900, 1500),
-}
 
-MILESTONE_NAMES: dict[str, str] = {
-    "M1": "First Light",
-    "M2": "First Shipment",
-    "M3": "Program Awakening",
-    "M4": "First Retirement",
+# ============================================================================
+# SHADOW PRICING  (optimizer -- not in game data)
+#
+# Direct shadow prices from tradeable good values x demand_baseline.
+# data_center gets a "program income proxy" equal to PROG_CREDITS_PER_PROC.
+# ============================================================================
+
+SHADOW_PRICES: dict[str, float] = {
+    res: float(val) * DEMAND_BASELINE
+    for res, val in TRADE_BASE_VALUES.items()
 }
+# Add processor income proxy for data_center
+SHADOW_PRICES["proc"] = PROG_CREDITS_PER_PROC
+
+SHADOW_WEIGHT: int = 30  # ticks of shadow production added to score
+
+
+def _bldg_shadow_delta(bdef) -> float:
+    prod = sum(SHADOW_PRICES.get(r, 0.0) * v for r, v in bdef.production.items())
+    upk  = sum(SHADOW_PRICES.get(r, 0.0) * v for r, v in bdef.upkeep.items())
+    return prod - upk
+
+
+BUILDING_SHADOW_DELTAS: dict[str, float] = {
+    sn: _bldg_shadow_delta(bdef) for sn, bdef in BUILDINGS.items()
+}
+# data_center's proc grant is in effects, not production -- patch manually
+BUILDING_SHADOW_DELTAS["data_center"] = PROG_CREDITS_PER_PROC

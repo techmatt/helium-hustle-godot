@@ -4,33 +4,37 @@ from __future__ import annotations
 """
 Helium Hustle -- Economic Optimizer CLI
 
-Runs one greedy optimisation pass for run 1 and prints a four-section report:
+Runs one greedy optimisation pass for a scenario and prints a four-section report:
 
   Section 1 -- Discovered build order (tick, action, building, cost)
-  Section 2 -- Milestone timing M1-M4 vs target windows
+  Section 2 -- Objective timing vs target windows
   Section 3 -- Resource snapshots at ticks 100, 300, 500, 700, 900
   Section 4 -- Structural summary (payback periods, energy budget, credits/tick)
 
 Usage:
-    cd sim
-    python run_optimizer.py
+    python sim/run_optimizer.py                              # uses run1_fresh.json
+    python sim/run_optimizer.py sim/scenarios/run1_fresh.json
+    python sim/run_optimizer.py sim/scenarios/run1_fresh.json --debug-tick 38
 """
 
 import csv
+import json
 import sys
 import time
 from pathlib import Path
 from typing import Optional
 
 from constants import (
-    BUILDINGS, MILESTONE_TARGETS, MILESTONE_NAMES,
-    SNAPSHOT_TICKS, LOOKAHEAD_TICKS,
+    BUILDINGS, SNAPSHOT_TICKS, LOOKAHEAD_TICKS,
     TRADE_BASE_VALUES,
 )
 from economy import (
-    num_processors, num_pads,
+    num_processors, num_pads, check_objectives,
 )
 from optimizer import run_greedy
+
+_SCENARIOS_DIR = Path(__file__).parent / "scenarios"
+_DEFAULT_SCENARIO = _SCENARIOS_DIR / "run1_fresh.json"
 
 
 # ============================================================================
@@ -48,11 +52,11 @@ def _header(title: str, char: str = "=", width: int = 78) -> str:
     return f"{char * left} {title} {char * right}"
 
 
-def _tick_in_window(tick: Optional[int], lo: int, hi: int) -> str:
+def _tick_status(tick: Optional[int], lo: int, hi: int) -> str:
     if tick is None:
-        return "NOT HIT"
+        return "MISSED  (not achieved)"
     if lo <= tick <= hi:
-        return f"tick {tick:4d}  OK  (target {lo}-{hi})"
+        return f"tick {tick:4d}  OK     (target {lo}-{hi})"
     elif tick < lo:
         return f"tick {tick:4d}  EARLY  (target {lo}-{hi})"
     else:
@@ -85,7 +89,6 @@ def print_build_order(build_log: list) -> None:
     print(_hr("-", len(header) + 20))
     for entry in build_log:
         tick = entry["tick"]
-        action = entry["action"].upper()
         label = entry["label"]
         count = f"x{entry['count_after']}" if entry["count_after"] is not None else "  "
 
@@ -107,43 +110,26 @@ def print_build_order(build_log: list) -> None:
 
 
 # ============================================================================
-# Section 2: Milestone timing
+# Section 2: Objective timing
 # ============================================================================
 
-def print_milestone_report(state, build_log: list) -> None:
+def print_objective_report(state, scenario: dict, build_log: list) -> None:
     print()
-    print(_header("SECTION 2: MILESTONE TIMING"))
-    ms = state.milestones
+    print(_header("SECTION 2: OBJECTIVE TIMING"))
 
-    ordered = [
-        ("M1", MILESTONE_NAMES["M1"], MILESTONE_TARGETS["M1"]),
-        ("M2", MILESTONE_NAMES["M2"], MILESTONE_TARGETS["M2"]),
-        ("M3", MILESTONE_NAMES["M3"], MILESTONE_TARGETS["M3"]),
-        ("M4", MILESTONE_NAMES["M4"], MILESTONE_TARGETS["M4"]),
-    ]
-    for code, name, (lo, hi) in ordered:
-        tick = ms.get(code)
-        status = _tick_in_window(tick, lo, hi)
-        print(f"  {code}  {name:<24}  {status}")
+    objectives = scenario.get("objectives", [])
+    obj_results = check_objectives(state, objectives)
 
-    print()
-    aux = [
-        ("first_he3",      "First He-3 produced"),
-        ("50_he3",         "He-3 stockpile >= 50"),
-        ("first_circuits", "First circuits produced"),
-        ("first_science",  "First science produced"),
-    ]
-    for code, name in aux:
-        tick = ms.get(code)
-        t_str = f"tick {tick:4d}" if tick else "not hit  "
-        print(f"         {name:<28}  {t_str}")
+    for obj in objectives:
+        oid  = obj["id"]
+        lo, hi = obj["target"]
+        tick = obj_results.get(oid)
+        label = oid.replace("_", " ").title()
+        status = _tick_status(tick, lo, hi)
+        print(f"  {oid:<16}  {label:<20}  {status}")
 
     print()
-    m4 = ms.get("M4")
-    if m4:
-        print(f"  Run ended at tick {state.tick}  (boredom = {state.resources['boredom']:.1f}/100)")
-    else:
-        print(f"  Run ended at tick {state.tick} -- M4 not reached within {state.tick} ticks")
+    print(f"  Run ended at tick {state.tick}  (boredom = {state.resources['boredom']:.1f}/100)")
     print(f"  Total credits earned: {state.total_credits_earned:.1f} cumulative")
     shipped = state.total_shipped
     if shipped:
@@ -156,7 +142,7 @@ def print_milestone_report(state, build_log: list) -> None:
 # Section 3: Resource snapshots
 # ============================================================================
 
-def print_snapshots(state, history: list) -> None:
+def print_snapshots(snapshots: dict, history: list) -> None:
     print()
     print(_header("SECTION 3: RESOURCE SNAPSHOTS"))
 
@@ -164,8 +150,6 @@ def print_snapshots(state, history: list) -> None:
         "eng", "reg", "ice", "he3", "ti",
         "cir", "prop", "cred", "sci", "boredom", "land",
     ]
-
-    snapshots = getattr(state, "_snapshots", {})
 
     for target_tick in SNAPSHOT_TICKS:
         snap = snapshots.get(target_tick)
@@ -179,7 +163,6 @@ def print_snapshots(state, history: list) -> None:
             label += f" (~{target_tick})"
         print(f"\n  +-- {label} " + "-" * max(0, 60 - len(label)))
 
-        # Resources table
         print(f"  |  {'Resource':<12}  {'Amount':>8}  {'Cap':>8}  {'Fill':>6}")
         print(f"  |  {'':->12}  {'':->8}  {'':->8}  {'':->6}")
         for res in all_resources:
@@ -194,18 +177,15 @@ def print_snapshots(state, history: list) -> None:
                 fill_str = "     --"
             print(f"  |  {res:<12}  {amt:8.1f}  {cap_str}  {fill_str}")
 
-        # Energy summary
         net_e = snap.get("net_energy", 0.0)
         e_prod = snap.get("energy_production", 0.0)
         e_upk = snap.get("energy_upkeep", 0.0)
         print(f"  |")
         print(f"  |  Net energy/tick:  {net_e:+.1f}  (prod {e_prod:.1f} - upk {e_upk:.1f})")
 
-        # Credit income rate
         rate = _rolling_credit_rate(history, actual_tick, window=20)
         print(f"  |  Credit income:    ~{rate:.2f} credits/tick  (20-tick rolling avg)")
 
-        # Building counts
         buildings = snap.get("buildings", {})
         parts = [f"{BUILDINGS[k].name} x{v}" for k, v in buildings.items() if v > 0]
         if parts:
@@ -221,7 +201,7 @@ def print_snapshots(state, history: list) -> None:
 # Section 4: Structural summary
 # ============================================================================
 
-def print_structural_summary(state, build_log: list, history: list) -> None:
+def print_structural_summary(state, build_log: list, history: list, snapshots: dict) -> None:
     print()
     print(_header("SECTION 4: STRUCTURAL SUMMARY"))
 
@@ -249,7 +229,6 @@ def print_structural_summary(state, build_log: list, history: list) -> None:
     print(f"  {'Tick':>5}  {'Prod':>6}  {'Upkeep':>7}  {'Net':>6}  "
           f"{'N Solar':>8}  {'N DCenter':>10}  {'Headroom':>9}")
     print("  " + _hr("-", 65))
-    snapshots = getattr(state, "_snapshots", {})
     for target in SNAPSHOT_TICKS:
         snap = snapshots.get(target)
         if snap is None:
@@ -272,16 +251,14 @@ def print_structural_summary(state, build_log: list, history: list) -> None:
     print(f"  {'Tick':>5}  {'Credits/tick':>13}  Note")
     print("  " + _hr("-", 55))
     checkpoints = [50, 100, 150, 200, 300, 400, 500, 600, 700, 800, 900]
+    first_ship_tick = state.events.get("shipment_complete")
     for cp in checkpoints:
         if cp > state.tick:
             break
         rate = _rolling_credit_rate(history, cp, window=20)
         note = ""
-        ms = state.milestones
-        if ms.get("M2") and abs(cp - ms["M2"]) <= 25:
+        if first_ship_tick and abs(cp - first_ship_tick) <= 25:
             note = "<-- first shipment"
-        elif ms.get("M3") and abs(cp - ms["M3"]) <= 25:
-            note = "<-- programs online"
         print(f"  {cp:5d}  {rate:13.2f}  {note}")
 
     # --- 4d: Final state ---
@@ -304,14 +281,6 @@ def print_structural_summary(state, build_log: list, history: list) -> None:
 # ============================================================================
 
 def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") -> None:
-    """
-    Write one row per tick to a CSV file.
-
-    Columns: tick, action, credits, boredom, energy/cap, regolith/cap, ice/cap,
-    he3/cap, titanium/cap, circuits/cap, propellant/cap, science, land,
-    net_energy, cum_credits_earned, and per-building counts for key buildings.
-    """
-    # Index build_log by tick for O(1) lookup
     purchases_by_tick: dict = {}
     for entry in build_log:
         t = entry["tick"]
@@ -333,7 +302,7 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
     ]
 
     resource_cols = [
-        ("cred", None),       # credits on hand
+        ("cred", None),
         ("eng",  "eng_cap"),
         ("reg",  "reg_cap"),
         ("ice",  "ice_cap"),
@@ -359,8 +328,6 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
 
         for snap in state.history:
             t = snap["tick"]
-
-            # Action summary for this tick
             entries = purchases_by_tick.get(t, [])
             if entries:
                 parts = []
@@ -376,20 +343,16 @@ def write_tick_csv(state, build_log: list, out_path: str = "tick_report.csv") ->
                 action_str = ""
 
             row = [t, action_str, round(snap.get("boredom", 0), 2)]
-
             for res, cap_key in resource_cols:
                 row.append(round(snap.get(res, 0), 1))
                 if cap_key:
                     cap_val = snap.get(cap_key)
                     row.append("" if cap_val is None else int(cap_val))
-
             row.append(round(snap.get("net_energy", 0), 1))
             row.append(round(snap.get("total_credits_earned", 0), 1))
-
             buildings = snap.get("buildings", {})
             for bkey, _ in key_buildings:
                 row.append(buildings.get(bkey, 0))
-
             writer.writerow(row)
 
     print(f"  Tick report written: {out}")
@@ -411,18 +374,12 @@ def print_score_traces(score_traces: dict) -> None:
         bldgs = tr["buildings"]
 
         print(f"\n  === Tick {tick} ===")
-
-        # Resource summary
         res_parts = ["cred", "eng", "reg", "ice", "he3", "ti", "cir", "prop"]
         res_str = "  ".join(f"{r}={res.get(r, 0):.1f}" for r in res_parts)
         print(f"  Resources: {res_str}")
         print(f"             boredom={res.get('boredom', 0):.2f}  land={res.get('land', 0):.0f}")
-
-        # Buildings summary
         bldg_parts = [f"{BUILDINGS[k].name} x{v}" for k, v in bldgs.items() if v > 0]
         print(f"  Buildings: {', '.join(bldg_parts) or '(none)'}")
-
-        # Threshold info
         print(f"  max_upcoming_urgency={tr['max_upcoming_urgency']:.0f}  "
               f"save_threshold={tr['save_threshold']:.1f}  "
               f"baseline_credits={tr['base_credits']:.1f}")
@@ -431,9 +388,8 @@ def print_score_traces(score_traces: dict) -> None:
         if chosen_key:
             print(f"  Chosen: {chosen_key[0]} {chosen_key[1]}")
         else:
-            print(f"  Chosen: (none — all actions failed threshold or scored <= 0)")
+            print(f"  Chosen: (none -- all actions failed threshold or scored <= 0)")
 
-        # Scoring table
         print()
         hdr = (f"  {'Rank':>4}  {'Type':<8}  {'Action':<22}  "
                f"{'Score':>7}  {'Marginal':>9}  {'Urgency':>8}  {'Passes':>6}  {'':>1}")
@@ -454,22 +410,24 @@ def print_score_traces(score_traces: dict) -> None:
 # Argument parsing
 # ============================================================================
 
-def _parse_args(argv: list) -> tuple[list[int], list[str]]:
+def _parse_args(argv: list) -> tuple[Path, list[int]]:
     """
-    Parse --debug-tick N (repeatable) from argv.
-    Returns (debug_ticks, remaining_args).
+    Parse optional scenario path and --debug-tick N flags from argv.
+    Returns (scenario_path, debug_ticks).
     """
     debug_ticks: list[int] = []
-    remaining: list[str] = []
+    scenario_path: Path = _DEFAULT_SCENARIO
     i = 0
     while i < len(argv):
         if argv[i] in ("--debug-tick", "-d") and i + 1 < len(argv):
             debug_ticks.append(int(argv[i + 1]))
             i += 2
-        else:
-            remaining.append(argv[i])
+        elif not argv[i].startswith("-"):
+            scenario_path = Path(argv[i])
             i += 1
-    return debug_ticks, remaining
+        else:
+            i += 1
+    return scenario_path, debug_ticks
 
 
 # ============================================================================
@@ -477,18 +435,28 @@ def _parse_args(argv: list) -> tuple[list[int], list[str]]:
 # ============================================================================
 
 def main() -> None:
-    debug_ticks, _ = _parse_args(sys.argv[1:])
+    scenario_path, debug_ticks = _parse_args(sys.argv[1:])
+
+    if not scenario_path.exists():
+        print(f"ERROR: scenario file not found: {scenario_path}")
+        sys.exit(1)
+
+    scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
 
     print()
-    print(_header("HELIUM HUSTLE -- ECONOMIC OPTIMIZER  (Run 1, Greedy Pass)"))
+    print(_header(f"HELIUM HUSTLE -- OPTIMIZER  ({scenario['name']})"))
     print(f"  Lookahead: {LOOKAHEAD_TICKS} ticks | Scoring: marginal credits + urgency bonuses")
     if debug_ticks:
         print(f"  Debug ticks: {sorted(debug_ticks)}")
     print(_hr("-"))
     print("  Running optimizer...", end="", flush=True)
 
+    objectives = scenario.get("objectives", [])
+
     t0 = time.perf_counter()
-    state, build_log, score_traces = run_greedy(debug_ticks=set(debug_ticks))
+    state, build_log, score_traces, snapshots = run_greedy(
+        debug_ticks=set(debug_ticks), objectives=objectives
+    )
     elapsed = time.perf_counter() - t0
 
     print(f" done in {elapsed:.1f}s  ({state.tick} ticks simulated, {len(build_log)} purchases)")
@@ -497,9 +465,9 @@ def main() -> None:
     history = state.history
 
     print_build_order(build_log)
-    print_milestone_report(state, build_log)
-    print_snapshots(state, history)
-    print_structural_summary(state, build_log, history)
+    print_objective_report(state, scenario, build_log)
+    print_snapshots(snapshots, history)
+    print_structural_summary(state, build_log, history, snapshots)
     if score_traces:
         print_score_traces(score_traces)
     write_tick_csv(state, build_log)
