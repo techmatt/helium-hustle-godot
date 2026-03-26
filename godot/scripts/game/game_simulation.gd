@@ -3,14 +3,19 @@ extends RefCounted
 
 var _resources_data: Array = []
 var _buildings_data: Array = []
+var _commands_data: Dictionary = {}  # {short_name: command_dict}
+var pending_program_events: Array = []  # populated during tick, read by GameManager
 
 
-func init(resources_data: Array, buildings_data: Array) -> void:
+func init(resources_data: Array, buildings_data: Array, commands_data: Array) -> void:
 	_resources_data = resources_data
 	_buildings_data = buildings_data
+	for cmd in commands_data:
+		_commands_data[cmd.short_name] = cmd
 
 
 func tick(state: GameState) -> void:
+	pending_program_events.clear()
 	recalculate_caps(state)
 
 	for bdef in _buildings_data:
@@ -24,8 +29,45 @@ func tick(state: GameState) -> void:
 		for res in bdef.production:
 			state.amounts[res] = state.amounts.get(res, 0.0) + float(bdef.production[res]) * count
 
+	execute_programs(state)
+
 	_clamp(state)
 	state.current_day += 1
+
+
+func execute_programs(state: GameState) -> void:
+	for prog_idx in range(state.programs.size()):
+		var prog: GameState.ProgramData = state.programs[prog_idx]
+		if prog.processors_assigned <= 0 or prog.commands.is_empty():
+			continue
+		for _proc in range(prog.processors_assigned):
+			if prog.commands.is_empty():
+				break
+			var ip: int = prog.instruction_pointer
+			var entry: GameState.ProgramEntry = prog.commands[ip]
+			var success: bool = _can_afford_command(state, entry.command_shortname)
+			if success:
+				_apply_command(state, entry.command_shortname)
+			else:
+				entry.failed_this_cycle = true
+			entry.current_progress += 1
+			pending_program_events.append({
+				"type": "step",
+				"program_index": prog_idx,
+				"entry_index": ip,
+				"success": success,
+			})
+			if entry.current_progress >= entry.repeat_count:
+				prog.instruction_pointer = ip + 1
+				if prog.instruction_pointer >= prog.commands.size():
+					prog.instruction_pointer = 0
+					for e: GameState.ProgramEntry in prog.commands:
+						e.current_progress = 0
+						e.failed_this_cycle = false
+					pending_program_events.append({
+						"type": "cycle_reset",
+						"program_index": prog_idx,
+					})
 
 
 func recalculate_caps(state: GameState) -> void:
@@ -79,6 +121,27 @@ func get_scaled_costs(state: GameState, short_name: String) -> Dictionary:
 	for res in bdef.costs:
 		result[res] = float(bdef.costs[res]) * scale
 	return result
+
+
+func _can_afford_command(state: GameState, short_name: String) -> bool:
+	if not _commands_data.has(short_name):
+		return false
+	var cmd = _commands_data[short_name]
+	for res in cmd.costs:
+		if state.amounts.get(res, 0.0) < float(cmd.costs[res]):
+			return false
+	return true
+
+
+func _apply_command(state: GameState, short_name: String) -> void:
+	if not _commands_data.has(short_name):
+		return
+	var cmd = _commands_data[short_name]
+	for res in cmd.costs:
+		state.amounts[res] = state.amounts.get(res, 0.0) - float(cmd.costs[res])
+	for res in cmd.production:
+		state.amounts[res] = state.amounts.get(res, 0.0) + float(cmd.production[res])
+	# Note: effects (boredom_add, load_pads, etc.) handled in later stages
 
 
 func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:

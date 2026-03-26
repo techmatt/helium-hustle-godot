@@ -86,7 +86,7 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 text = "(No buildings yet)"
 
-; ── Right Panel ───────────────────────────────────────────────────────────────
+; ── Right Panel (program panel built by script) ────────────────────────────────
 
 [node name="RightPanel" type="PanelContainer" parent="MainVBox/ContentHBox"]
 layout_mode = 2
@@ -106,50 +106,8 @@ theme_override_constants/margin_bottom = 12
 [node name="RightVBox" type="VBoxContainer" parent="MainVBox/ContentHBox/RightPanel/RightMargin"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 10
-
-[node name="LblProgramsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
-layout_mode = 2
-text = "Programs"
-
-[node name="ProgramSlots" type="HBoxContainer" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
-layout_mode = 2
-
-[node name="BtnSlot1" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
-layout_mode = 2
-text = "1"
-
-[node name="BtnSlot2" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
-layout_mode = 2
-text = "2"
-
-[node name="BtnSlot3" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
-layout_mode = 2
-text = "3"
-
-[node name="BtnSlot4" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
-layout_mode = 2
-text = "4"
-
-[node name="BtnSlot5" type="Button" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox/ProgramSlots"]
-layout_mode = 2
-text = "5"
-
-[node name="LblProgramEditor" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
-layout_mode = 2
 size_flags_vertical = 3
-text = "(Program editor)"
-
-[node name="SepEvents" type="HSeparator" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
-layout_mode = 2
-
-[node name="LblEventsHeader" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
-layout_mode = 2
-text = "Events"
-
-[node name="LblNoEvents" type="Label" parent="MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox"]
-layout_mode = 2
-text = "(No events)"
+theme_override_constants/separation = 6
 
 ; ── Status Bar ────────────────────────────────────────────────────────────────
 

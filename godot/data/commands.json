@@ -22,14 +22,10 @@
       "eng": 3.0
     },
     "production": {
-      "cred": 5.0
+      "cred": 5.0,
+      "boredom": 0.04
     },
-    "effects": [
-      {
-        "effect": "boredom_add",
-        "value": 0.04
-      }
-    ],
+    "effects": [],
     "description": "Energy to credits. Key early income. Small boredom cost per execution."
   },
   {

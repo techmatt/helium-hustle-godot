@@ -1,10 +1,22 @@
 class_name BuildingCard
 extends PanelContainer
 
-const COLOR_POSITIVE    := Color(0.498, 0.749, 0.498)  # #7FBF7F
-const COLOR_NEGATIVE    := Color(0.749, 0.498, 0.498)  # #BF7F7F
-const COLOR_CAN_AFFORD  := Color(0.20, 0.40, 0.20, 0.35)
-const COLOR_CANT_AFFORD := Color(0.40, 0.20, 0.20, 0.35)
+const COLORS_DARK: Dictionary = {
+	"positive":    Color(0.498, 0.749, 0.498),
+	"negative":    Color(0.749, 0.498, 0.498),
+	"can_afford":  Color(0.20, 0.40, 0.20, 0.35),
+	"cant_afford": Color(0.40, 0.20, 0.20, 0.35),
+	"desc":        Color(0.70, 0.70, 0.70),
+	"count":       Color(0.75, 0.75, 0.75),
+}
+const COLORS_LIGHT: Dictionary = {
+	"positive":    Color(0.08, 0.46, 0.08),
+	"negative":    Color(0.58, 0.08, 0.08),
+	"can_afford":  Color(0.50, 0.86, 0.50, 0.30),
+	"cant_afford": Color(0.86, 0.50, 0.50, 0.30),
+	"desc":        Color(0.26, 0.26, 0.30),
+	"count":       Color(0.32, 0.32, 0.36),
+}
 
 const RESOURCE_COLORS: Dictionary = {
 	"eng":     Color(1.00, 0.85, 0.00),
@@ -15,6 +27,25 @@ const RESOURCE_COLORS: Dictionary = {
 	"land":    Color(0.40, 0.70, 0.30),
 	"boredom": Color(0.55, 0.55, 0.55),
 	"proc":    Color(0.80, 0.20, 0.80),
+	"ti":      Color(0.80, 0.80, 0.80),
+	"prop":    Color(0.40, 0.70, 0.95),
+	"sci":     Color(0.70, 0.50, 0.90),
+	"cir":     Color(0.30, 0.80, 0.70),
+}
+
+const RESOURCE_NAMES: Dictionary = {
+	"eng":     "Energy",
+	"reg":     "Regolith",
+	"ice":     "Ice",
+	"he3":     "Helium-3",
+	"cred":    "Credits",
+	"land":    "Land",
+	"boredom": "Boredom",
+	"proc":    "Processors",
+	"ti":      "Titanium",
+	"prop":    "Propellant",
+	"sci":     "Science",
+	"cir":     "Circuits",
 }
 
 var _bdef: Dictionary
@@ -27,6 +58,10 @@ var _buy_btn: Button
 var _bg_style: StyleBoxFlat
 # Maps resource key → amount Label (for dynamic cost coloring)
 var _cost_labels: Dictionary = {}
+
+
+func _c(key: String) -> Color:
+	return COLORS_DARK[key] if GameSettings.is_dark_mode else COLORS_LIGHT[key]
 
 
 func setup(bdef: Dictionary, font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
@@ -43,22 +78,41 @@ func refresh() -> void:
 
 	var can_afford: bool = GameManager.can_afford_building(_bdef.short_name)
 	_buy_btn.disabled = not can_afford
-	_bg_style.bg_color = COLOR_CAN_AFFORD if can_afford else COLOR_CANT_AFFORD
+	if GameSettings.is_dark_mode:
+		_bg_style.bg_color = _c("can_afford") if can_afford else _c("cant_afford")
+	else:
+		# Light mode: very subtle tint + style the Buy button
+		_bg_style.bg_color = Color(0.94, 0.99, 0.94) if can_afford else Color(0.99, 0.94, 0.94)
+		if can_afford:
+			var s := StyleBoxFlat.new()
+			s.bg_color = Color(0.298, 0.686, 0.314)  # #4CAF50
+			s.corner_radius_top_left     = 4
+			s.corner_radius_top_right    = 4
+			s.corner_radius_bottom_left  = 4
+			s.corner_radius_bottom_right = 4
+			_buy_btn.add_theme_stylebox_override("normal", s)
+			_buy_btn.add_theme_stylebox_override("pressed", s)
+			_buy_btn.add_theme_color_override("font_color", Color.WHITE)
+		else:
+			_buy_btn.remove_theme_stylebox_override("normal")
+			_buy_btn.remove_theme_stylebox_override("pressed")
+			_buy_btn.remove_theme_color_override("font_color")
 
 	var scaled: Dictionary = GameManager.get_scaled_costs(_bdef.short_name)
 	var st: GameState = GameManager.state
 	for res: String in _cost_labels:
 		var lbl: Label = _cost_labels[res]
+		var ok_color: Color = Color.WHITE if GameSettings.is_dark_mode else Color(0.08, 0.08, 0.10)
 		if res == "land":
 			var land_cost: int = _bdef.land
 			lbl.text = "%d" % land_cost
 			var ok: bool = st.amounts.get("land", 0.0) >= float(land_cost)
-			lbl.add_theme_color_override("font_color", Color.WHITE if ok else COLOR_NEGATIVE)
+			lbl.add_theme_color_override("font_color", ok_color if ok else _c("negative"))
 		else:
 			var amount: float = scaled.get(res, 0.0)
 			lbl.text = "%.0f" % amount
 			var ok: bool = st.amounts.get(res, 0.0) >= amount
-			lbl.add_theme_color_override("font_color", Color.WHITE if ok else COLOR_NEGATIVE)
+			lbl.add_theme_color_override("font_color", ok_color if ok else _c("negative"))
 
 
 # ── UI construction ────────────────────────────────────────────────────────────
@@ -68,11 +122,19 @@ func _build_ui() -> void:
 	size_flags_horizontal = Control.SIZE_FILL
 
 	_bg_style = StyleBoxFlat.new()
-	_bg_style.bg_color = COLOR_CANT_AFFORD
 	_bg_style.corner_radius_top_left     = 4
 	_bg_style.corner_radius_top_right    = 4
 	_bg_style.corner_radius_bottom_left  = 4
 	_bg_style.corner_radius_bottom_right = 4
+	if GameSettings.is_dark_mode:
+		_bg_style.bg_color = _c("cant_afford")
+	else:
+		_bg_style.bg_color = Color.WHITE
+		_bg_style.border_width_left   = 1
+		_bg_style.border_width_right  = 1
+		_bg_style.border_width_top    = 1
+		_bg_style.border_width_bottom = 1
+		_bg_style.border_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
 	add_theme_stylebox_override("panel", _bg_style)
 
 	var margin := MarginContainer.new()
@@ -110,7 +172,7 @@ func _build_header(parent: VBoxContainer) -> void:
 	_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_count_lbl.add_theme_font_override("font", _font_exo2_semibold)
 	_count_lbl.add_theme_font_size_override("font_size", 15)
-	_count_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
+	_count_lbl.add_theme_color_override("font_color", _c("count"))
 	row.add_child(_count_lbl)
 
 	_buy_btn = Button.new()
@@ -128,27 +190,27 @@ func _build_description(parent: VBoxContainer) -> void:
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.add_theme_font_override("font", _font_exo2_regular)
 	lbl.add_theme_font_size_override("font_size", 14)
-	lbl.add_theme_color_override("font_color", Color(0.70, 0.70, 0.70))
+	lbl.add_theme_color_override("font_color", _c("desc"))
 	parent.add_child(lbl)
 
 
 func _build_production(parent: VBoxContainer) -> void:
 	for res: String in _bdef.production:
 		var lbl := Label.new()
-		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), res]
+		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), RESOURCE_NAMES.get(res, res)]
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 14)
-		lbl.add_theme_color_override("font_color", COLOR_POSITIVE)
+		lbl.add_theme_color_override("font_color", _c("positive"))
 		parent.add_child(lbl)
 
 
 func _build_upkeep(parent: VBoxContainer) -> void:
 	for res: String in _bdef.upkeep:
 		var lbl := Label.new()
-		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), res]
+		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), RESOURCE_NAMES.get(res, res)]
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 14)
-		lbl.add_theme_color_override("font_color", COLOR_NEGATIVE)
+		lbl.add_theme_color_override("font_color", _c("negative"))
 		parent.add_child(lbl)
 
 
@@ -156,7 +218,7 @@ func _build_effects(parent: VBoxContainer) -> void:
 	for effect: Dictionary in _bdef.effects:
 		if effect.get("prefix", "") == "store":
 			var lbl := Label.new()
-			lbl.text = "  +%.0f %s storage" % [float(effect.value), effect.resource]
+			lbl.text = "  +%.0f %s storage" % [float(effect.value), RESOURCE_NAMES.get(effect.resource, effect.resource)]
 			lbl.add_theme_font_override("font", _font_exo2_regular)
 			lbl.add_theme_font_size_override("font_size", 14)
 			lbl.add_theme_color_override("font_color", Color(0.80, 0.80, 0.50))
@@ -183,7 +245,7 @@ func _add_cost_row(grid: GridContainer, res: String) -> void:
 	grid.add_child(icon)
 
 	var name_lbl := Label.new()
-	name_lbl.text = res
+	name_lbl.text = RESOURCE_NAMES.get(res, res)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.add_theme_font_override("font", _font_exo2_regular)
 	name_lbl.add_theme_font_size_override("font_size", 14)

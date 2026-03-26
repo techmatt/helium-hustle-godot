@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cmdrow00001"]
+
+[ext_resource type="Script" path="res://scripts/ui/command_row.gd" id="1_cmdrow"]
+
+[node name="CommandRow" type="PanelContainer"]
+script = ExtResource("1_cmdrow")

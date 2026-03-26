@@ -181,7 +181,7 @@ def _cmd_effect_val(short_name: str, effect_name: str, default: float = 0.0) -> 
 
 SELL_CLOUD_COMPUTE_ENERGY:  float = _cmd_cost("cloud_compute", "eng",  2.0)
 SELL_CLOUD_COMPUTE_CREDITS: float = _cmd_prod("cloud_compute", "cred", 5.0)
-SELL_CLOUD_COMPUTE_BOREDOM: float = _cmd_effect_val("cloud_compute", "boredom_add", 0.04)
+SELL_CLOUD_COMPUTE_BOREDOM: float = _cmd_prod("cloud_compute", "boredom", 0.04)
 
 # Commands the optimizer can execute as one-shot discrete actions (buy_* resource purchases).
 # Each entry: short_name -> {costs: {res: amt}, production: {res: amt}}
@@ -212,8 +212,8 @@ PROG_CREDITS_PER_PROC:    float = (
     + _f_idle * _cmd_prod("idle",        "cred", 0)
 )
 PROG_BOREDOM_PER_PROC:    float = (
-    _f_scc * _cmd_effect_val("cloud_compute", "boredom_add", 0)
-    # idle and load_pads have no boredom effect
+    _f_scc * _cmd_prod("cloud_compute", "boredom", 0)
+    # idle and load_pads have no boredom production
 )
 PROG_ENERGY_PER_PROC:     float = (
     _f_scc  * _cmd_cost("cloud_compute", "eng", 0)
