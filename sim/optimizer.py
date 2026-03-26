@@ -283,11 +283,11 @@ def _objective_urgency(
         lo, hi = obj["target"]
         t = state.tick
         if t > hi:
-            return 150.0   # past deadline — high urgency
+            return 250.0   # past deadline — high urgency
         elif t >= lo:
-            return 80.0    # inside window — moderate pressure
+            return 160.0   # inside window — strong enough to override shadow penalties
         else:
-            return 40.0    # approaching window — light nudge
+            return 60.0    # approaching window — light nudge
     return 0.0
 
 

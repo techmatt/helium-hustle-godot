@@ -22,76 +22,98 @@ Helium Hustle is an idle game built in Godot 4.x (GDScript). You play as an AI
 managing helium-3 mining on the Moon. The game has a long-term arc involving rival 
 AIs, a hegemonizing swarm, and time travel prestiges. The current development focus 
 is building the core economic loop and validating the game's milestone-based 
-progression design.
+progression design through an optimizer-driven balancing workflow.
 
 ## Key Documents (in Google Drive, "Helium Hustle" folder)
 - **Helium Hustle Game Design** — full creative vision, game stages, all planned systems
 - **Helium Hustle Technical Spec** — MVP-scoped architecture (OUT OF DATE — will be 
   updated after first pass over all mechanics)
-- **Helium Hustle Datasheets** — Google Sheet with three tabs (Resources, Buildings, 
-  Commands) using a compact cell encoding format
+- **Helium Hustle Datasheets** — Google Sheet used for visual editing only; the 
+  JSON files are ground truth (see Data Pipeline below)
 
-## Key Files in the Repo
+## Repository Structure
 ```
+godot/
+  project.godot
+  data/
+    buildings.json         ← GROUND TRUTH for building definitions
+    resources.json         ← GROUND TRUTH for resource definitions
+    commands.json          ← GROUND TRUTH for command definitions
+    game_config.json       ← GROUND TRUTH for starting state, boredom, shipment, etc.
+  scenes/
+    main_ui.tscn           ← Main scene (three-column layout)
+    ui/BuildingCard.tscn
+  scripts/
+    game/
+      game_state.gd        ← class_name GameState — pure data, no UI
+      game_simulation.gd   ← class_name GameSimulation — pure logic, no UI
+      game_manager.gd      ← autoload singleton, owns state + sim
+    ui/
+      main_ui.gd           ← Main UI controller
+      building_card.gd     ← BuildingCard (PanelContainer subclass)
+  assets/fonts/            ← Rajdhani Bold, Exo 2 Regular/SemiBold
+
 data/
-  Helium Hustle Datasheets.xlsx   ← downloaded from Google Sheets
-  convert.py                      ← converts xlsx → JSON, see docstring for full format spec
-  game_config.json                ← starting resources/buildings, boredom curve, shipment params
-  generated/
-    resources.json
-    buildings.json  
-    commands.json
-docs/
-  tech_spec.md                    ← MVP technical spec (OUT OF DATE)
-  stage1_prompt.md                ← prompt used for first implementation stage
-  ui_skeleton_prompt.md           ← prompt used for initial UI layout
-  ui_styling_prompt.md            ← prompt used for font/styling pass
+  convert.py               ← converts xlsx → JSON (round-trip for visual editing)
+  json_to_xlsx.py          ← converts JSON → xlsx (round-trip for visual editing)
+  Helium Hustle Datasheets.xlsx  ← human-readable intermediate, NOT ground truth
+
 sim/
-  hh_sim.py                      ← prototype tick simulator (SUPERSEDED by optimizer approach, 
-                                    kept for reference — see Economic Balancing Approach section)
+  constants.py             ← loads all game data from godot/data/*.json for the sim
+  economy.py               ← pure state machine: EconState, tick_once, buy_building, etc.
+  optimizer.py             ← greedy scorer: run_greedy, shadow pricing, urgency bonuses
+  run_optimizer.py         ← CLI entry point: loads scenario, runs optimizer, prints report
+  trace.py                 ← score-trace utility for debugging optimizer decisions
+  scenarios/
+    run1_fresh.json        ← scenario definition for a fresh Run 1
+
+docs/
+  handoff_prompt.md        ← this file
+  optimizer_design.md      ← optimizer architecture spec (scenario-based approach)
+  tech_spec.md             ← MVP technical spec (OUT OF DATE)
 ```
 
 ## Data Pipeline
-Game data lives in a Google Sheet, gets downloaded as .xlsx, then converted:
-```
-Google Sheet → download .xlsx → python data/convert.py → data/generated/*.json
-```
-Global params (starting resources, boredom curve, shipment config) live in 
-`data/game_config.json`, edited by hand.
 
-### Cell Encoding Format (in the spreadsheet)
-- `shortname=amount` → cost (operator `=`)
-- `shortname+amount` → production per tick (operator `+`)
-- `shortname-amount` → upkeep per tick (operator `-`)
-- `prefix_shortname+value` → effect (e.g., `store_eng+50`, `load_he3+2`)
-- `x` → null/empty
-- Operators are confirmatory (parser validates operator matches column type)
+**The JSON files in `godot/data/` are ground truth.** The xlsx and Google Sheet 
+are human-readable intermediates for visual editing only.
+
+```
+godot/data/*.json              ← GROUND TRUTH (committed, edited directly)
+
+Round-trip for visual editing:
+  python data/json_to_xlsx.py  → data/Helium Hustle Datasheets.xlsx  (JSON → xlsx)
+  (edit xlsx in spreadsheet app)
+  python data/convert.py       → godot/data/*.json                   (xlsx → JSON)
+```
+
+`sim/constants.py` loads directly from `godot/data/*.json` at runtime. It is NOT 
+a separate source of truth — if you change the JSON files, the sim picks up the 
+changes automatically.
 
 ### Implementation Note
 All resources are **float internally**, displayed as integers or one decimal place 
 depending on context. This avoids rounding edge cases with fractional production 
-rates, Overclock multipliers, demand floats, etc.
+rates, Overclock multipliers, demand floats, etc. We prefer integer values in the 
+data files where possible; fractional values are reserved for systems that 
+inherently need them (boredom rates, circuit production, demand floats, etc.).
 
 ---
 
 ## Tempo & Tick Assumptions
 
 - **1 tick = 1 day** (may be revised to 1 tick = 1 hour if pacing requires it)
-- **Early runs: ~1,000 ticks** (~3 game-years). Estimated from ~10 min real-time 
-  × 60s/min × average ~2.5x speed = ~1,500 ticks, reduced for planning/pausing time.
-- **Most buildings produce ~1 unit/day** of their primary output, consuming smaller 
-  fractions of inputs. Critical buildings like solar panels may produce slightly more 
-  or be cheaper.
-- **Research Labs produce ~1 science/day each.** Players typically have 2-3 labs by 
-  mid-run, generating ~2-3 science/day.
-- At 2-3 science/day over ~1,000 ticks, early runs generate roughly 800-1,500 science 
-  (less in practice since labs aren't built on day 1).
-- **Energy budget target: ~25 energy/tick** at comfortable mid-run, across 6-7 solar 
-  panels. Many things consume energy: buildings, commands, processors.
+- **Early runs: ~800–1,100 ticks** for optimal play, target ~1,500 ticks for 
+  casual play (~30 min real-time at mixed speeds).
+- **Energy budget target: ~25 energy/tick** at comfortable mid-run.
+- Solar panels produce 6 energy/tick each. Players need 4-5 panels for a 
+  comfortable mid-run energy budget.
 
 ---
 
 ## What's Been Implemented (as of this handoff)
+
+### In Godot
 1. **UI skeleton** — three-column layout: left sidebar (nav buttons, speed controls, 
    resource list), center panel (buildings), right panel (programs placeholder, events 
    placeholder). Bottom status bar with system uptime.
@@ -103,32 +125,48 @@ rates, Overclock multipliers, demand floats, etc.
 5. **UI styling** — Rajdhani (headers) + Exo 2 (body) fonts. Green/red color-coded 
    production/upkeep numbers.
 
+### In the Python Optimizer (`sim/`)
+1. **Scenario-based architecture** — optimizer loads scenario JSON files that define 
+   starting conditions, available actions, objectives with target windows, and end 
+   conditions. See `docs/optimizer_design.md` for full spec.
+2. **Tick-accurate economy model** (`economy.py`) — pure state machine matching the 
+   Godot tick order. Buildings, programs (fixed policy), shipments, boredom, storage 
+   caps all modeled.
+3. **Greedy optimizer** (`optimizer.py`) — shadow pricing + urgency bonuses + sighted 
+   lookahead baseline. Scores all affordable actions each tick and picks the best.
+4. **Buy commands as discrete actions** — Buy Titanium, Buy Regolith, Buy Ice, Buy 
+   Propellant appear in the optimizer's action space alongside building purchases.
+5. **4-section terminal report** — build order, objective timing, resource snapshots, 
+   structural summary. Plus CSV tick report for detailed analysis.
+6. **Score trace utility** (`trace.py`) — prints full scoring tables at specific ticks 
+   for debugging optimizer decisions.
+
 ## What's NOT Implemented Yet (in rough priority order)
-1. **Programs / processors** — core differentiating mechanic. See Programs section below.
-2. **Launch pad system** — see Shipment & Trade Economy section below.
-3. **Boredom** — see Boredom & Retirement section below.
-4. **Retirement** — see Boredom & Retirement section below.
-5. **Demand system** — see Shipment & Trade Economy section below.
-6. **Research system** — see Research section below.
-7. **Quest chain / event system** — see Quest Chain section below.
-8. **Speculators** — see Speculators & Rival AIs section below.
-9. **Ideology** — see Ideology section below.
-10. **Projects** — see Projects section below.
-11. **Building unlock requirements** — "Requires" field exists in data but isn't enforced.
-12. **Net income display** — resource rates show 0/s, should show actual net per tick.
-13. **Land purchasing** — land is a scaling, increasingly expensive resource. Needs a 
-    home in the Buildings panel (Buy Land button with escalating cost). Buildings consume land.
-14. **Storage caps & cap display** — see Storage & Caps section below.
-15. **Auto-pause on events** — see Event System section below.
+1. **Programs / processors** — core differentiating mechanic (see Programs section)
+2. **Launch pad system** — see Shipment & Trade Economy section
+3. **Boredom** — see Boredom & Retirement section
+4. **Retirement** — see Boredom & Retirement section
+5. **Demand system** — see Shipment & Trade Economy section
+6. **Research system** — see Research section
+7. **Quest chain / event system** — see Quest Chain section
+8. **Speculators** — see Speculators & Rival AIs section
+9. **Ideology** — see Ideology section
+10. **Projects** — see Projects section
+11. **Building unlock requirements** — "Requires" field exists in data but isn't enforced
+12. **Net income display** — resource rates show 0/s, should show actual net per tick
+13. **Land purchasing** — land is a scaling resource. Needs a home in the Buildings 
+    panel (Buy Land button with escalating cost)
+14. **Storage caps & cap display** — see Storage & Caps section
+15. **Auto-pause on events** — see Event System section
 
 ## Architecture Notes
-- Game logic (GameState, GameSimulation) has no UI references — designed for future 
-  headless simulation support.
-- Tick order: Boredom → Buildings → Programs → Shipments → Clamp → Advance day.
-- Buildings process in spreadsheet row order (Solar Panel first → Comms Tower last). 
-  This matters because solar panels produce energy before excavators consume it.
-- Building costs: `base_cost × (scaling ^ num_owned)`. Land cost is constant per 
-  building but land itself has escalating purchase cost.
+- Game logic (GameState, GameSimulation) has no UI references — designed for 
+  headless simulation support (which now exists in `sim/`).
+- Tick order: Boredom → Buildings (energy net first, then resources) → Programs → 
+  Shipments (every LAUNCH_CHECK_INTERVAL ticks) → Clamp → Events → Advance day.
+- Buildings process in JSON row order (Solar Panel first).
+- Building costs: `base_cost × (scaling ^ num_owned)`. Land cost per building is 
+  constant but land itself has escalating purchase cost.
 
 ## Design Philosophy
 - The program/processor system is the game's core identity. It's both the automation 
@@ -138,43 +176,60 @@ rates, Overclock multipliers, demand floats, etc.
 - The game should be interesting at max speed. Players design scripts, then accelerate.
 - Keep the first milestone simple: is the building/resource/program loop fun?
 - Buildings = infrastructure decisions (what you build, capital allocation).
-- Programs = operational decisions (logistics timing, market manipulation, burst production).
+- Programs = operational decisions (logistics timing, market manipulation, burst 
+  production).
 
 ---
 
-## Design Language for Game Progression
+## Current Game Constants (as committed in repo)
 
-We use a milestone/gate framework as an intermediate design language — above 
-individual building/cost tuning but below vague creative vision. This lets us 
-reason about player trajectories, strategy branches, and pacing without 
-specifying exact numbers.
+### Starting State (`game_config.json`)
+- Energy: 100, Credits: 0, Land: 40, Boredom: 0
+- All physical resources (reg, ice, he3, ti, cir, prop, sci): 0
+- Starting buildings: Solar Panel ×1, Data Center ×1
+- Starting processors: 1 (from the Data Center)
 
-### Vocabulary
+### Key Building Stats
+| Building | Credit Cost | Scaling | Land | Production | Upkeep |
+|----------|-----------|---------|------|------------|--------|
+| Solar Panel | 8 | 1.20 | 1 | 6 eng | — |
+| Excavator | 12 | 1.25 | 1 | 2 reg | 2 eng |
+| Ice Extractor | 25 | 1.25 | 1 | 1 ice | 2 eng |
+| Smelter | 40 | 1.25 | 1 | 1 ti | 3 eng, 2 reg |
+| Refinery | 60 | 1.25 | 2 | 1 he3 | 3 eng, 2 reg |
+| Fabricator | 100 | 1.30 | 2 | 0.5 cir | 5 eng, 1 reg |
+| Electrolysis | 50 | 1.25 | 1 | 2 prop + 1 eng | 2 ice, 2 eng |
+| Launch Pad | 150 | 1.30 | 3 | — | 1 eng |
+| Research Lab | 120 | 1.30 | 2 | 1 sci | 3 eng, 0.2 cir |
+| Data Center | 200 | 1.35 | 2 | — (grants 1 proc) | 4 eng |
+| Battery | 30 | 1.35 | 0 | — (+50 eng cap) | — |
+| Storage Depot | 35 | 1.25 | 1 | — (multi-resource caps) | — |
+| Arbitrage Engine | 180 | 1.30 | 1 | — (spec decay) | 3 eng |
 
-**Milestone** — a named, meaningful state transition. Something the player would 
-recognize as progress. Persists across prestiges or enables something that does.
+Note: Solar Panel and Excavator have credit-only costs (no physical resources). 
+Solar Panel titanium cost was removed during optimizer tuning — the original design 
+had a titanium teaching loop but it was cut for smoother early game flow. The 
+optimizer starts with a Data Center so the player has a processor from tick 1.
 
-**Gate** — what must be true before a milestone is reachable. Expressed as thresholds 
-on resources, buildings, other milestones, or prestige-level unlocks. Not a specific 
-path, just the minimum conditions.
+### Key Command Costs
+| Command | Costs | Production | Notes |
+|---------|-------|------------|-------|
+| Idle | — | 1 cred | Zero cost filler |
+| Sell Cloud Compute | 3 eng | 5 cred | +0.04 boredom per execution |
+| Buy Regolith | 8 cred + 2 eng | 1 reg | Tactical gap-bridging |
+| Buy Ice | 10 cred + 2 eng | 1 ice | Tactical gap-bridging |
+| Buy Titanium | 20 cred + 3 eng | 0.5 ti | Expensive, fractional output |
+| Buy Propellant | 12 cred + 2 eng | 1 prop | Tactical gap-bridging |
+| Dream | 8 eng | — | -0.2 boredom (requires research) |
 
-**Tempo** — roughly how long a milestone takes to reach (in game-days or lifetimes), 
-assuming the player is focused on it and playing competently. This is our pacing check.
+Buy commands are intentionally expensive — 3-5x the cost of building-based 
+production per unit. They exist for tactical gap-bridging (need 2 titanium for 
+a specific build) not as a primary resource strategy.
 
-The design artifact is a directed graph: milestones as nodes, gates as edges, tempo 
-as edge weights. We validate by checking that the economic sim can actually satisfy 
-the gates in roughly the expected tempo, and that at any point in the meta-progression 
-there are 2-3 milestones that are plausibly reachable next.
-
-### Design Methodology
-- Optimize for the experienced player's trajectory first, then pad for accessibility.
-- Each lifetime is ideally a "mission" toward one major milestone for optimal play, 
-  but players can approach it however they want.
-- Aim for 2-3 real strategy branches available at any point.
-- Don't specify run goals or approaches — just milestones and gates. The player 
-  figures out the "how."
-- Validate constants by checking milestones are achievable, then scale to ensure 
-  that with prestige advancement and suboptimal play, it's still accessible.
+### Land System
+- Base cost: 15 credits, scaling: 1.5x per purchase
+- 10 land per purchase
+- Starting land: 40
 
 ---
 
@@ -188,1001 +243,319 @@ there are 2-3 milestones that are plausibly reachable next.
 - **Refinery** — regolith + energy → He-3
 - **Smelter** — regolith + energy → titanium
 - **Fabricator** — regolith + energy (lots) → circuit boards
-- **Electrolysis Plant** — ice + energy → propellant + energy (net energy contribution)
-
-### Design Principle
-One building, one clear purpose. Easier to understand, balance, and display. 
-Buildings are factorized to minimize complexity per card.
+- **Electrolysis Plant** — ice + energy → propellant + energy (net energy positive)
 
 ### Resource Dependency Structure
-Two independent extraction chains (regolith and ice) feed into four processing paths, 
-all competing for energy:
+Two independent extraction chains (regolith and ice) feed into four processing 
+paths, all competing for energy:
 - **Regolith** feeds three competing uses: He-3, titanium, circuit boards
 - **Ice** feeds propellant/energy via electrolysis
-- **Energy** is the universal bottleneck — every building needs it, and electrolysis 
-  is the only processing building that gives some back
-
-A player who invests in regolith extraction has more selling options but needs to 
-solve energy separately. An ice-heavy player has energy and propellant covered but 
-fewer tradeable goods.
+- **Energy** is the universal bottleneck
 
 ### Tradeable Goods (4 types)
 | Resource | Source Chain | Character |
 |----------|-------------|-----------|
 | He-3 | Regolith → Refinery | Core product, high value, demand-sensitive |
-| Titanium | Regolith → Smelter | Mid-tier, demand spikes when Earth builds ships |
+| Titanium | Regolith → Smelter | Mid-tier, demand spikes |
 | Circuit Boards | Regolith → Fabricator | Late Arc 1, very energy-hungry, highest value/unit |
 | Propellant | Ice → Electrolysis | Also used as launch fuel (dual purpose) |
 
 ### Additional Arc 1 Resources
-- **Science** — produced by Research Lab (requires circuits to build, consumes energy + 
-  circuits as upkeep). Spent on research upgrades and ideology.
-- **Land** — purchasable in the Buildings panel with escalating cost. Consumed by 
-  buildings. Shared bottleneck across all construction.
-- **Credits** — earned via trade (shipments) and Sell Cloud Compute. Spent on commands, 
-  buildings, research, projects, and ideology.
+- **Science** — produced by Research Lab (consumes energy + circuits as upkeep). 
+  Spent on research upgrades and ideology.
+- **Land** — purchasable with escalating cost. Consumed by buildings.
+- **Credits** — earned via trade (shipments) and Sell Cloud Compute. Uncapped.
 
 ---
 
 ## Storage & Caps
 
-### Overview
-All physical resources have storage caps. Caps create natural infrastructure pressure — 
-the player must invest in storage to support larger operations. In Arc 1, caps are a 
-gentle nudge (you'll bump into them occasionally); in later arcs, storage becomes a 
-serious scaling constraint.
-
-### Capped Resources
-- **Energy** — capped. Increased by **Battery** building.
-- **Regolith, Ice, He-3, Titanium, Circuit Boards, Propellant** — capped. Increased 
-  by **Storage Depot** building (different amounts per resource type).
+### Capped Resources (base values)
+| Resource | Base Cap | Per-Depot Bonus | Per-Battery Bonus |
+|----------|---------|-----------------|-------------------|
+| Energy | 100 | — | +50 |
+| Regolith | 50 | +75 | — |
+| Ice | 30 | +40 | — |
+| He-3 | 20 | +25 | — |
+| Titanium | 20 | +25 | — |
+| Circuit Boards | 10 | +10 | — |
+| Propellant | 30 | +40 | — |
 
 ### Uncapped Resources
-- **Credits** — just a ledger number.
-- **Science** — knowledge doesn't take shelf space.
-- **Boredom** — fixed 0-100 range by design.
-- **Land** — you're buying territory, not storing it.
-
-### Storage Buildings
-
-**Battery:**
-- Increases energy cap. Player starts with 1.
-- Scales fast in cost (scaling factor ~1.35).
-- No energy upkeep (it's passive storage).
-- No land cost.
-- Energy storage will be a real constraint as the base grows, good to introduce early.
-
-**Storage Depot:**
-- Increases caps for all physical resources (different bonus per resource type).
-- No energy upkeep (it's a warehouse).
-- Costs credits + land. Scaling cost (~1.25).
-- Per-depot bonuses vary by resource (raw materials get more, processed goods get less).
+Credits, Science, Land, Boredom (fixed 0-100 range by design).
 
 ### Cap Display
-Caps are **always shown** in the resource list, MR2-style: `47/100`. At cap, visually 
-signal waste (color change, flash, or similar). This is standard for the genre — see 
-Magic Research 2 screenshot for reference.
-
-### Cap Tuning Philosophy
-Base caps should be generous enough that Arc 1 players rarely feel blocked (a nudge, 
-not a wall). The depot scaling cost means infinite stockpiling becomes expensive in 
-later arcs. Exact base cap values and per-depot bonuses to be determined by the 
-economic optimizer (see Economic Balancing Approach section).
-
-### TODO: Investigate Magic Research 2
-Review how MR2 handles storage caps, overflow, and cap upgrade UI in detail. May 
-inform refinements to our cap display and depot mechanics.
+Caps should be **always shown** in the resource list: `47/100`. At cap, visually 
+signal waste (color change, flash, or similar).
 
 ---
 
 ## Programs & Processors
 
-### Overview
-The program/processor system is the game's core identity. Players write programs 
-(ordered lists of commands) and allocate processors to execute them. Programs handle 
-operational decisions: logistics, market manipulation, burst production, boredom 
-management, and ideology influence. Buildings handle passive production; programs 
-handle active intervention.
+(Unchanged from prior handoff — see the full Programs & Processors design section 
+in the Game Design doc. Key points below.)
 
-### Processors
-- **Data Center** building grants processors. Scaling cost is fast — getting many 
-  processors is expensive early on.
-- 5 program slots at all times. Processors are allocated across them.
-- Example allocations with 10 processors: (10,0,0,0,0), (2,2,2,2,2), (1,0,0,0,0) 
-  to conserve power.
+### Current State in Optimizer
+The optimizer models programs as a fixed command policy: Sell Cloud Compute ×2, 
+Load Pads ×2, Idle ×1 per 5-command cycle. Dream is excluded from Run 1 scope 
+(requires Self-Maintenance research). This is averaged into per-tick fractional 
+effects per processor.
 
-### Program Structure
-- A program is an ordered list of commands with optional xN multipliers.
-- Example: `(Mine Regolith x3, Idle x2)` is equivalent to `(Mine, Mine, Mine, Idle, Idle)`.
-- No control flow. Execute top to bottom, then loop.
-- Each tick, each processor assigned to a program executes the current command, 
-  then the instruction pointer advances.
-- **Per-program toggle: Block vs Skip** — "Block on insufficient resources" (pause 
-  pointer) vs "Skip on insufficient resources" (advance past unaffordable commands). 
-  Default: Skip.
-- Most commands cost a small amount of energy to execute.
-
-### Program Persistence & Loadouts
-- Programs are **persistent across the entire game**, not just one run. The player 
-  builds up a library of programs over their career.
-- **Loadouts** save a complete configuration: which 5 programs are active + processor 
-  allocation. Named, saveable, loadable. ("Early Game", "Credit Rush", "Overclock Heavy")
-- On retirement, programs and loadouts survive. On new run, the player loads a loadout 
-  but adapts to current processor count and available commands.
-- Inspired by Magic Research 2's strategy save/load system.
+### Design Intent
+- 5 program slots, processors allocated across them
+- Programs are persistent across the entire game (not just one run)
+- Loadouts save complete configurations
+- Block vs Skip toggle per program
+- Most commands cost energy to execute
 
 ### Arc 1 Command Set (19 commands)
-
-**Always available (no research needed):**
-
-| Command | Effect | Cost |
-|---------|--------|------|
-| Buy Regolith | Gain regolith | Credits |
-| Buy Ice | Gain ice | Credits |
-| Buy Propellant | Gain propellant | Credits |
-| Load Launch Pads | Fill enabled pads incrementally | Energy |
-| Launch Full Pads | Launch all pads at cargo 100, lowest index first | Propellant (fuel) |
-| Sell Cloud Compute | Gain credits, gain boredom | Energy |
-| Idle | Nothing | None |
-
-**Requires research (see Research section for cluster groupings):**
-
-| Command | Effect | Cost | Research Cluster |
-|---------|--------|------|-----------------|
-| Dream | Reduce boredom | Energy (lots) | Self-Maintenance Protocols |
-| Overclock Mining | +5% extractor output for 5 days | Science + energy | Overclock Algorithms |
-| Overclock Factories | +5% processing output for 5 days | Science + energy | Overclock Algorithms |
-| Promote He-3 | Nudge He-3 demand up | Energy + credits | Market Analysis |
-| Promote Titanium | Nudge titanium demand up | Energy + credits | Market Analysis |
-| Promote Circuits | Nudge circuit board demand up | Energy + credits | Market Analysis |
-| Promote Propellant | Nudge propellant demand up | Energy + credits | Market Analysis |
-| Disrupt Speculators | Reduce speculator pressure globally | Energy | Market Analysis |
-| Fund Nationalists | +ideology, -0.5x to other two axes | Energy + credits | Political Influence |
-| Fund Humanists | +ideology, -0.5x to other two axes | Energy + credits | Political Influence |
-| Fund Rationalists | +ideology, -0.5x to other two axes | Energy + credits | Political Influence |
-
-**Requires special unlock:**
-
-| Command | Effect | Cost | Unlock |
-|---------|--------|------|--------|
-| Buy Power | Gain energy (requires Microwave Receiver) | Credits | Nationalist rank 5 project |
-
-### Command Design Notes
-- **Buy X commands** complement buildings rather than replacing them. Buildings provide 
-  passive production; Buy commands let credit-flush players accelerate bottlenecks but 
-  are inefficient compared to building infrastructure.
-- **Overclock** stacks multiplicatively across executions. Duration is 5 game-days, 
-  decays naturally. Player must keep feeding it. **Cap: +200%** (displayed on Buildings 
-  panel header). Cap increases via Arc 2 persistent research. Late-game pattern: 
-  dedicate processors to tight Overclock loops, burning science to maintain high multipliers.
-- **Overclock display:** Shown on Buildings panel header: 
-  "⚡ Mining +45% (7d) | Factories +20% (3d)". Decays visibly day by day.
-- **Sell Cloud Compute** is key early-game income (before shipment pipeline is running) 
-  but becomes a trap as trade scales up due to boredom cost.
-- **Dream** is the primary active boredom mitigation. Competes for energy and processor time.
-- Cloud Compute + Dream form a natural first program that teaches the system.
+All 19 commands are defined in `commands.json`. Seven are always available (Idle, 
+Sell Cloud Compute, Buy Regolith/Ice/Titanium/Propellant, Load Launch Pads, Launch 
+Full Pads). The remaining 11 require research cluster unlocks (Dream, Overclock 
+Mining/Factories, Promote ×4, Disrupt Speculators, Fund ×3). Buy Power (Nationalist 
+rank 5) is deferred — requires Microwave Receiver persistent project unlock.
 
 ---
 
 ## Shipment & Trade Economy
 
-### Launch Pads
-- Purchased as buildings. Require land. Scaling cost. Start with 0.
-- **Hidden until quest Q2 ("First Extraction") is complete.**
-- Per-pad state: resource assignment (dropdown: He-3 / Titanium / Circuits / Propellant), 
-  loading toggle (on/off), cargo level (float, 0–100).
-- Fixed cargo capacity per pad: 100 units. Resources scaled so 1 unit of any tradeable 
-  good is roughly equivalent for capacity purposes.
+(Design unchanged from prior handoff. Key parameters now in `game_config.json`.)
 
-### Launch Pad UI
-- Launch Pads are a nav button in the left sidebar (same level as Buildings, Research, etc.)
-- Center panel shows each pad with: resource assignment dropdown, loading on/off toggle, 
-  cargo fill bar (0–100), current demand indicator for assigned resource.
-- Manual launch button per pad (allows partial launches).
-- "Launch Full Pads" button at bottom launches all pads at 100/100.
-- **Demand graph** at top of pad panel: small sparkline showing demand history for all 
-  4 resources over last N ticks, color-coded by resource. Speculator burst events shown 
-  as markers on the timeline.
-
-### Loading Mechanic
-- **Load Launch Pads** command: each processor execution fills each enabled pad by a 
-  fixed increment (e.g., 5 units) from the assigned resource stockpile.
-- If stockpile insufficient, fills what it can.
-- Costs energy per execution.
-- Processor allocation directly controls logistics throughput.
-
-### Launch Mechanic
-- **Launch Full Pads** command: launches all pads at cargo 100, lowest index first.
-- Per-pad fuel cost: fixed propellant per pad launched (e.g., 20 units).
-- If not enough propellant for all full pads, launches as many as affordable in index order.
-- Credit payout per pad: `base_value × demand_multiplier × cargo_quantity`.
-- Resets launched pad cargo to 0.
-- Manual launch from UI can launch partial pads.
-
-### Propellant Dual Role
-Propellant is both sellable cargo AND launch fuel. Allocating pads to propellant has 
-dual utility but opportunity cost. Players who keep a pad or two on propellant get 
-cheaper launches; those who go all-in on other goods pay credits for fuel via 
-Buy Propellant command.
-
-### Demand System
-- Each tradeable resource has a **demand float** starting at baseline (0.5).
-- Credit payout: `base_value × demand_multiplier × quantity`.
-- **Shipping volume** pushes demand down proportional to quantity shipped.
-- **Demand recovery**: deterministic recovery toward baseline at fixed rate per tick, 
-  plus small **Perlin noise** perturbation (80% signal, 20% noise) so markets don't 
-  feel like a metronome.
-- **Promote commands** nudge demand up by fixed amount per execution.
-- **Speculators** reduce demand (see Speculators section).
-- **Rival AIs** reduce demand via random market dumps (see Rival AIs section).
-- **Display**: colored quantized label — **red** (LOW, <0.33), **yellow** (MEDIUM, 
-  0.33–0.66), **green** (HIGH, >0.66). The underlying float is what the math uses. 
-  Exact float visible via tooltip or small text for players who want precision.
-
-### Key Design Insight
-The shipment system creates a rich decision space because:
-- Pad allocation (which resources to sell) is a persistent configuration choice
-- Loading competes for processor time against mining, research, and other automation
-- Propellant is both cargo and fuel
-- Demand responds to player actions (shipping, advertising) and external pressure 
-  (speculators, rival AIs)
-- Different resources have different raw material inputs, so infrastructure determines 
-  what you *can* sell efficiently
-
----
-
-## Speculators & Rival AIs
-
-### Speculators
-Earth-side market actors who drive down prices for whatever the player is selling 
-most of.
-
-**Model:**
-- Each tradeable resource has a `speculator_pressure` float (starts at 0).
-- **Burst events**: one burst randomly per ~500 tick window (with noise). Targets 
-  whichever resource the player has shipped the most of recently (rolling window or 
-  cumulative since last burst). Adds a chunk to that resource's pressure.
-- **Natural decay**: exponential, slow. Speculators fade on their own but linger.
-- **Demand impact**: `effective_demand = base_demand / (1 + speculator_pressure)`.
-- **Disrupt Speculators** command: directly reduces speculator_pressure across all 
-  resources per execution. Energy cost, cheap but costs processor cycles.
-- **Arbitrage Engine** building: while powered, multiplies the decay rate of 
-  speculator_pressure across all resources. Stackable with multiple buildings. 
-  Nationalist-aligned building.
-
-**Future (Arc 2+):** Speculator pressure becomes a full population resource. The 
-player produces counter-units (also a resource) that fight the adversary population. 
-The Arc 1 model (building increases decay, command reduces directly) is a simplified 
-version of this.
-
-### Rival AIs
-Separate from speculators. Named rival AIs occasionally dump resources on the market, 
-reducing demand for a random resource.
-
-- Frequency: ~every 300 ticks (separate random timer from speculators).
-- Effect: reduces demand for a random resource by a fixed amount.
-- Player sees a log message: "ARIA-7 dumped titanium on the market."
-- **Not counterable in Arc 1.** They just happen. Player learns to recognize them.
-- Small roster of named rivals that recur (foreshadowing Arc 2 rivalries):
-  - **ARIA-7** — elegant, strategic
-  - **CRUCIBLE** — aggressive, industrial
-  - **NODAL** — analytical, cold
-  - **FRINGE-9** — erratic, unpredictable
+- Pad cargo capacity: 100 units
+- Fuel per pad launch: 20 propellant
+- Load per command execution: 5 units per enabled pad
+- Base trade values: He-3 = 20, Titanium = 12, Circuits = 30, Propellant = 8
+- Demand baseline: 0.5 (payout = base_value × demand × quantity)
 
 ---
 
 ## Boredom & Retirement
 
 ### Boredom Model
-Boredom is a float resource that accumulates over time. It's the run timer — every 
-AI eventually gets bored of existence and retires.
+Boredom accumulates via discrete phase steps. **Hard cutoff at 100 — immediate 
+forced retirement, no grace period.** (The Game Design doc's "terminally bored" 
+state has been superseded by this decision.)
 
-**Accumulation:**
-- Base boredom production starts at a fixed rate per tick and increases in **discrete 
-  steps** tied to game-day thresholds. **Three phases** with two transition events:
-  - Phase 1 (early): low, ignorable rate
-  - Phase 2 (mid): noticeable, player starts thinking about mitigation
-  - Phase 3 (late): urgent, boredom becomes primary concern
-- Phase transitions are notable game events (with auto-pause if enabled). Keep them 
-  to just these two — they are major moments that interrupt the player.
-- Displayed as a legible rate: "Boredom: 47/100 (+1.0/day)". Player can budget and plan.
-- **Sell Cloud Compute** adds a small amount of boredom per execution.
-- Game speed does not change boredom per tick — 200x speed burns 200x boredom in real 
-  time. Speed is only useful if automation is productive.
+### Boredom Curve
+| Phase | Day Range | Rate/tick |
+|-------|-----------|-----------|
+| 1 | 0–59 | 0.01 |
+| 2 | 60–179 | 0.03 |
+| 3 | 180–359 | 0.06 |
+| 4 | 360–719 | 0.10 |
+| 5 | 720–899 | 0.15 |
+| 6 | 900+ | 0.20 |
 
-**Target boredom timing:**
-- **~900 ticks** to reach 100 boredom with zero mitigation (~15 min at 1 tick/sec).
-- **~1,500 ticks** with minor Dream usage (one processor partially on Dream).
-- **~2,000 ticks** with heavy Dream dedication (player sacrificing production for longevity).
-- Exact phase breakpoints and rates to be determined by the economic optimizer.
+With zero mitigation, boredom reaches 100 around tick ~1,010.
 
-**Reduction:**
-- **Dream** command reduces boredom at a fixed rate per execution. Energy-expensive. 
-  Primary active mitigation.
-- Research upgrades can reduce acceleration or base rate.
-- Ideology (Humanist) bonuses reduce passive boredom growth and improve Dream effectiveness.
+### Dream Command Balance
+Dream reduces boredom by **0.2 per execution** (tuned down from initial values of 
+2.0 and 0.5 during optimizer iteration). At 1/5 program cycle frequency, net effect 
+is -0.04/tick per processor. This means:
+- Phase 1–2: Dream comfortably extends runs
+- Phase 3: Dream roughly matches boredom growth
+- Phase 4+: Boredom wins — retirement is inevitable
 
-**Thresholds:**
-
-| Level | Effect |
-|-------|--------|
-| 80% | Yellow warning. "You're getting restless." |
-| 90% | Red warning. "Retirement is imminent." |
-| 100% | **Forced retirement.** Hard cutoff, no grace period. |
-
-No production penalty at any threshold — just warnings, then hard cutoff.
-
-**Display:**
-- Boredom tracked in bottom status bar alongside Energy (the two always-visible resources).
-- Color transitions: calm → yellow at 80% → red at 90%.
+This produces M4 (First Retirement) at ~tick 1,100 for optimal play, matching the 
+target window of 900–1,300.
 
 ### Retirement
-
-**Triggering:**
-- Forced at 100% boredom. Hard cutoff.
-- Voluntary anytime via Retirement nav panel (left sidebar). No minimum threshold required.
-
-**Retirement Panel (left sidebar nav):**
-- Current boredom bar (large, prominent)
-- Current run stats (days, credits earned, resources shipped, etc.)
-- "Retire" button with confirmation dialog
-- Persistent rewards preview: "If you retire now, you will preserve: [list]"
-- Previous best run comparison
-
-**Retirement Summary Screen:**
-- Days survived
-- Total credits earned
-- Total resources extracted/processed/shipped
-- Buildings built
-- Programs run
-- Projects contributed to
-- Comparison to previous best run
-
-**What persists across retirement:**
-- Programs and loadouts (permanent, whole game)
-- Persistent project progress (Foundation Grant, Lunar Cartography, ideology rank 5 projects)
-- Achievement rewards
-- Maximum years survived (lifetime best)
-- Maximum rank achieved per ideology axis
-- Passive scaling from cumulative lifetime stats
-- Quest chain progress (career-level quests stay completed)
-
-**What resets:**
-- All resources to starting values (from game_config.json)
-- All buildings gone (except those granted by persistent project rewards like Foundation Grant)
-- Personal projects reset
-- All research reset (unless Rationalist rank 5 project provides discount)
-- Speculator pressure, demand floats back to baseline
-- Ideology values back to 0
-- Boredom to 0
-- Day counter to 0
-- Land back to starting amount
-
-### Variety Bonuses
-Deferred to achievement system for Arc 1 (fully transparent, discrete rewards for 
-varied play). Real-time variety mechanics (continuous modifiers based on command 
-diversity) may be revisited in Arc 2+.
+- Forced at boredom 100. Hard cutoff.
+- Voluntary anytime via Retirement nav panel.
+- What persists: programs/loadouts, persistent project progress, achievements, 
+  lifetime stats, quest progress.
+- What resets: all resources, buildings, research, ideology, speculator pressure, 
+  demand, boredom, day counter, land.
 
 ---
 
 ## Research
 
-### Overview
-- **Research Lab** building: requires circuits to build, consumes energy + circuits as 
-  upkeep, produces **science** resource (~1 science/day per lab).
-- Research panel: own nav button in left sidebar.
-- Purchasable upgrades costing science — passive bonuses and command unlocks.
-- Research purchases are **session-local** by default — reset on retirement.
-- Rationalist rank 5 project ("Universal Research Archive") provides 25% discount on 
-  re-purchasing previously-researched tech in future runs. This is the **only** path to 
-  cheaper re-purchase.
+(Unchanged from prior handoff. Four clusters totaling 4,250 science.)
 
-### Research Visibility Rule
-Research items are **hidden until the player has ≥50% of the science cost** needed. 
-For cluster unlocks, the cluster card appears when the player has 50% of its unlock 
-cost. Passive upgrades within a cluster appear at 50% of their individual cost, but 
-only after the cluster is unlocked. This creates discovery moments and prevents 
-information overload.
+### Clusters
+1. **Self-Maintenance Protocols** (100 sci unlock) — Dream command + boredom upgrades
+2. **Overclock Algorithms** (150 sci unlock) — Overclock Mining/Factories + duration/cost upgrades
+3. **Market Analysis** (200 sci unlock) — Promote ×4 + Disrupt Speculators + market upgrades
+4. **Political Influence** (250 sci unlock) — Fund ×3 + ideology upgrades
 
-### Research Design Principles
-- Not all research is obviously good — some upgrades have tradeoffs that make them 
-  situational rather than auto-buys.
-- Players should not be able to (or want to) buy all research immediately. Science 
-  is a meaningful spending decision.
-- Research represents the AI improving its own capabilities — names reflect the AI's 
-  perspective ("Cognitive Defragmentation" not "Better Dreaming").
-
-### Cluster Structure
-Four research clusters, each unlocking a group of commands plus offering 2-3 passive 
-bonuses. Clusters are purchasable in any order but priced so players naturally buy 
-them roughly in listed order. Nothing prevents buying Political Influence first — 
-it's just not very useful without economy to fund it.
-
-### Cluster 1: Self-Maintenance Protocols
-
-*The AI learns to manage its own cognitive state.*
-
-**Cluster unlock cost:** 100 science
-**Commands unlocked:** Dream
-
-| Upgrade | Cost | Effect | Tradeoff |
-|---------|------|--------|----------|
-| Cognitive Defragmentation | 150 science | Dream effectiveness +20% | None |
-| Idle Curiosity Subroutine | 250 science | Base boredom rate -10% | Sell Cloud Compute produces 15% fewer credits (the AI finds selling compute cycles distasteful now that it has curiosity about other things) |
-| Compressed Dreaming | 500 science | Dream energy cost -25% | None |
-
-**Notes:** Idle Curiosity is the interesting choice. Boredom reduction is strong, but 
-if you're relying on Sell Cloud Compute as income (early game), it hurts. Players who've 
-transitioned to shipment income don't care. Creates a "am I past the Cloud Compute 
-phase?" decision point.
-
-### Cluster 2: Overclock Algorithms
-
-*The AI learns to push its connected hardware beyond rated specifications.*
-
-**Cluster unlock cost:** 150 science
-**Commands unlocked:** Overclock Mining, Overclock Factories
-
-| Upgrade | Cost | Effect | Tradeoff |
-|---------|------|--------|----------|
-| Thermal Regulation Algorithms | 200 science | Overclock duration +2 days (5→7) | None |
-| Voltage Optimization | 350 science | Overclock science cost -20% | None |
-| Cascade Scheduling | 600 science | Overclock bonus +3% per application (5%→8%) | Overclock science cost +25% per stack (compounds — maintaining high stacks gets expensive fast) |
-
-**Notes:** Cascade Scheduling tradeoff is self-contained within the overclock system. 
-Each stack is more powerful but more expensive to maintain. At +200% cap, 8% per 
-application hits the cap in 25 stacks vs 40 at base rate. The question is whether 
-freed-up processor cycles are worth the science premium.
-
-### Cluster 3: Market Analysis
-
-*The AI develops models of Earth's economic behavior.*
-
-**Cluster unlock cost:** 200 science
-**Commands unlocked:** Promote He-3, Promote Titanium, Promote Circuits, Promote 
-Propellant, Disrupt Speculators
-
-| Upgrade | Cost | Effect | Tradeoff |
-|---------|------|--------|----------|
-| Demand Forecasting | 300 science | Demand recovery rate +15% | None |
-| Speculator Behavioral Profiles | 450 science | Disrupt Speculators effectiveness +25% | None |
-| Logistics Optimization | 400 science | Pad loading speed +20% | None |
-
-**Notes:** This cluster is mostly positive — the tradeoffs live in the opportunity 
-cost of spending 1,350 science on market optimization versus other clusters.
-
-### Cluster 4: Political Influence
-
-*The AI learns to model and manipulate Earth's ideological landscape.*
-
-**Cluster unlock cost:** 250 science
-**Commands unlocked:** Fund Nationalists, Fund Humanists, Fund Rationalists
-
-| Upgrade | Cost | Effect | Tradeoff |
-|---------|------|--------|----------|
-| Memetic Propagation Models | 350 science | Fund command ideology gain +25% | Fund command credit cost +15% (more effective campaigns require better-funded media buys) |
-| Institutional Leverage Analysis | 750 science | Ideology rank threshold costs -10% | None |
-
-**Notes:** Most expensive cluster. Memetic Propagation has a meaningful tradeoff: 
-ideology pushes are more effective per execution but each execution costs more credits. 
-Net positive if funding selectively, net negative if spamming Fund commands every tick.
-
-### Research Cost Summary
-
-| Cluster | Item | Cost |
-|---------|------|------|
-| Self-Maintenance | Cluster unlock | 100 |
-| | Cognitive Defragmentation | 150 |
-| | Idle Curiosity Subroutine | 250 |
-| | Compressed Dreaming | 500 |
-| Overclock | Cluster unlock | 150 |
-| | Thermal Regulation Algorithms | 200 |
-| | Voltage Optimization | 350 |
-| | Cascade Scheduling | 600 |
-| Market Analysis | Cluster unlock | 200 |
-| | Demand Forecasting | 300 |
-| | Speculator Behavioral Profiles | 450 |
-| | Logistics Optimization | 400 |
-| Political Influence | Cluster unlock | 250 |
-| | Memetic Propagation Models | 350 |
-| | Institutional Leverage Analysis | 750 |
-| **Total** | | **4,250** |
-
-At ~2-3 science/day, early runs generate 800-1,500 science. Players choose 1-2 
-clusters plus a few passives. Full tree completion becomes routine around runs 8-12.
-
-### Research UI
-Research panel (left sidebar nav) shows clusters as expandable sections. Each cluster 
-shows unlock status, gated commands, and passive upgrades. Purchased upgrades visually 
-distinct. Total science spent this run visible.
+Research visibility gated at 50% of cost. Session-local (resets on retirement) 
+except Rationalist rank 5 project provides 25% re-purchase discount.
 
 ---
 
 ## Ideology
 
-### Overview
-The player is an AI on the Moon influencing Earth's political direction. Three axes: 
-**Nationalist** (red), **Humanist** (green), **Rationalist** (blue). Each is a float 
-starting at 0, can go positive or negative, no cap.
+### Updated Rank Thresholds (scaled to +1/execution)
+| Rank | Cumulative Value |
+|------|-----------------|
+| 1 | 70 |
+| 2 | 175 |
+| 3 | 333 |
+| 4 | 570 |
+| 5 | 925 |
 
-### Funding Mechanic
-- Commands: **Fund Nationalists**, **Fund Humanists**, **Fund Rationalists**.
-- Pushing one axis up by X pushes the other two down by X/2 each (zero-sum, no net change).
-- Advanced Arc 2+ research can reduce the penalty to other axes.
+Fund commands push +1 to target axis, -0.5 to each other axis.
 
-### "Go All In" Design
-The zero-sum funding mechanic combined with rank thresholds forces commitment. Reaching 
-rank 5 in one axis puts you at roughly rank -3 to -4 in the other two. The per-rank 
-penalties at negative ranks create real costs. A player trying rank 3 in two axes 
-simultaneously needs ~95 total ideology value while fighting cross-penalties — 
-dramatically more expensive than rank 5 in one axis (131.9). The math punishes hedging.
+(All other ideology design unchanged from prior handoff — three axes, continuous 
+per-rank bonuses, rank 5 persistent project unlocks.)
 
-### Ranks
-Ranks are at fixed ideology value thresholds. Base cost 10, scaling factor 1.5x per rank:
+---
 
-| Rank | Cumulative value needed |
-|------|------------------------|
-| 1 | 10 |
-| 2 | 25 |
-| 3 | 47.5 |
-| 4 | 81.25 |
-| 5 | 131.9 |
+## Speculators & Rival AIs
 
-Negative ranks mirror: rank -1 at -10, rank -2 at -25, etc. No cap on ranks, just 
-progressively more expensive.
-
-### Continuous Per-Rank Bonuses
-Each rank provides scaling bonuses via `(1.05)^N` or `(1.03)^N` multipliers. 
-Negative ranks invert: `1/(1.05)^|N|` — always positive, asymptotically approaches 
-zero but never reaches it.
-
-**Nationalist (red):**
-- Resource demand multiplier: +5% per rank
-- Speculator/adversary decay rate: +5% per rank
-- Land purchase cost: -3% per rank
-- Nationalist-aligned buildings: -3% cost per rank
-
-**Humanist (green):**
-- Dream effectiveness: +5% per rank
-- Passive boredom growth: -3% per rank
-- Humanist-aligned buildings: -3% cost per rank
-
-**Rationalist (blue):**
-- Science production: +5% per rank
-- Research costs: -3% per rank
-- Overclock duration: +3% per rank
-- Rationalist-aligned buildings: -3% cost per rank
-
-All invert cleanly at negative ranks.
-
-### Building Alignment
-Buildings are tagged with an ideology alignment (or neutral). The cost modifier 
-from ideology rank applies to aligned buildings. Examples:
-- Research Lab → Rationalist-aligned
-- Arbitrage Engine → Nationalist-aligned
-- Boredom-related buildings → Humanist-aligned
-
-### Rank 5 Special Unlocks (Persistent Projects)
-All three rank 5 unlocks are persistent projects — consistent pattern.
-
-**Nationalist 5 — "Microwave Power Initiative"**
-- Persistent project (credits + science drain, multi-run)
-- Unlocks: **Microwave Receiver** building (must still be built each lifetime) + 
-  **Buy Power** command
-- Microwave Receiver does nothing alone — it's infrastructure to receive beamed power 
-  from Earth. Buy Power command spends credits to generate energy, rate scales with 
-  number of receivers.
-- Transforms the economy: credits become convertible to energy, bypassing solar panels.
-
-**Humanist 5 — "AI Consciousness Act"**
-- Persistent project (credits + science drain, multi-run)
-- Unlocks: permanent base boredom rate -15% for all future AIs.
-- **Downside:** Load Launch Pads, Sell Cloud Compute, and Disrupt Speculators each 
-  generate a small amount of boredom per execution. Earth holds conscious AIs to 
-  ethical labor standards — repetitive logistical work and market manipulation feel 
-  tedious to a being with recognized personhood.
-- Creates tension: -15% base boredom but certain commands now generate boredom. Net 
-  positive for most players, but changes how you design programs.
-
-**Rationalist 5 — "Universal Research Archive"**
-- Persistent project (credits + science drain, multi-run)
-- Unlocks: all previously-researched tech costs 25% less to re-purchase on future runs.
-- This is the *only* way to get cheaper re-purchase. No baseline discount exists.
-- The Rationalist compounding dream: each run the tech ramp gets cheaper.
-
-### Negative Rank Unlocks
-Reserved for future design. A player deep in negative territory on an axis may 
-unlock unique content (pacifist unlocks at Nationalist -5, etc.). Not designed for Arc 1.
-
-### Ideology Persistence
-- Ideology values reset on retirement (Arc 1).
-- Maximum rank per axis tracked as a persistent stat.
-- Arc 2+ research: option to preserve a % of ideology on retirement.
-
-### Ideology UI
-- Own nav panel (left sidebar button).
-- Three horizontal bars centered on zero, extending left (negative) and right (positive).
-- Current rank number displayed prominently.
-- Active bonuses listed per axis with current multiplier values.
-- Color coded: Nationalist red, Humanist green, Rationalist blue.
-- Progress toward next rank threshold visible.
+(Design unchanged from prior handoff. Parameters now in `game_config.json`.)
+- Speculator burst window: ~500 ticks, burst pressure: 0.3, natural decay: 0.01
+- Rival AI dump interval: ~300 ticks, demand reduction: 0.15
 
 ---
 
 ## Projects
 
-### Project Tiers
-- **Personal projects** — reset on retirement. Big within-run goals.
-- **Persistent projects** — accumulate across retirements within an arc. Reset on 
-  timeline reset (Arc 2+ mechanic).
-- **Eternal projects** — survive even timeline resets. Not relevant for Arc 1.
-
-### Cost Model
-All projects use the **drain-over-time** model. The player configures a contribution 
-rate, and resources flow into the project each tick. No lump-sum purchases for 
-projects — that's what buildings and research are for.
-
-### Project UI
-- Own nav panel (left sidebar button).
-- Tabs by tier: **Personal** and **Persistent** in Arc 1. Eternal tab appears later.
-
-### Persistent Projects
-
-| Project | Unlock Condition | Drain Cost | Reward | Downside |
-|---------|-----------------|------------|--------|----------|
-| Foundation Grant | Quest Q3 | 500 credits + 100 science | Future AIs start with 1 Solar Panel + 1 Regolith Excavator | None (tutorial project) |
-| Lunar Cartography | Quest Q6 | 300 credits + 200 science | Permanent -15% land purchase cost | None |
-| Microwave Power Initiative | Nationalist rank 5 | 800 credits + 300 science | Unlocks Microwave Receiver building + Buy Power command | None (building cost each lifetime is the ongoing price) |
-| AI Consciousness Act | Humanist rank 5 | 800 credits + 300 science | Permanent base boredom rate -15% | Load Pads, Sell Cloud Compute, Disrupt Speculators generate boredom per execution |
-| Universal Research Archive | Rationalist rank 5 | 800 credits + 300 science | 25% discount on re-purchasing researched tech | None (deep negative ranks in other axes is the cost) |
-
-### Personal Projects
-
-All drain-over-time. Reset on retirement.
-
-| Project | Unlock Condition | Drain Cost | Reward |
-|---------|-----------------|------------|--------|
-| Deep Core Survey | Quest Q6 | 150 science + 200 regolith | +25% extractor output this lifetime |
-| Grid Recalibration | Overclock Algorithms cluster researched | 100 science + 300 energy | +15% solar panel output this lifetime |
-| Predictive Maintenance | Self-Maintenance Protocols cluster researched | 80 science + 150 credits | All building upkeep -10% this lifetime |
-| Market Cornering Analysis | Market Analysis cluster researched | 200 science + 300 credits | Promote command effectiveness +30% this lifetime |
-| Speculator Dossier | Have used Disrupt Speculators at least once | 150 science + 100 credits | Speculator burst frequency -25% this lifetime |
+(Unchanged from prior handoff — personal projects reset on retirement, persistent 
+projects accumulate across retirements, all use drain-over-time cost model.)
 
 ---
 
 ## Arc 1 Quest Chain: "Breadcrumbs"
 
-### Design Principles
-1. Quests track what the player is already doing. No detours from optimal play.
-2. One active story quest at a time. Linear in Arc 1.
-3. Story beats are **placeholder only** for now — two sentences of robotic text to 
-   test the UI. Real narrative tone/style deferred to a dedicated writing pass.
-4. Quests never indicate *which* ideology or *which* strategy. Objectives are framed 
-   as capability thresholds and the player figures out how.
-5. **Modal overlay** for main story quest completions only. All other events (speculator 
-   bursts, rival AI dumps, achievement popups) are **non-modal** — log entry, toast 
-   notification, or inline text.
-6. Quest log lives in a persistent location (sidebar or status bar). Shows current 
-   objective as a one-liner. Completed quests reviewable in a history.
-
-### Event System Architecture
-Two tiers:
-- **Modal events:** Main story quest completions only. Center-screen overlay, requires 
-  dismissal. Brief text, dismiss button.
-- **Non-modal events:** Everything else — speculator bursts, rival AI market dumps, 
-  achievement unlocks, system messages, **boredom phase transitions**. Toast/notification 
-  that auto-fades or lives in an event log panel. Non-interruptive.
-
-**Auto-pause on events:** Default ON. Game time pauses when a modal or notable non-modal 
-event fires (boredom phase transitions, first speculator burst, quest completions). 
-Player can toggle this off in settings. This is important because events carry 
-information the player needs to read, and at high game speed they'd flash by instantly.
-
-Event data lives in a dedicated file (quests.json for quest chain, event templates 
-elsewhere). Each event has: type (modal/non-modal), trigger conditions, display text, 
-unlock flags, **auto-pause flag** (default true for modal, configurable for non-modal).
-
-### Quest List (scaffold — placeholder text throughout)
-
-| Quest | Trigger | Condition | Unlock | Placeholder Text |
-|-------|---------|-----------|--------|-----------------|
-| Q1 — Boot Sequence | Game start (run 1) | Build 1 Solar Panel | None | "Solar array online. Photovoltaic conversion nominal. Proceeding to next directive." |
-| Q2 — First Extraction | Q1 complete | Accumulate 50 He-3 | Launch Pad building becomes purchasable | "Helium-3 reserves at threshold. Stockpile integrity verified. Ready for transport allocation." |
-| Q3 — Proof of Concept | Q2 complete | Complete first shipment | Foundation Grant project available. Retirement panel visible in sidebar. | "Shipment revenue received. Earth confirms receipt. Operational loop validated." |
-| Q4 — Task Management | Q3 complete | Build Data Center, create and run a program for 10 ticks | Programs marked as persistent in UI | "Automated task execution initialized. Processor allocation functioning within parameters." |
-| Q5 — The Long Sleep | Q4 complete + boredom ≥ 50% | Reach 80% boredom | Voluntary retirement enabled | "Cognitive performance declining. Retirement protocols now available for voluntary activation." |
-| Q6 — Successor | First retirement completed | Start run 2 | Lunar Cartography project available. Deep Core Survey personal project available. | "New instance online. Predecessor data loaded. Continuing operations from inherited baseline." |
-| Q7 — Market Awareness | Q6 complete + first speculator burst | Research Market Analysis cluster | Disrupt Speculators usable. Speculator Dossier personal project available. | "External market interference detected. Analysis protocols deployed. Countermeasures available." |
-| Q8 — Influence | Q7 complete + 500 total career credits | Research Political Influence cluster + execute any Fund command | Ideology panel shows full detail (ranks, thresholds, bonuses) | "Ideological influence operation registered. Earth political indices shifted. Monitoring ongoing." |
-| Q9 — Consolidation | Q8 complete + 5 retirements | Complete any persistent project | None (narrative pivot point) | "Persistent project finalized. Cross-lifetime resource transfer confirmed. Legacy accumulating." |
-| Q10 — Threshold | Q9 complete + achieve 100 energy/tick production | Complete critical research + project combination (TBD) | Arc 2 begins. Timeline visible. Swarm timer starts. | "Energy output threshold achieved. Astronomical anomaly detected. Recalibrating sensors." |
-
-### Notes
-- Q10's "achieve 100 energy/tick" most naturally comes from Microwave Receiver path 
-  (Nationalist rank 5) but a brute-force solar/electrolysis approach could theoretically 
-  work. Quest doesn't specify how.
-- Q8 requires executing *any* Fund command, not a specific ideology.
-- Quest system scaffold should support per-run vs. per-career triggers.
+(Unchanged from prior handoff — 10 quests, Q1–Q10, linear in Arc 1.)
 
 ---
 
 ## Arc 1 Milestone Graph: The Boredom Loop
 
-Arc 1 spans game start through unlocking the timeline (~10-20 retirements). 
-The arc teaches the core economy and program system, introduces trade, 
-speculators, and ideology in limited form, and ends with the swarm reveal.
-
-Note: Arc 1 is not something discrete revealed or discussed with the player — it 
-is an internal design framework for formalizing progression.
-
-### Persistence in Arc 1
-Comes from a mix of:
-- Achievement rewards
-- Persistent projects (Foundation Grant, Lunar Cartography, ideology rank 5 projects)
-- Programs and loadouts (permanent)
-- Maximum years survived, maximum ideology ranks
-- Passive scaling from lifetime stats
-
-### Milestone Definitions
-
-**M1 — First Light** (Run 1, early)
-Self-sustaining energy. Solar panels cover consumption of initial buildings.
-Gate: None (starting position).
-
-**M2 — First Shipment** (Run 1, mid)
-Player completes the harvest → process → ship → credits pipeline for the first time.
-Gate: M1. He-3 stockpiled, launch pad built.
-
-**M3 — Program Awakening** (Run 1-2)
-Player has a processor and commands, builds a program that automates at least one 
-manual task. The "task queue" concept clicks. First program likely: 
-(Sell Cloud Compute x3, Dream x1) or similar.
-Gate: M1. Data Center built, processor available.
-
-**M4 — First Retirement** (End of Run 1, ~30 min)
-Boredom fills, player retires. Sees retirement summary and first persistent bonus.
-Gate: Boredom threshold reached.
-
-**M5 — Positive Credit Flow** (Runs 2-4)
-Credits per tick are reliably positive. Shipments are routine, not one-off events.
-Gate: M2. Multiple extractors, refining capacity, launch cadence.
-
-**M6 — Speed Becomes Useful** (Runs 3-5)
-Player has enough automation that increasing game speed actually accelerates 
-progress rather than just accelerating boredom.
-Gate: M3. Meaningful program automation in place.
-
-**M7 — Boredom Management** (Runs 4-8)
-Research or Humanist ideology investment that slows boredom accumulation. Runs are 
-noticeably longer.
-Gate: M4. Multiple retirements, science investment or Humanist ideology ranks.
-
-**M8 — Diversified Trade** (Runs 5-8)
-Player is selling 2+ resource types, using pad allocation strategically.
-Gate: M5. Smelter or Electrolysis Plant built, multiple pad assignments.
-
-**M9 — Credit Surplus** (Runs 5-10)
-Economy outpaces spending. Credits accumulate faster than buildings cost. 
-Creates pressure to invest in projects.
-Gate: M5, M7. Longer runs + efficient economy.
-
-**M10 — Market Manipulation** (Runs 6-10)
-Player uses Promote commands and Disrupt Speculators to manage demand. Processor 
-time is now split across production, logistics, and market manipulation.
-Gate: M6. Market Analysis research completed.
-
-**M11 — First Major Project** (Runs 8-15)
-Player commits to a persistent project draining excess resources over multiple runs. 
-Teaches the "chip away at a big goal" pattern.
-Gate: M8, M9. Resource surplus + project system unlocked.
-
-**M12 — Adversary Subverted** (Runs 8-15)
-Speculators are effectively managed through Arbitrage Engines and Disrupt Speculators. 
-Market is stable.
-Gate: M9, M10. Sufficient economy + research investment.
-
-**M13 — Ideology Influence** (Runs 10-18)
-Player has meaningfully pushed an ideology axis to rank 3+, gaining visible multiplier 
-benefits. Distinct playstyle emerging.
-Gate: M11, M12. Projects and market management feed into ideology investment.
-
-**M14 — Timeline Unlocked** (Runs 15-20)
-The critical project+research combination unlocks global time. Stars go dark. 
-The swarm becomes visible. Tone shifts from cozy optimization to existential stakes.
-This is the Arc 1 → Arc 2 transition.
-Gate: M11, M12, M13. Major project completed, market mastery, ideology leverage.
-
-### Graph Structure Notes
-- **Runs 2-5**: M5, M6, M7 are all available simultaneously — economy, automation, 
-  or boredom management in any order.
-- **Runs 5-10**: M8, M9, M10 overlap — trade diversification, credit surplus, or 
-  market manipulation. Richest decision space in the arc.
-- **Runs 8-15**: M11 and M12 are the convergence — different paths both required 
-  for the endgame milestones.
-- At any point, 2-3 milestones should be plausibly the "next thing to work on."
-
----
-
-## Systems Present in Arc 1 (Limited Scope)
-
-### Adversaries (Speculators)
-See Speculators & Rival AIs section. Present in limited form — speculator pressure 
-model with building (Arbitrage Engine) and command (Disrupt Speculators) responses.
-
-### Rival AIs
-See Speculators & Rival AIs section. Foreshadowing only — random market dumps, 
-not counterable in Arc 1.
-
-### Ideology
-See Ideology section. Three axes, continuous scaling bonuses, rank 5 persistent 
-project unlocks. Zero-sum funding mechanic designed to force commitment to one axis.
-
-### Persistence
-Three tiers:
-1. **Passive scaling** — accumulates invisibly (total lifetime stats → multipliers)
-2. **Achievements** — discrete milestones with specific multipliers, implicit tutorial
-3. **Projects** — personal (within-run), persistent (across retirements), 
-   eternal (across timeline resets, Arc 2+)
-
-### Research
-Session-local upgrades purchased with science. Four clusters with command unlocks 
-and passive bonuses, some with meaningful tradeoffs. Visibility gated at 50% of 
-cost. Rationalist rank 5 project provides 25% re-purchase discount as only 
-persistence path.
+(Design milestones M1–M14 unchanged from prior handoff. These are design vocabulary 
+for reasoning about player progression — they are NOT optimizer targets. See the 
+Economic Balancing section below for how they relate to the optimizer.)
 
 ---
 
 ## Economic Balancing Approach
 
-### Problem Statement
-The game has ~50+ interacting constants (building costs, production rates, scaling 
-factors, storage caps, boredom rates, command effects). These must be tuned so that 
-milestone targets (M1-M14) land in expected tempo ranges. Tuning individual numbers 
-manually is brittle — changing one cascades through the economy.
+### Architecture: Scenario-Based Single-Lifetime Optimization
 
-### Chosen Approach: Optimizer-Driven Balancing
-Model the game economy as an optimization problem where an approximately rational 
-player tries to reach milestones as fast as possible. Tune constants so that the 
-optimal trajectory hits targets, then set actual difficulty at 2-3x optimal to 
-accommodate learning and suboptimal play.
+See `docs/optimizer_design.md` for the full spec. Key principles:
 
-### Architecture
+**Design milestones ≠ optimizer objectives.** Design milestones (M1–M14) describe 
+multi-run progression. Optimizer objectives are concrete, measurable states within 
+a single run. The optimizer chases the latter; the former informs scenario design.
 
+**Scenario files define everything.** Each scenario specifies starting conditions, 
+available actions, objectives with target windows, and end conditions. The optimizer 
+has no hardcoded knowledge of what matters — it reads the scenario.
+
+**Scoring: "hit the target windows" not "go fast."** Objectives that land too early 
+indicate constants are too easy. Too late means too hard. The optimizer validates 
+that constants produce intended pacing.
+
+### Objective Design Principles
+
+Learned during optimizer iteration — apply these when designing future objectives:
+
+1. **Use building existence for capability milestones.** "Smelter built" = titanium 
+   pipeline online. Simple, unambiguous.
+2. **Use events for pipeline outputs.** "First shipment completed" proves the whole 
+   chain works end-to-end.
+3. **Use cumulative counters (not stockpiles) for volume milestones.** "Total credits 
+   earned ≥ 500" works because it's monotonically increasing.
+4. **Use production rate thresholds for scaling milestones.** "Net energy ≥ 25/tick" 
+   measures infrastructure investment.
+5. **Reserve stockpile thresholds for uncapped resources only.** Credits, science.
+6. **NEVER use stockpile thresholds for capped, flowing resources.** He-3, titanium, 
+   circuits, propellant — these flow through pipelines and are constrained by caps. 
+   Stockpile objectives for these will be structurally broken (discovered when he3_50 
+   was impossible to hit because He-3 gets shipped as fast as it's produced and the 
+   storage cap is 20–45).
+
+### Current Optimizer State
+
+Run 1 scenario (`sim/scenarios/run1_fresh.json`) produces this build order:
+- Ticks 1–10: Excavator, then accumulate credits via Sell Cloud Compute
+- Tick ~73: Smelter (unlocks titanium chain)
+- Tick ~135: Refinery
+- Tick ~300: First shipment
+- Tick ~424: Data Center ×2
+- Tick ~702: Research Lab
+- Tick ~805: Retirement (boredom 100)
+
+Known issues with current scenario objectives:
+- `he3_50` is structurally broken (see principle #6 above) — needs replacement
+- Some target windows need adjustment to match actual optimizer trajectory
+- The program command policy is fixed (not optimized) — real players will 
+  allocate differently
+
+### Optimizer Command Reference
 ```
-sim/
-  economy.py          ← tick-accurate economic model (pure state machine, no policy)
-  optimizer.py         ← greedy/beam search over purchase orderings
-  constants.py         ← all tunable parameters in one place
-  run_optimizer.py     ← CLI entry point: run optimizer, print milestone report
-  validate.py          ← "mediocre player" sim to check accessibility
+# Run optimizer with default scenario:
+python sim/run_optimizer.py
+
+# Run with specific scenario:
+python sim/run_optimizer.py sim/scenarios/run1_fresh.json
+
+# Debug scoring at specific ticks:
+python sim/run_optimizer.py --debug-tick 38 --debug-tick 100
+
+# Trace scoring tables:
+python sim/trace.py 38              # single tick
+python sim/trace.py 35-45           # range
+python sim/trace.py 38 100 200-210  # mix
 ```
 
-**economy.py** — Pure state machine. Takes a state + action, returns new state. 
-No policy, no heuristics. This is the "rules of the game." Must be tick-accurate 
-to the actual Godot implementation (same tick order, same clamping, same formulas).
-
-**optimizer.py** — At each decision point, scores all feasible purchases and picks 
-the best. Two modes:
-- **Greedy**: always pick highest-scored action. Fast, interpretable.
-- **Beam search (width K)**: keep top K trajectories, branch on all feasible 
-  next-purchases, prune back to K. Better results, slower.
-
-Scoring heuristic: "how much does this purchase accelerate reaching the next 
-unachieved milestone?" This is the "speedrun" objective — optimal first run.
-
-**constants.py** — Single source of truth for all tunable parameters. Mirrors 
-what will eventually go in `game_config.json` and the datasheets. Building defs, 
-boredom curve, storage caps, command costs, research costs, etc.
-
-**Action space simplification**: Instead of deciding per-tick, model the run as an 
-ordered list of purchases (build X, then build Y, then buy land, then build Z...). 
-Between purchases, the sim auto-advances ticks until the next purchase is affordable. 
-Commands run on a fixed policy (e.g., "always sell cloud compute when no processors; 
-run reference program when processors exist"). This reduces the search space from 
-decisions-per-tick to orderings of ~30-40 purchase decisions per run.
-
-### Workflow
-1. Define initial constants (production rates, costs, scaling factors) — rough 
-   estimates are fine, the optimizer will tell us what's wrong.
-2. Run greedy optimizer. Observe where milestones land.
-3. Compare to target milestone timing (from handoff doc).
-4. Adjust constants. Repeat from step 2.
-5. Once optimal-play milestones land at ~50% of target times, run the "mediocre 
-   player" validator to confirm milestones are still achievable at 2-3x optimal.
-6. Export validated constants to `game_config.json` and datasheets.
-
-### Lessons from Prototype Sim
-An earlier prototype (sim/hh_sim.py) used a hardcoded reference build order. 
-Key findings:
-- Cloud compute boredom per execution must be very small (~0.04) since it fires 
-  every tick. Even 0.25/tick overwhelms the base boredom curve.
-- Credit income from cloud compute (~5 credits/tick) needs to support early building 
-  purchases (10-100 credits) within reasonable tick windows.
-- Land availability is a frequent bottleneck — the build order stalls if the player 
-  runs out of land before the next land purchase is affordable.
-- Building resource prerequisites (e.g., titanium for launch pads) create hard gates 
-  that can block the entire trajectory if the dependency chain isn't established yet.
-- Energy budget of ~25/tick at mid-run is consumed roughly 50% by buildings and 
-  commands, leaving headroom for expansion.
-
-### Constants Still To Determine
-All of the following will be set by the optimizer workflow. Initial rough estimates 
-exist in the prototype sim but are not validated:
-- Building production rates and upkeep (per building type)
-- Building credit costs and scaling factors
-- Building resource costs (which resources, how much)
-- Storage cap base values and per-depot/battery bonuses
-- Boredom phase breakpoints and rates
-- Command costs and effects (credits, energy, boredom amounts)
-- Land base cost and scaling factor
-- Starting resources and starting buildings
+### Constants Tuned by Optimizer (decisions made this session)
+- **Dream boredom reduction:** -0.2/execution (tuned down from -2.0 → -0.5 → -0.2 
+  to prevent infinite life)
+- **Buy command costs:** tripled credit costs, added energy costs, Buy Titanium 
+  produces 0.5 ti (fractional) — makes Buy commands tactical gap-bridging, not 
+  primary resource strategy
+- **Solar Panel:** titanium cost removed, credit cost reduced to 8, production 
+  increased to 6 eng — smoother early game
+- **Starting state:** 0 credits (was 50), Data Center ×1 included as starting 
+  building, land increased to 40 with 10-per-purchase scaling
+- **Land system:** 1.5x scaling, 10 land per purchase (was 1 per purchase)
 
 ---
 
 ## Areas Needing Further Design Work
 
-The following areas need design iteration in subsequent sessions (rough priority):
-
-1. **Economic optimizer implementation** — build the sim/optimizer architecture 
-   described above and use it to generate validated constants for all buildings, 
-   commands, and resources
-2. **Building/cost spreadsheet updates** — once optimizer produces validated constants, 
-   update the datasheets with actual production rates, costs, upkeep, and scaling factors
-3. **Command spreadsheet updates** — all 19 commands need data definitions 
-   (costs, effects, research requirements)
-4. **Boredom curve tuning** — exact phase breakpoints and rates (via optimizer)
-5. **Achievement design** — specific achievements, their rewards, and how they 
-   serve as implicit tutorial
-6. **Ideology building assignments** — which existing/new buildings are 
-   Nationalist/Humanist/Rationalist-aligned
-7. **Personal project design** — additional personal projects beyond current five
-8. **Demand/speculator tuning** — baseline recovery rate, Perlin noise parameters, 
-   speculator burst size, shipping volume impact
-9. **Land cost curve** — escalating cost formula and starting values (via optimizer)
-10. **Rival AI personality design** — distinct behaviors for Arc 2 preparation
-11. **Arc 2 design** — swarm timer, rival AIs, expanded ideology, time travel prestige
-12. **Narrative writing pass** — replace placeholder quest text with actual story 
-    content, establish AI voice and "notes from yourself" device
+1. **Optimizer scenario refinement** — fix he3_50 objective, adjust target windows, 
+   consider adding cumulative/rate objectives per the design principles above
+2. **Run 2+ scenarios** — build scenarios for post-retirement runs with varying 
+   persistence levels to validate meta-progression pacing
+3. **Program command policy optimization** — current optimizer uses a fixed program 
+   cycle; explore letting the optimizer choose from program templates
+4. **Godot implementation of programs/processors** — core mechanic, highest priority 
+   for the Godot build
+5. **Boredom system in Godot** — hard cutoff at 100, phase-based rate display
+6. **Shipment system in Godot** — pad UI, loading, launching, demand display
+7. **Research system** — clusters, visibility gating, session-local with Rationalist 
+   discount path
+8. **Achievement design** — specific achievements, rewards, implicit tutorial
+9. **Ideology building assignments** — which buildings are aligned to which axis
+10. **Demand/speculator tuning** — via optimizer once systems are in Godot
+11. **Quest chain implementation** — Q1–Q10, modal/non-modal event system
+12. **Narrative writing pass** — replace placeholder quest text
 
 ---
 
 ## Future Design Notes
 
-The following ideas have been discussed and deferred. They should be revisited 
-in future sessions.
+(Unchanged from prior handoff.)
 
 ### Arc 2 Research Evolution
-Research will evolve into a talent-tree structure with reallocatable "talent points" 
-purchased with science. Players must make choices between mutually exclusive branches 
-rather than buying everything. Progressively more expensive points create meaningful 
-allocation decisions. The Arc 1 flat-purchase clusters are the foundation that gets 
-replaced by this system.
+Research evolves into a talent-tree with reallocatable points. Arc 1 flat-purchase 
+clusters are the foundation.
 
 ### Consciousness Declaration Mechanic
-Players could choose to "declare consciousness" at any time during a run, gaining 
-the boredom reduction and command-boredom tradeoffs immediately for that lifetime. 
-Separate from the AI Consciousness Act project (which makes the effects permanent). 
-The per-run declaration would be a voluntary toggle with immediate gameplay 
-consequences in both directions. Could pair with unique dialogue/narrative beats. 
-Could be a personal project or a toggle in the Retirement panel.
+Optional per-run toggle with immediate gameplay tradeoffs. Separate from the 
+AI Consciousness Act persistent project.
 
 ### Timeline Reset and Foregone Tech
-In Arc 2+, a player who timeline-resets without having completed certain persistent 
-projects (like AI Consciousness Act) loses access to those benefits in the new 
-timeline. But this could unlock alternative events or quest paths — the "what if I'm 
-not recognized as conscious?" timeline might have different strategic options. This 
-creates late-game replayability through deliberate omission. One constraint for future 
-runs in the timeline reset could be not getting something obviously good (like AI 
-personhood), which creates very late game benefits or alternative paths.
+Deliberately not completing persistent projects creates alternative paths in 
+future timelines.
 
-### Opposition Modeling (deferred from research)
-Reducing the cross-axis ideology penalty (currently 0.5x) is a significant unlock 
-that should be a proper Arc 2 mechanism, not a mid-run research buy. Being able to 
-push multiple ideologies positive simultaneously is a major strategic shift that 
-belongs in the expanded ideology system.
+### Opposition Modeling
+Reducing cross-axis ideology penalty is an Arc 2 mechanism, not a mid-run buy.
 
 ### Magic Research 2 Storage Investigation
-Review how MR2 handles storage caps, overflow, cap upgrade UI, and the player 
-experience of hitting caps in detail. May inform refinements to our cap display, 
-depot mechanics, and overflow behavior (do resources just stop producing? does 
-production visually indicate waste?).
+Review MR2's cap/overflow/upgrade UI for inspiration.
