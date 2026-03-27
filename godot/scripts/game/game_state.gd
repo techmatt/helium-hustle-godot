@@ -40,6 +40,8 @@ var programs: Array = []              # Array of ProgramData, always 5 slots
 var pads: Array = []                  # Array of LaunchPadData
 var loading_priority: Array = ["he3", "ti", "cir", "prop"]
 var launch_history: Array = []        # Array of LaunchRecord, max 5
+var completed_research: Array = []    # Array of String research IDs purchased this run
+var cumulative_science_earned: float = 0.0  # monotonically increasing, never decremented
 
 var total_processors: int:
 	get: return buildings_active.get("data_center", buildings_owned.get("data_center", 0))

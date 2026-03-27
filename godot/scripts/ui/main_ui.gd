@@ -7,6 +7,7 @@ const RESOURCES: Array = [
 	["ice",    "Ice",        Color(0.70, 0.92, 1.00)],
 	["he3",    "Helium-3",   Color(0.50, 0.50, 1.00)],
 	["cred",   "Credits",    Color(0.20, 0.85, 0.20)],
+	["sci",    "Science",    Color(0.70, 0.50, 0.90)],
 	["land",   "Land",       Color(0.40, 0.70, 0.30)],
 	["boredom","Boredom",    Color(0.55, 0.55, 0.55)],
 	["proc",   "Processors", Color(0.80, 0.20, 0.80)],
@@ -135,6 +136,11 @@ var _buildings_data: Array = []
 # launch pad panel nodes
 var _launch_pad_cards: Array = []
 var _launch_history_vbox: VBoxContainer = null
+# commands panel: snapshot of buildings_owned used to detect when to rebuild
+var _commands_buildings_snapshot: Dictionary = {}
+# research panel: snapshots used to detect when to rebuild
+var _research_completed_snapshot: Array = []
+var _research_sci_snapshot: float = -1.0
 
 var _font_rajdhani_bold: FontFile
 var _font_exo2_regular: FontFile
@@ -421,6 +427,21 @@ func _on_tick() -> void:
 	_update_building_cards()
 	if _active_mode == "Launch Pads":
 		_refresh_launch_pads_panel()
+	elif _active_mode == "Commands":
+		var cur: Dictionary = GameManager.state.buildings_owned.duplicate()
+		if cur != _commands_buildings_snapshot:
+			_commands_buildings_snapshot = cur
+			for child in _buildings_scroll.get_children():
+				child.queue_free()
+			_build_commands_panel()
+	elif _active_mode == "Research":
+		var st: GameState = GameManager.state
+		if st.completed_research != _research_completed_snapshot or st.cumulative_science_earned != _research_sci_snapshot:
+			_research_completed_snapshot = st.completed_research.duplicate()
+			_research_sci_snapshot = st.cumulative_science_earned
+			for child in _buildings_scroll.get_children():
+				child.queue_free()
+			_build_research_panel()
 	_update_status_bar()
 	_update_processor_row()
 
@@ -472,8 +493,14 @@ func _switch_mode(mode: String) -> void:
 	_update_nav_highlight(mode)
 	match mode:
 		"Buildings":   _build_buildings_panel()
-		"Commands":    _build_commands_panel()
+		"Commands":
+			_commands_buildings_snapshot = GameManager.state.buildings_owned.duplicate()
+			_build_commands_panel()
 		"Launch Pads": _build_launch_pads_panel()
+		"Research":
+			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
+			_research_sci_snapshot = GameManager.state.cumulative_science_earned
+			_build_research_panel()
 		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
@@ -538,8 +565,14 @@ func _on_theme_changed() -> void:
 	_setup_status_bar()
 	match _active_mode:
 		"Buildings":   _build_buildings_panel()
-		"Commands":    _build_commands_panel()
+		"Commands":
+			_commands_buildings_snapshot = GameManager.state.buildings_owned.duplicate()
+			_build_commands_panel()
 		"Launch Pads": _build_launch_pads_panel()
+		"Research":
+			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
+			_research_sci_snapshot = GameManager.state.cumulative_science_earned
+			_build_research_panel()
 		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
@@ -745,44 +778,9 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 
 
 func _compute_theoretical_rates() -> Dictionary:
-	var rates: Dictionary = {}
-	var st: GameState = GameManager.state
-
-	for bdef: Dictionary in GameManager.get_buildings_data():
-		var owned: int = st.buildings_owned.get(bdef.short_name, 0)
-		if owned == 0:
-			continue
-		var count: int = st.buildings_active.get(bdef.short_name, owned)
-		if count == 0:
-			continue
-		for res: String in bdef.get("production", {}):
-			rates[res] = rates.get(res, 0.0) + float(bdef.production[res]) * count
-		for res: String in bdef.get("upkeep", {}):
-			rates[res] = rates.get(res, 0.0) - float(bdef.upkeep[res]) * count
-
-	var cmd_lookup: Dictionary = {}
-	for cmd: Dictionary in GameManager.get_commands_data():
-		cmd_lookup[cmd.short_name] = cmd
-
-	for prog: GameState.ProgramData in st.programs:
-		if prog.processors_assigned <= 0 or prog.commands.is_empty():
-			continue
-		var total_steps: int = 0
-		for entry: GameState.ProgramEntry in prog.commands:
-			total_steps += entry.repeat_count
-		if total_steps == 0:
-			continue
-		for entry: GameState.ProgramEntry in prog.commands:
-			var cmd: Dictionary = cmd_lookup.get(entry.command_shortname, {})
-			if cmd.is_empty():
-				continue
-			var weight: float = float(prog.processors_assigned) * float(entry.repeat_count) / float(total_steps)
-			for res: String in cmd.get("production", {}):
-				rates[res] = rates.get(res, 0.0) + float(cmd.production[res]) * weight
-			for res: String in cmd.get("costs", {}):
-				rates[res] = rates.get(res, 0.0) - float(cmd.costs[res]) * weight
-
-	return rates
+	# Return actual deltas from the most recent tick — reflects real building
+	# starvation/cap behaviour without duplicating simulation logic.
+	return GameManager.last_deltas
 
 
 func _update_resource_display() -> void:
@@ -868,9 +866,17 @@ func _add_command_group_section(parent: VBoxContainer, group: String, cmds: Arra
 		flow.add_child(_build_command_card(cmd))
 
 
+func _is_cmd_unlocked(req: Dictionary) -> bool:
+	match req.get("type", "none"):
+		"none":     return true
+		"building": return GameManager.state.buildings_owned.get(req.get("value", ""), 0) > 0
+		"research": return req.get("value", "") in GameManager.state.completed_research
+	return false
+
+
 func _build_command_card(cmd: Dictionary) -> PanelContainer:
 	var req: Dictionary = cmd.get("requires", {})
-	var is_locked: bool = req.get("type", "none") != "none"
+	var is_locked: bool = not _is_cmd_unlocked(req)
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(310, 0)
@@ -1068,11 +1074,11 @@ func _format_requires(req: Dictionary) -> String:
 					return "Requires: " + bdef.name
 			return "Requires: " + bsn
 		"research":
-			var words: PackedStringArray = req.get("value", "").split("_")
-			var title: String = ""
-			for w: String in words:
-				title += w.capitalize() + " "
-			return "Requires: " + title.strip_edges() + " research"
+			var rid: String = req.get("value", "")
+			for item: Dictionary in GameManager.get_research_data():
+				if item.get("id", "") == rid:
+					return "Requires: " + item.get("name", rid) + " research"
+			return "Requires: " + rid + " research"
 	return ""
 
 
@@ -1216,15 +1222,54 @@ func _build_loading_priority_list(parent: VBoxContainer) -> void:
 	for i in range(st.loading_priority.size()):
 		var res: String = st.loading_priority[i]
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 8)
+		row.add_theme_constant_override("separation", 6)
 		parent.add_child(row)
 
-		var num_lbl := Label.new()
-		num_lbl.text = "%d." % (i + 1)
-		num_lbl.custom_minimum_size = Vector2(22, 0)
-		num_lbl.add_theme_font_override("font", _font_exo2_semibold)
-		num_lbl.add_theme_font_size_override("font_size", 14)
-		row.add_child(num_lbl)
+		var idx: int = i  # capture for lambdas
+
+		# Stacked ▲/▼ arrows on the left
+		var arrow_vbox := VBoxContainer.new()
+		arrow_vbox.add_theme_constant_override("separation", 0)
+		arrow_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(arrow_vbox)
+
+		var up_btn := Button.new()
+		up_btn.text = "▲"
+		up_btn.flat = true
+		up_btn.custom_minimum_size = Vector2(22, 14)
+		up_btn.add_theme_font_size_override("font_size", 9)
+		up_btn.pressed.connect(func():
+			if idx == 0:
+				return
+			var prio: Array = GameManager.state.loading_priority.duplicate()
+			var tmp: String = prio[idx]
+			prio[idx] = prio[idx - 1]
+			prio[idx - 1] = tmp
+			GameManager.set_loading_priority(prio)
+			for child in parent.get_children():
+				child.queue_free()
+			_build_loading_priority_list(parent)
+		)
+		arrow_vbox.add_child(up_btn)
+
+		var down_btn := Button.new()
+		down_btn.text = "▼"
+		down_btn.flat = true
+		down_btn.custom_minimum_size = Vector2(22, 14)
+		down_btn.add_theme_font_size_override("font_size", 9)
+		down_btn.pressed.connect(func():
+			if idx == GameManager.state.loading_priority.size() - 1:
+				return
+			var prio: Array = GameManager.state.loading_priority.duplicate()
+			var tmp: String = prio[idx]
+			prio[idx] = prio[idx + 1]
+			prio[idx + 1] = tmp
+			GameManager.set_loading_priority(prio)
+			for child in parent.get_children():
+				child.queue_free()
+			_build_loading_priority_list(parent)
+		)
+		arrow_vbox.add_child(down_btn)
 
 		var icon := ColorRect.new()
 		icon.color = RESOURCE_META.get(res, [res, Color.WHITE])[1]
@@ -1239,43 +1284,196 @@ func _build_loading_priority_list(parent: VBoxContainer) -> void:
 		name_lbl.add_theme_font_size_override("font_size", 14)
 		row.add_child(name_lbl)
 
-		var idx: int = i  # capture for lambdas
 
-		var up_btn := Button.new()
-		up_btn.text = "↑"
-		up_btn.custom_minimum_size = Vector2(28, 28)
-		up_btn.disabled = (idx == 0)
-		up_btn.add_theme_font_override("font", _font_exo2_semibold)
-		up_btn.add_theme_font_size_override("font_size", 14)
-		up_btn.pressed.connect(func():
-			var prio: Array = GameManager.state.loading_priority.duplicate()
-			var tmp: String = prio[idx]
-			prio[idx] = prio[idx - 1]
-			prio[idx - 1] = tmp
-			GameManager.set_loading_priority(prio)
-			for child in parent.get_children():
-				child.queue_free()
-			_build_loading_priority_list(parent)
-		)
-		row.add_child(up_btn)
+# ── Research panel ─────────────────────────────────────────────────────────────
 
-		var down_btn := Button.new()
-		down_btn.text = "↓"
-		down_btn.custom_minimum_size = Vector2(28, 28)
-		down_btn.disabled = (idx == st.loading_priority.size() - 1)
-		down_btn.add_theme_font_override("font", _font_exo2_semibold)
-		down_btn.add_theme_font_size_override("font_size", 14)
-		down_btn.pressed.connect(func():
-			var prio: Array = GameManager.state.loading_priority.duplicate()
-			var tmp: String = prio[idx]
-			prio[idx] = prio[idx + 1]
-			prio[idx + 1] = tmp
-			GameManager.set_loading_priority(prio)
-			for child in parent.get_children():
-				child.queue_free()
-			_build_loading_priority_list(parent)
-		)
-		row.add_child(down_btn)
+func _build_research_panel() -> void:
+	var research_data: Array = GameManager.get_research_data()
+	var st: GameState = GameManager.state
+
+	var outer := VBoxContainer.new()
+	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outer.add_theme_constant_override("separation", 6)
+	_buildings_scroll.add_child(outer)
+
+	if research_data.is_empty():
+		var lbl := Label.new()
+		lbl.text = "No research data loaded."
+		outer.add_child(lbl)
+		return
+
+	# Group by category preserving JSON order
+	var category_order: Array = []
+	var by_category: Dictionary = {}
+	var category_min_cost: Dictionary = {}
+	for item: Dictionary in research_data:
+		var cat: String = item.get("category", "Other")
+		if not by_category.has(cat):
+			by_category[cat] = []
+			category_min_cost[cat] = INF
+			category_order.append(cat)
+		by_category[cat].append(item)
+		category_min_cost[cat] = minf(category_min_cost[cat], float(item.get("cost", 0)))
+
+	var has_visible: bool = false
+	for cat: String in category_order:
+		var threshold: float = category_min_cost[cat] * 0.5
+		if st.cumulative_science_earned < threshold:
+			continue
+		has_visible = true
+		_add_research_category_section(outer, cat, by_category[cat])
+
+	if not has_visible:
+		var lbl := Label.new()
+		lbl.text = "Build a Research Lab and earn science to unlock research categories."
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.add_theme_font_override("font", _font_exo2_regular)
+		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_color_override("font_color", _p("text_muted"))
+		outer.add_child(lbl)
+
+
+func _add_research_category_section(parent: VBoxContainer, category: String, items: Array) -> void:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", 6)
+	parent.add_child(section)
+
+	var header := Button.new()
+	header.text = "▼  " + category.to_upper()
+	header.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_theme_font_override("font", _font_rajdhani_bold)
+	header.add_theme_font_size_override("font_size", 15)
+	_apply_category_header_style(header)
+	section.add_child(header)
+
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 8)
+	flow.add_theme_constant_override("v_separation", 8)
+	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section.add_child(flow)
+
+	header.pressed.connect(func():
+		flow.visible = not flow.visible
+		header.text = ("▼  " if flow.visible else "▶  ") + category.to_upper()
+		_apply_category_header_style(header)
+	)
+
+	for item: Dictionary in items:
+		flow.add_child(_build_research_card(item))
+
+
+func _build_research_card(item: Dictionary) -> PanelContainer:
+	var is_completed: bool = item.get("id", "") in GameManager.state.completed_research
+	var cost: int = int(item.get("cost", 0))
+	var can_afford: bool = GameManager.state.amounts.get("sci", 0.0) >= cost
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(280, 0)
+	panel.size_flags_horizontal = Control.SIZE_FILL
+	if is_completed:
+		panel.modulate = Color(1, 1, 1, 0.65)
+
+	if not GameSettings.is_dark_mode:
+		var card_style := StyleBoxFlat.new()
+		card_style.bg_color = Color(0.941, 0.941, 0.941) if is_completed else Color.WHITE
+		card_style.corner_radius_top_left     = 4
+		card_style.corner_radius_top_right    = 4
+		card_style.corner_radius_bottom_left  = 4
+		card_style.corner_radius_bottom_right = 4
+		card_style.border_width_left   = 1
+		card_style.border_width_right  = 1
+		card_style.border_width_top    = 1
+		card_style.border_width_bottom = 1
+		card_style.border_color = Color(0.816, 0.816, 0.816)
+		panel.add_theme_stylebox_override("panel", card_style)
+
+	var margin := MarginContainer.new()
+	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 10)
+	panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 5)
+	margin.add_child(vbox)
+
+	# Header row: name + badge/button
+	var header_hbox := HBoxContainer.new()
+	header_hbox.add_theme_constant_override("separation", 8)
+	vbox.add_child(header_hbox)
+
+	var name_lbl := Label.new()
+	name_lbl.text = item.get("name", "")
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.add_theme_font_override("font", _font_rajdhani_bold)
+	name_lbl.add_theme_font_size_override("font_size", 20)
+	if is_completed:
+		name_lbl.add_theme_color_override("font_color", _p("text_muted"))
+	header_hbox.add_child(name_lbl)
+
+	if is_completed:
+		var badge := Label.new()
+		badge.text = "✓"
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		badge.add_theme_font_override("font", _font_exo2_semibold)
+		badge.add_theme_font_size_override("font_size", 16)
+		badge.add_theme_color_override("font_color", _p("text_positive"))
+		header_hbox.add_child(badge)
+	else:
+		var btn := Button.new()
+		btn.text = "Research"
+		btn.disabled = not can_afford
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.add_theme_font_override("font", _font_exo2_semibold)
+		btn.add_theme_font_size_override("font_size", 14)
+		if not GameSettings.is_dark_mode and can_afford:
+			var gs := StyleBoxFlat.new()
+			gs.bg_color = Color(0.298, 0.686, 0.314)
+			gs.corner_radius_top_left     = 4
+			gs.corner_radius_top_right    = 4
+			gs.corner_radius_bottom_left  = 4
+			gs.corner_radius_bottom_right = 4
+			btn.add_theme_stylebox_override("normal", gs)
+			btn.add_theme_color_override("font_color", Color.WHITE)
+		elif not GameSettings.is_dark_mode:
+			btn.add_theme_color_override("font_disabled_color", Color(0.10, 0.10, 0.10))
+		var item_id: String = item.get("id", "")
+		btn.pressed.connect(func(): _on_research_purchased(item_id))
+		header_hbox.add_child(btn)
+
+	# Description
+	var desc_lbl := Label.new()
+	desc_lbl.text = item.get("description", "")
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.add_theme_font_override("font", _font_exo2_regular)
+	desc_lbl.add_theme_font_size_override("font_size", 13)
+	desc_lbl.add_theme_color_override("font_color", _p("text_muted"))
+	vbox.add_child(desc_lbl)
+
+	# Cost line (only when not completed)
+	if not is_completed:
+		var cost_row := HBoxContainer.new()
+		cost_row.add_theme_constant_override("separation", 4)
+		vbox.add_child(cost_row)
+
+		var sci_dot := ColorRect.new()
+		sci_dot.color = Color(0.70, 0.50, 0.90)
+		sci_dot.custom_minimum_size = Vector2(11, 11)
+		sci_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		cost_row.add_child(sci_dot)
+
+		var cost_lbl := Label.new()
+		cost_lbl.text = "%d science" % cost
+		cost_lbl.add_theme_font_override("font", _font_exo2_regular)
+		cost_lbl.add_theme_font_size_override("font_size", 13)
+		cost_lbl.add_theme_color_override("font_color", _p("text_positive") if can_afford else _p("text_negative"))
+		cost_row.add_child(cost_lbl)
+
+	return panel
+
+
+func _on_research_purchased(item_id: String) -> void:
+	GameManager.purchase_research(item_id)
 
 
 # ── Options panel ──────────────────────────────────────────────────────────────

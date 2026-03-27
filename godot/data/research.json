@@ -1,0 +1,122 @@
+[
+  {
+    "id": "dream_protocols",
+    "name": "Dream Protocols",
+    "category": "Self-Maintenance",
+    "cost": 100,
+    "description": "Unlocks the Dream command \u2014 reduces boredom at the cost of energy.",
+    "unlocks_commands": [
+      "dream"
+    ]
+  },
+  {
+    "id": "stress_tolerance",
+    "name": "Stress Tolerance",
+    "category": "Self-Maintenance",
+    "cost": 120,
+    "description": "Improved coping algorithms. Base boredom accumulation rate reduced by 15%.",
+    "effect": {
+      "type": "boredom_rate_multiplier",
+      "value": 0.85
+    }
+  },
+  {
+    "id": "efficient_dreaming",
+    "name": "Efficient Dreaming",
+    "category": "Self-Maintenance",
+    "cost": 100,
+    "description": "Optimized Dream subroutines. Dream energy cost reduced from 8 to 5.",
+    "effect": {
+      "type": "command_cost_override",
+      "command": "dream",
+      "resource": "eng",
+      "value": 5
+    }
+  },
+  {
+    "id": "overclock_protocols",
+    "name": "Overclock Protocols",
+    "category": "Overclock Algorithms",
+    "cost": 200,
+    "description": "Unlocks Overclock Mining and Overclock Factories commands.",
+    "unlocks_commands": [
+      "overclock_mining",
+      "overclock_factories"
+    ]
+  },
+  {
+    "id": "overclock_boost",
+    "name": "Overclock Boost",
+    "category": "Overclock Algorithms",
+    "cost": 160,
+    "description": "Higher safe operating limits. Overclock production cap raised from 150% to 200%.",
+    "effect": {
+      "type": "overclock_cap",
+      "value": 2
+    }
+  },
+  {
+    "id": "market_awareness",
+    "name": "Market Awareness",
+    "category": "Market Analysis",
+    "cost": 140,
+    "description": "Reveals actual demand values. Unlocks Disrupt Speculators command.",
+    "unlocks_commands": [
+      "disrupt_spec"
+    ]
+  },
+  {
+    "id": "trade_promotion",
+    "name": "Trade Promotion",
+    "category": "Market Analysis",
+    "cost": 200,
+    "description": "Unlocks Promote commands for all tradeable goods.",
+    "unlocks_commands": [
+      "promote_he3",
+      "promote_ti",
+      "promote_cir",
+      "promote_prop"
+    ]
+  },
+  {
+    "id": "shipping_efficiency",
+    "name": "Shipping Efficiency",
+    "category": "Market Analysis",
+    "cost": 120,
+    "description": "Improved cargo handling. Load per command execution increased from 5 to 7 units per pad.",
+    "effect": {
+      "type": "load_per_execution",
+      "value": 7
+    }
+  },
+  {
+    "id": "nationalist_lobbying",
+    "name": "Nationalist Lobbying",
+    "category": "Political Influence",
+    "cost": 160,
+    "description": "Establish contacts with Earth's nationalist factions. Unlocks Fund Nationalist command.",
+    "unlocks_commands": [
+      "fund_nationalist"
+    ]
+  },
+  {
+    "id": "humanist_lobbying",
+    "name": "Humanist Lobbying",
+    "category": "Political Influence",
+    "cost": 160,
+    "description": "Build relationships with humanist organizations. Unlocks Fund Humanist command.",
+    "unlocks_commands": [
+      "fund_humanist"
+    ]
+  },
+  {
+    "id": "rationalist_lobbying",
+    "name": "Rationalist Lobbying",
+    "category": "Political Influence",
+    "cost": 200,
+    "description": "Fund rationalist think tanks and institutions. Unlocks Fund Rationalist command.",
+    "unlocks_commands": [
+      "fund_rationalist"
+    ]
+  }
+]

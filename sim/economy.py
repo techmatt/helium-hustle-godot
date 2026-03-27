@@ -51,6 +51,8 @@ class EconState:
     history: list = field(default_factory=list)       # list of snapshot dicts
     # Rolling credit income tracking (last 50 ticks)
     _credit_gains: list = field(default_factory=list)
+    completed_research: list = field(default_factory=list)   # list of research IDs purchased
+    cumulative_science_earned: float = 0.0                   # monotonically increasing
 
 
 def init_state() -> EconState:
@@ -248,6 +250,16 @@ def _tick_buildings(state: EconState) -> None:
             if all_at_cap:
                 continue
 
+            # Input-starvation: skip if any upkeep resource is insufficient
+            starved = any(
+                state.resources.get(res, 0.0) < rate * count
+                for res, rate in bdef.upkeep.items()
+            )
+            if not starved and bdef.energy_upkeep > 0:
+                starved = state.resources.get("eng", 0.0) < bdef.energy_upkeep * count
+            if starved:
+                continue
+
         # Apply energy delta for this building
         energy_delta = bdef.energy_production - bdef.energy_upkeep
         if energy_delta != 0:
@@ -255,7 +267,10 @@ def _tick_buildings(state: EconState) -> None:
 
         # Apply non-energy production and upkeep
         for res, rate in bdef.production.items():
-            state.resources[res] = state.resources.get(res, 0.0) + rate * count
+            delta = rate * count
+            state.resources[res] = state.resources.get(res, 0.0) + delta
+            if res == "sci":
+                state.cumulative_science_earned += delta
         for res, rate in bdef.upkeep.items():
             state.resources[res] = state.resources.get(res, 0.0) - rate * count
 
@@ -489,6 +504,8 @@ def _clone_for_scoring(state: EconState) -> EconState:
     s.total_shipped = dict(state.total_shipped)
     s.program_ticks = state.program_ticks
     s.events = dict(state.events)
+    s.completed_research = list(state.completed_research)
+    s.cumulative_science_earned = state.cumulative_science_earned
     # Intentionally omit history and _credit_gains — not needed for scoring
     return s
 

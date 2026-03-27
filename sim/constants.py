@@ -31,6 +31,8 @@ _resources_raw = _load("resources.json")
 _cfg           = _load("game_config.json")
 _commands_raw  = _load("commands.json")
 _commands      = {c["short_name"]: c for c in _commands_raw}
+_research_raw  = _load("research.json")
+RESEARCH: dict[str, dict] = {r["id"]: r for r in _research_raw}
 
 
 # ============================================================================

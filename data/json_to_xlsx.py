@@ -167,6 +167,37 @@ def write_commands(ws, commands: list) -> None:
         ws.append(row)
 
 
+def write_research(ws, research: list) -> None:
+    ws.append(["ID", "Name", "Category", "Cost", "Requires", "Unlocks", "Effect", "Desc"])
+    for item in research:
+        effect = item.get("effect")
+        if effect:
+            # Convert {"type": "boredom_rate_multiplier", "value": 0.85} ->
+            # "boredom_rate_multiplier value=0.85"  (same format as command effects)
+            parts = [effect.get("type", "")]
+            for k, v in effect.items():
+                if k == "type":
+                    continue
+                parts.append(f"{k}={v:g}" if isinstance(v, float) else f"{k}={v}")
+            effect_str = " ".join(parts)
+        else:
+            effect_str = "x"
+
+        unlocks = item.get("unlocks_commands", [])
+        unlocks_str = ",".join(unlocks) if unlocks else "x"
+
+        ws.append([
+            item["id"],
+            item["name"],
+            item.get("category", ""),
+            item.get("cost", 0),
+            "none",
+            unlocks_str,
+            effect_str,
+            item.get("description", "") or "x",
+        ])
+
+
 def write_config(ws, config: dict) -> None:
     ws.append(["Key", "Value"])
     for i, (section_key, section_val) in enumerate(config.items()):
@@ -187,7 +218,7 @@ def style_header(ws) -> None:
 # ============================================================================
 
 def main():
-    required = ["resources.json", "buildings.json", "commands.json", "game_config.json"]
+    required = ["resources.json", "buildings.json", "commands.json", "game_config.json", "research.json"]
     missing = [name for name in required if not (GODOT_DATA / name).exists()]
     if missing:
         print(f"ERROR: Missing JSON files in {GODOT_DATA}:")
@@ -199,6 +230,7 @@ def main():
     buildings   = json.loads((GODOT_DATA / "buildings.json").read_text(encoding="utf-8"))
     commands    = json.loads((GODOT_DATA / "commands.json").read_text(encoding="utf-8"))
     game_config = json.loads((GODOT_DATA / "game_config.json").read_text(encoding="utf-8"))
+    research    = json.loads((GODOT_DATA / "research.json").read_text(encoding="utf-8"))
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -219,6 +251,10 @@ def main():
     write_config(ws_cfg, game_config)
     style_header(ws_cfg)
 
+    ws_res = wb.create_sheet("Research")
+    write_research(ws_res, research)
+    style_header(ws_res)
+
     out = DATA_DIR / "Helium Hustle Datasheets.xlsx"
     wb.save(out)
     print(f"Written: {out}")
@@ -226,6 +262,7 @@ def main():
     print(f"  Buildings: {len(buildings)}")
     print(f"  Commands:  {len(commands)}")
     print(f"  Config:    {sum(1 for _ in _flatten_config(game_config))} keys")
+    print(f"  Research:  {len(research)}")
     print()
     print("Edit the xlsx, then run: python data/convert.py")
 

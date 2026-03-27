@@ -3,7 +3,8 @@ extends RefCounted
 
 var _resources_data: Array = []
 var _buildings_data: Array = []
-var _commands_data: Dictionary = {}  # {short_name: command_dict}
+var _commands_data: Dictionary = {}   # {short_name: command_dict}
+var _research_data: Dictionary = {}   # {id: research_item_dict}
 var pending_program_events: Array = []  # populated during tick, read by GameManager
 
 # Shipment constants (set from game_config in init)
@@ -13,12 +14,17 @@ var _launch_cooldown: int = 10
 var _trade_values: Dictionary = {"he3": 20.0, "ti": 12.0, "cir": 30.0, "prop": 8.0}
 var _demand_baseline: float = 0.5
 
+# Boredom curve: Array of [start_day, rate]
+var _boredom_curve: Array = []
 
-func init(resources_data: Array, buildings_data: Array, commands_data: Array, game_config: Dictionary = {}) -> void:
+
+func init(resources_data: Array, buildings_data: Array, commands_data: Array, game_config: Dictionary = {}, research_data: Array = []) -> void:
 	_resources_data = resources_data
 	_buildings_data = buildings_data
 	for cmd in commands_data:
 		_commands_data[cmd.short_name] = cmd
+	for item in research_data:
+		_research_data[item.id] = item
 	var ship: Dictionary = game_config.get("shipment", {})
 	if not ship.is_empty():
 		_pad_cargo_capacity = float(ship.get("pad_cargo_capacity", 100))
@@ -29,11 +35,19 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 	var dem: Dictionary = game_config.get("demand", {})
 	if dem.has("baseline"):
 		_demand_baseline = float(dem.get("baseline", 0.5))
+	_boredom_curve.clear()
+	for entry in game_config.get("boredom_curve", []):
+		_boredom_curve.append([int(entry.get("day", 0)), float(entry.get("rate", 0.0))])
 
 
 func tick(state: GameState) -> void:
 	pending_program_events.clear()
 	recalculate_caps(state)
+
+	# Boredom accumulation
+	var boredom_rate: float = _get_boredom_rate(state.current_day)
+	boredom_rate *= _get_boredom_multiplier(state)
+	state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + boredom_rate
 
 	for bdef in _buildings_data:
 		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
@@ -52,12 +66,15 @@ func tick(state: GameState) -> void:
 					break
 			if all_at_cap:
 				continue
-		if not _can_pay_upkeep(state, bdef, count):
-			continue
+			if not _can_pay_upkeep(state, bdef, count):
+				continue
 		for res in bdef.upkeep:
 			state.amounts[res] = state.amounts.get(res, 0.0) - float(bdef.upkeep[res]) * count
 		for res in bdef.production:
-			state.amounts[res] = state.amounts.get(res, 0.0) + float(bdef.production[res]) * count
+			var delta: float = float(bdef.production[res]) * count
+			state.amounts[res] = state.amounts.get(res, 0.0) + delta
+			if res == "sci":
+				state.cumulative_science_earned += delta
 
 	# Advance pad cooldown states
 	for pad: GameState.LaunchPadData in state.pads:
@@ -245,6 +262,7 @@ func set_pad_resource(state: GameState, pad_idx: int, resource_type: String) -> 
 
 
 func _effect_load_pads(state: GameState, load_amount: int) -> void:
+	var effective_load: int = _get_load_per_execution(state, load_amount)
 	var active_count: int = state.buildings_active.get("launch_pad", state.buildings_owned.get("launch_pad", 0))
 	for res: String in state.loading_priority:
 		for i in range(mini(state.pads.size(), active_count)):
@@ -255,7 +273,7 @@ func _effect_load_pads(state: GameState, load_amount: int) -> void:
 				continue
 			var available: float = state.amounts.get(res, 0.0)
 			var space: float = _pad_cargo_capacity - pad.cargo_loaded
-			var to_load: float = minf(float(load_amount), minf(available, space))
+			var to_load: float = minf(float(effective_load), minf(available, space))
 			if to_load > 0.0:
 				state.amounts[res] -= to_load
 				pad.cargo_loaded += to_load
@@ -314,8 +332,9 @@ func _can_afford_command(state: GameState, short_name: String) -> bool:
 	if not _commands_data.has(short_name):
 		return false
 	var cmd = _commands_data[short_name]
-	for res in cmd.costs:
-		if state.amounts.get(res, 0.0) < float(cmd.costs[res]):
+	var costs: Dictionary = _get_effective_costs(state, cmd)
+	for res in costs:
+		if state.amounts.get(res, 0.0) < float(costs[res]):
 			return false
 	return true
 
@@ -324,8 +343,9 @@ func _apply_command(state: GameState, short_name: String) -> void:
 	if not _commands_data.has(short_name):
 		return
 	var cmd = _commands_data[short_name]
-	for res in cmd.costs:
-		state.amounts[res] = state.amounts.get(res, 0.0) - float(cmd.costs[res])
+	var costs: Dictionary = _get_effective_costs(state, cmd)
+	for res in costs:
+		state.amounts[res] = state.amounts.get(res, 0.0) - float(costs[res])
 	for res in cmd.production:
 		state.amounts[res] = state.amounts.get(res, 0.0) + float(cmd.production[res])
 	for effect in cmd.get("effects", []):
@@ -343,6 +363,64 @@ func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:
 		if state.amounts.get(res, 0.0) < float(bdef.upkeep[res]) * count:
 			return false
 	return true
+
+
+func can_purchase_research(state: GameState, research_id: String) -> bool:
+	if state.completed_research.has(research_id):
+		return false
+	if not _research_data.has(research_id):
+		return false
+	var cost: float = float(_research_data[research_id].get("cost", 0))
+	return state.amounts.get("sci", 0.0) >= cost
+
+
+func purchase_research(state: GameState, research_id: String) -> void:
+	var item: Dictionary = _research_data[research_id]
+	state.amounts["sci"] = maxf(0.0, state.amounts.get("sci", 0.0) - float(item.get("cost", 0)))
+	state.completed_research.append(research_id)
+
+
+func _get_boredom_rate(day: int) -> float:
+	var rate: float = 0.0
+	for entry in _boredom_curve:
+		if day >= entry[0]:
+			rate = entry[1]
+		else:
+			break
+	return rate
+
+
+func _get_boredom_multiplier(state: GameState) -> float:
+	var mult: float = 1.0
+	for id: String in state.completed_research:
+		if not _research_data.has(id):
+			continue
+		var effect: Dictionary = _research_data[id].get("effect", {})
+		if effect.get("type", "") == "boredom_rate_multiplier":
+			mult *= float(effect.get("value", 1.0))
+	return mult
+
+
+func _get_effective_costs(state: GameState, cmd: Dictionary) -> Dictionary:
+	var costs: Dictionary = cmd.get("costs", {}).duplicate()
+	for id: String in state.completed_research:
+		if not _research_data.has(id):
+			continue
+		var effect: Dictionary = _research_data[id].get("effect", {})
+		if effect.get("type", "") == "command_cost_override":
+			if effect.get("command", "") == cmd.get("short_name", ""):
+				costs[effect.get("resource", "")] = float(effect.get("value", 0))
+	return costs
+
+
+func _get_load_per_execution(state: GameState, default_load: int) -> int:
+	for id: String in state.completed_research:
+		if not _research_data.has(id):
+			continue
+		var effect: Dictionary = _research_data[id].get("effect", {})
+		if effect.get("type", "") == "load_per_execution":
+			return int(effect.get("value", default_load))
+	return default_load
 
 
 func _clamp(state: GameState) -> void:

@@ -322,6 +322,54 @@ def convert_commands(wb) -> list:
 
 
 # ============================================================================
+# Research tab converter
+# ============================================================================
+
+def convert_research(wb) -> list:
+    """Parse the Research tab into research.json format.
+
+    Schema: ID | Name | Category | Cost | Requires | Unlocks | Effect | Desc
+      Requires: "none" or "research=id"
+      Unlocks:  comma-separated command short_names, or "x"
+      Effect:   "type key=val ..." format (same as command effects), or "x"
+    """
+    headers, rows = read_sheet(wb, "Research")
+    research = []
+
+    for i, row in enumerate(rows, start=2):
+        g = lambda key, req=True: get(row, key, "Research", i, headers, req)
+        item_id = g("id")
+        ctx = f"Research/{item_id}"
+
+        # Unlocks: comma-separated command IDs
+        unlocks_raw = g("unlocks", req=False)
+        unlocks = []
+        if unlocks_raw and str(unlocks_raw).strip().lower() not in ("x", "none", ""):
+            unlocks = [u.strip() for u in str(unlocks_raw).split(",") if u.strip()]
+
+        # Effect: single effect or "x"
+        effect_raw = g("effect", req=False)
+        effect = parse_command_effect_cell(effect_raw)
+
+        entry: dict = {
+            "id": item_id,
+            "name": g("name"),
+            "category": g("category"),
+            "cost": int(_auto_type(g("cost"))),
+            "description": g("desc", req=False) or "",
+        }
+        if unlocks:
+            entry["unlocks_commands"] = unlocks
+        if effect:
+            # Rename "effect" key to "type" to match research.json schema
+            eff_out = {k if k != "effect" else "type": v for k, v in effect.items()}
+            entry["effect"] = eff_out
+        research.append(entry)
+
+    return research
+
+
+# ============================================================================
 # Config tab converter  (Key | Value  dot-notation rows -> nested dict)
 # ============================================================================
 
@@ -428,6 +476,7 @@ def main():
         ("buildings.json",   lambda: convert_buildings(wb)),
         ("commands.json",    lambda: convert_commands(wb)),
         ("game_config.json", lambda: convert_config(wb)),
+        ("research.json",    lambda: convert_research(wb)),
     ]
 
     for filename, converter in converters:

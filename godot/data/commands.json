@@ -42,7 +42,7 @@
       "reg": 1.0
     },
     "effects": [],
-    "description": "Purchase regolith from Earth. Tactical gap-bridging only — building production is far cheaper."
+    "description": "Purchase regolith from Earth. Tactical gap-bridging only \u2014 building production is far cheaper."
   },
   {
     "name": "Buy Ice",
@@ -58,7 +58,7 @@
       "ice": 1.0
     },
     "effects": [],
-    "description": "Purchase ice. Tactical gap-bridging only — extraction is far cheaper at scale."
+    "description": "Purchase ice. Tactical gap-bridging only \u2014 extraction is far cheaper at scale."
   },
   {
     "name": "Buy Titanium",
@@ -74,7 +74,7 @@
       "ti": 0.5
     },
     "effects": [],
-    "description": "Purchase titanium from Earth. Rare and expensive — bridge 2-3 units max, then build a Smelter."
+    "description": "Purchase titanium from Earth. Rare and expensive \u2014 bridge 2-3 units max, then build a Smelter."
   },
   {
     "name": "Buy Propellant",
@@ -90,7 +90,7 @@
       "prop": 1.0
     },
     "effects": [],
-    "description": "Purchase propellant. Tactical gap-bridging only — Electrolysis chain is far cheaper at scale."
+    "description": "Purchase propellant. Tactical gap-bridging only \u2014 Electrolysis chain is far cheaper at scale."
   },
   {
     "name": "Load Launch Pads",
@@ -132,7 +132,7 @@
     "short_name": "dream",
     "requires": {
       "type": "research",
-      "value": "self_maintenance"
+      "value": "dream_protocols"
     },
     "costs": {
       "eng": 8.0
@@ -151,7 +151,7 @@
     "short_name": "overclock_mining",
     "requires": {
       "type": "research",
-      "value": "overclock_algorithms"
+      "value": "overclock_protocols"
     },
     "costs": {
       "eng": 6.0,
@@ -173,7 +173,7 @@
     "short_name": "overclock_factories",
     "requires": {
       "type": "research",
-      "value": "overclock_algorithms"
+      "value": "overclock_protocols"
     },
     "costs": {
       "eng": 6.0,
@@ -195,7 +195,7 @@
     "short_name": "promote_he3",
     "requires": {
       "type": "research",
-      "value": "market_analysis"
+      "value": "trade_promotion"
     },
     "costs": {
       "eng": 2.0,
@@ -216,7 +216,7 @@
     "short_name": "promote_ti",
     "requires": {
       "type": "research",
-      "value": "market_analysis"
+      "value": "trade_promotion"
     },
     "costs": {
       "eng": 2.0,
@@ -237,7 +237,7 @@
     "short_name": "promote_cir",
     "requires": {
       "type": "research",
-      "value": "market_analysis"
+      "value": "trade_promotion"
     },
     "costs": {
       "eng": 2.0,
@@ -258,7 +258,7 @@
     "short_name": "promote_prop",
     "requires": {
       "type": "research",
-      "value": "market_analysis"
+      "value": "trade_promotion"
     },
     "costs": {
       "eng": 2.0,
@@ -279,7 +279,7 @@
     "short_name": "disrupt_spec",
     "requires": {
       "type": "research",
-      "value": "market_analysis"
+      "value": "market_awareness"
     },
     "costs": {
       "eng": 3.0
@@ -299,7 +299,7 @@
     "short_name": "fund_nationalist",
     "requires": {
       "type": "research",
-      "value": "political_influence"
+      "value": "nationalist_lobbying"
     },
     "costs": {
       "eng": 2.0,
@@ -320,7 +320,7 @@
     "short_name": "fund_humanist",
     "requires": {
       "type": "research",
-      "value": "political_influence"
+      "value": "humanist_lobbying"
     },
     "costs": {
       "eng": 2.0,
@@ -341,7 +341,7 @@
     "short_name": "fund_rationalist",
     "requires": {
       "type": "research",
-      "value": "political_influence"
+      "value": "rationalist_lobbying"
     },
     "costs": {
       "eng": 2.0,

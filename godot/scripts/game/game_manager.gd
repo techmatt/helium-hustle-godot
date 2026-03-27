@@ -25,6 +25,7 @@ var _timer: Timer
 var _game_config: Dictionary
 var _buildings_data: Array = []
 var _commands_data: Array = []
+var _research_data: Array = []
 
 
 func _ready() -> void:
@@ -32,9 +33,10 @@ func _ready() -> void:
 	_buildings_data = _load_json("res://data/buildings.json")
 	_game_config = _load_json("res://data/game_config.json")
 	_commands_data = _load_json("res://data/commands.json")
+	_research_data = _load_json("res://data/research.json")
 
 	sim = GameSimulation.new()
-	sim.init(resources_data, _buildings_data, _commands_data, _game_config)
+	sim.init(resources_data, _buildings_data, _commands_data, _game_config, _research_data)
 
 	state = GameState.new()
 	_initialize_state()
@@ -122,6 +124,16 @@ func get_buildings_data() -> Array:
 
 func get_commands_data() -> Array:
 	return _commands_data
+
+
+func get_research_data() -> Array:
+	return _research_data
+
+
+func purchase_research(research_id: String) -> void:
+	if sim.can_purchase_research(state, research_id):
+		sim.purchase_research(state, research_id)
+		tick_completed.emit()
 
 
 func _on_tick() -> void:

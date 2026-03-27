@@ -93,8 +93,29 @@ func _build_ui() -> void:
 
 	_resource_opt = OptionButton.new()
 	_resource_opt.custom_minimum_size = Vector2(145, 0)
-	_resource_opt.add_theme_font_override("font", _font_e2r)
+	_resource_opt.add_theme_font_override("font", _font_e2s)
 	_resource_opt.add_theme_font_size_override("font_size", 13)
+	if not GameSettings.is_dark_mode:
+		var opt_style := StyleBoxFlat.new()
+		opt_style.bg_color = Color.WHITE
+		opt_style.border_width_left   = 1
+		opt_style.border_width_right  = 1
+		opt_style.border_width_top    = 1
+		opt_style.border_width_bottom = 1
+		opt_style.border_color = Color(0.78, 0.78, 0.78)
+		opt_style.corner_radius_top_left     = 4
+		opt_style.corner_radius_top_right    = 4
+		opt_style.corner_radius_bottom_left  = 4
+		opt_style.corner_radius_bottom_right = 4
+		_resource_opt.add_theme_stylebox_override("normal", opt_style)
+		_resource_opt.add_theme_stylebox_override("hover", opt_style)
+		_resource_opt.add_theme_stylebox_override("pressed", opt_style)
+		_resource_opt.add_theme_stylebox_override("focus", opt_style)
+		var black := Color(0.10, 0.10, 0.10)
+		_resource_opt.add_theme_color_override("font_color", black)
+		_resource_opt.add_theme_color_override("font_hover_color", black)
+		_resource_opt.add_theme_color_override("font_pressed_color", black)
+		_resource_opt.add_theme_color_override("font_focus_color", black)
 	for res: String in TRADEABLE:
 		_resource_opt.add_item(RESOURCE_DISPLAY[res])
 	_resource_opt.item_selected.connect(_on_resource_selected)
@@ -234,13 +255,18 @@ func _set_launch_btn(enabled: bool, _hint: String) -> void:
 		s.corner_radius_top_right    = 4
 		s.corner_radius_bottom_left  = 4
 		s.corner_radius_bottom_right = 4
+		var black := Color(0.10, 0.10, 0.10)
 		if enabled:
 			s.bg_color = Color(0.298, 0.686, 0.314)
 			_launch_btn.add_theme_stylebox_override("normal", s)
+			_launch_btn.remove_theme_stylebox_override("disabled")
 			_launch_btn.add_theme_color_override("font_color", Color.WHITE)
+			_launch_btn.remove_theme_color_override("font_disabled_color")
 		else:
 			s.bg_color = Color(0.85, 0.85, 0.85)
-			_launch_btn.add_theme_stylebox_override("normal", s)
+			_launch_btn.add_theme_stylebox_override("disabled", s)
+			_launch_btn.remove_theme_stylebox_override("normal")
+			_launch_btn.add_theme_color_override("font_disabled_color", black)
 			_launch_btn.remove_theme_color_override("font_color")
 
 
