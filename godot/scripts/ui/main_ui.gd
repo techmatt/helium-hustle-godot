@@ -122,7 +122,7 @@ const PALETTE: Dictionary = {
 @onready var _buildings_scroll: ScrollContainer = $MainVBox/ContentHBox/CenterPanel/CenterMargin/CenterVBox/BuildingsScroll
 @onready var _center_panel: PanelContainer = $MainVBox/ContentHBox/CenterPanel
 @onready var _right_vbox: VBoxContainer = $MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox
-@onready var _status_label: Label = $MainVBox/StatusBar/StatusMargin/LblStatus
+@onready var _status_bar_margin: MarginContainer = $MainVBox/StatusBar/StatusMargin
 
 var _nav_buttons: Dictionary = {}    # label → Button
 var _active_mode: String = "Buildings"
@@ -139,6 +139,21 @@ var _launch_history_vbox: VBoxContainer = null
 var _font_rajdhani_bold: FontFile
 var _font_exo2_regular: FontFile
 var _font_exo2_semibold: FontFile
+
+# ── Status bar nodes (built in code, replacing scene label) ───────────────────
+var _uptime_label: Label = null
+var _boredom_bar: ProgressBar = null
+var _boredom_bar_lbl: Label = null
+var _boredom_fill: StyleBoxFlat = null
+var _boredom_rate_lbl: Label = null
+var _energy_bar: ProgressBar = null
+var _energy_bar_lbl: Label = null
+var _energy_fill: StyleBoxFlat = null
+var _energy_rate_lbl: Label = null
+# 50-tick boredom rolling average
+const BOREDOM_HISTORY_SIZE: int = 50
+var _boredom_history: Array = []
+var _prev_boredom: float = 0.0
 
 # ── Program panel state ─────────────────────────────────────────────────────────
 var _selected_program: int = 0
@@ -167,6 +182,7 @@ func _ready() -> void:
 	GameManager.tick_completed.connect(_on_tick)
 	GameSettings.theme_changed.connect(_on_theme_changed)
 	_build_buildings_panel()
+	_setup_status_bar()
 	_update_resource_display()
 
 
@@ -212,6 +228,192 @@ func _setup_panel_headers() -> void:
 	_center_header.add_theme_font_size_override("font_size", 22)
 
 
+# ── Status bar ─────────────────────────────────────────────────────────────────
+
+func _make_status_bar_bar(init_color: Color) -> Array:
+	var wrapper := Control.new()
+	wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrapper.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	wrapper.custom_minimum_size = Vector2(0, 20)
+
+	var bar := ProgressBar.new()
+	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar.min_value = 0.0
+	bar.max_value = 100.0
+	bar.value = 0.0
+	bar.show_percentage = false
+
+	var fill_style := StyleBoxFlat.new()
+	fill_style.bg_color = init_color
+	fill_style.corner_radius_top_left     = 3
+	fill_style.corner_radius_top_right    = 3
+	fill_style.corner_radius_bottom_left  = 3
+	fill_style.corner_radius_bottom_right = 3
+	bar.add_theme_stylebox_override("fill", fill_style)
+
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
+	bg_style.corner_radius_top_left     = 3
+	bg_style.corner_radius_top_right    = 3
+	bg_style.corner_radius_bottom_left  = 3
+	bg_style.corner_radius_bottom_right = 3
+	bar.add_theme_stylebox_override("background", bg_style)
+
+	var lbl := Label.new()
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_override("font", _font_exo2_semibold)
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	lbl.add_theme_constant_override("shadow_offset_x", 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 1)
+	lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.7))
+
+	wrapper.add_child(bar)
+	wrapper.add_child(lbl)
+	return [bar, lbl, fill_style, wrapper]
+
+
+func _setup_status_bar() -> void:
+	var status_bar: PanelContainer = $MainVBox/StatusBar
+	status_bar.custom_minimum_size.y = 36
+
+	for child in _status_bar_margin.get_children():
+		child.queue_free()
+
+	var hbox := HBoxContainer.new()
+	hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_theme_constant_override("separation", 12)
+	_status_bar_margin.add_child(hbox)
+
+	# Day counter — fixed width, left-aligned
+	_uptime_label = Label.new()
+	_uptime_label.text = "Day 0"
+	_uptime_label.add_theme_font_override("font", _font_exo2_semibold)
+	_uptime_label.add_theme_font_size_override("font_size", 13)
+	_uptime_label.custom_minimum_size.x = 60
+	hbox.add_child(_uptime_label)
+
+	hbox.add_child(VSeparator.new())
+
+	# Boredom section
+	var boredom_hbox := HBoxContainer.new()
+	boredom_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boredom_hbox.add_theme_constant_override("separation", 6)
+	hbox.add_child(boredom_hbox)
+
+	var bd_lbl := Label.new()
+	bd_lbl.text = "Boredom"
+	bd_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	bd_lbl.add_theme_font_size_override("font_size", 13)
+	boredom_hbox.add_child(bd_lbl)
+
+	var bd := _make_status_bar_bar(Color(0.180, 0.490, 0.196))  # #2E7D32
+	_boredom_bar    = bd[0]
+	_boredom_bar_lbl = bd[1]
+	_boredom_fill   = bd[2]
+	boredom_hbox.add_child(bd[3])
+
+	_boredom_rate_lbl = Label.new()
+	_boredom_rate_lbl.text = "+0.00/tick"
+	_boredom_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_boredom_rate_lbl.add_theme_font_size_override("font_size", 12)
+	_boredom_rate_lbl.custom_minimum_size.x = 90
+	boredom_hbox.add_child(_boredom_rate_lbl)
+
+	hbox.add_child(VSeparator.new())
+
+	# Energy section
+	var energy_hbox := HBoxContainer.new()
+	energy_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	energy_hbox.add_theme_constant_override("separation", 6)
+	hbox.add_child(energy_hbox)
+
+	var en_lbl := Label.new()
+	en_lbl.text = "Energy"
+	en_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	en_lbl.add_theme_font_size_override("font_size", 13)
+	energy_hbox.add_child(en_lbl)
+
+	var en := _make_status_bar_bar(Color(0.082, 0.396, 0.753))  # #1565C0
+	_energy_bar     = en[0]
+	_energy_bar_lbl = en[1]
+	_energy_fill    = en[2]
+	energy_hbox.add_child(en[3])
+
+	_energy_rate_lbl = Label.new()
+	_energy_rate_lbl.text = "+0/tick"
+	_energy_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_energy_rate_lbl.add_theme_font_size_override("font_size", 12)
+	_energy_rate_lbl.custom_minimum_size.x = 72
+	energy_hbox.add_child(_energy_rate_lbl)
+
+
+func _update_status_bar() -> void:
+	if _uptime_label == null:
+		return
+
+	var st: GameState = GameManager.state
+
+	# Day counter
+	_uptime_label.text = "Day %d" % st.current_day
+
+	# Boredom rolling average (50-tick circular buffer)
+	var current_boredom: float = st.amounts.get("boredom", 0.0)
+	var delta_boredom: float = current_boredom - _prev_boredom
+	_prev_boredom = current_boredom
+	_boredom_history.push_back(delta_boredom)
+	if _boredom_history.size() > BOREDOM_HISTORY_SIZE:
+		_boredom_history.pop_front()
+
+	var boredom_rate: float = 0.0
+	if not _boredom_history.is_empty():
+		var total: float = 0.0
+		for d: float in _boredom_history:
+			total += d
+		boredom_rate = total / _boredom_history.size()
+
+	const BOREDOM_MAX: float = 100.0
+	_boredom_bar.max_value = BOREDOM_MAX
+	_boredom_bar.value = current_boredom
+	_boredom_bar_lbl.text = "%.1f / %.0f" % [current_boredom, BOREDOM_MAX]
+
+	# Color ramp on boredom bar fill
+	var boredom_pct: float = current_boredom / BOREDOM_MAX * 100.0
+	if boredom_pct < 25.0:
+		_boredom_fill.bg_color = Color(0.180, 0.490, 0.196)   # #2E7D32
+	elif boredom_pct < 50.0:
+		_boredom_fill.bg_color = Color(0.976, 0.659, 0.145)   # #F9A825
+	elif boredom_pct < 75.0:
+		_boredom_fill.bg_color = Color(0.902, 0.318, 0.0)     # #E65100
+	else:
+		_boredom_fill.bg_color = Color(0.718, 0.110, 0.110)   # #B71C1C
+
+	if boredom_rate <= 0.0:
+		_boredom_rate_lbl.text = "%.2f/tick" % boredom_rate
+		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+	else:
+		_boredom_rate_lbl.text = "+%.2f/tick" % boredom_rate
+		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
+
+	# Energy bar
+	var energy_amount: float = st.amounts.get("eng", 0.0)
+	var energy_cap: float = st.caps.get("eng", 100.0)
+	_energy_bar.max_value = energy_cap
+	_energy_bar.value = energy_amount
+	_energy_bar_lbl.text = "%d / %d" % [int(energy_amount), int(energy_cap)]
+
+	var rates: Dictionary = _compute_theoretical_rates()
+	var energy_rate: int = int(rates.get("eng", 0.0))
+	if energy_rate >= 0:
+		_energy_rate_lbl.text = "+%d/tick" % energy_rate
+		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+	else:
+		_energy_rate_lbl.text = "%d/tick" % energy_rate
+		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
+
+
 # ── Tick handler ───────────────────────────────────────────────────────────────
 
 func _on_tick() -> void:
@@ -219,7 +421,7 @@ func _on_tick() -> void:
 	_update_building_cards()
 	if _active_mode == "Launch Pads":
 		_refresh_launch_pads_panel()
-	_status_label.text = "System uptime: %d days" % GameManager.state.current_day
+	_update_status_bar()
 	_update_processor_row()
 
 
@@ -324,6 +526,16 @@ func _on_theme_changed() -> void:
 	_card_nodes.clear()
 	_launch_pad_cards.clear()
 	_launch_history_vbox = null
+	_boredom_bar = null
+	_boredom_bar_lbl = null
+	_boredom_fill = null
+	_boredom_rate_lbl = null
+	_energy_bar = null
+	_energy_bar_lbl = null
+	_energy_fill = null
+	_energy_rate_lbl = null
+	_uptime_label = null
+	_setup_status_bar()
 	match _active_mode:
 		"Buildings":   _build_buildings_panel()
 		"Commands":    _build_commands_panel()
