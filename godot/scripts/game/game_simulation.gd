@@ -6,12 +6,29 @@ var _buildings_data: Array = []
 var _commands_data: Dictionary = {}  # {short_name: command_dict}
 var pending_program_events: Array = []  # populated during tick, read by GameManager
 
+# Shipment constants (set from game_config in init)
+var _pad_cargo_capacity: float = 100.0
+var _launch_fuel_cost: float = 20.0
+var _launch_cooldown: int = 10
+var _trade_values: Dictionary = {"he3": 20.0, "ti": 12.0, "cir": 30.0, "prop": 8.0}
+var _demand_baseline: float = 0.5
 
-func init(resources_data: Array, buildings_data: Array, commands_data: Array) -> void:
+
+func init(resources_data: Array, buildings_data: Array, commands_data: Array, game_config: Dictionary = {}) -> void:
 	_resources_data = resources_data
 	_buildings_data = buildings_data
 	for cmd in commands_data:
 		_commands_data[cmd.short_name] = cmd
+	var ship: Dictionary = game_config.get("shipment", {})
+	if not ship.is_empty():
+		_pad_cargo_capacity = float(ship.get("pad_cargo_capacity", 100))
+		_launch_fuel_cost = float(ship.get("fuel_per_pad", 20))
+		_trade_values = {}
+		for k: String in ship.get("base_values", {}):
+			_trade_values[k] = float(ship.base_values[k])
+	var dem: Dictionary = game_config.get("demand", {})
+	if dem.has("baseline"):
+		_demand_baseline = float(dem.get("baseline", 0.5))
 
 
 func tick(state: GameState) -> void:
@@ -19,15 +36,40 @@ func tick(state: GameState) -> void:
 	recalculate_caps(state)
 
 	for bdef in _buildings_data:
-		var count: int = state.buildings_owned.get(bdef.short_name, 0)
+		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
+		if owned == 0:
+			continue
+		var count: int = state.buildings_active.get(bdef.short_name, owned)
 		if count == 0:
 			continue
+		var prod: Dictionary = bdef.get("production", {})
+		if not prod.is_empty():
+			var all_at_cap: bool = true
+			for res in prod:
+				var cap: float = state.caps.get(res, INF)
+				if cap == INF or state.amounts.get(res, 0.0) < cap:
+					all_at_cap = false
+					break
+			if all_at_cap:
+				continue
 		if not _can_pay_upkeep(state, bdef, count):
 			continue
 		for res in bdef.upkeep:
 			state.amounts[res] = state.amounts.get(res, 0.0) - float(bdef.upkeep[res]) * count
 		for res in bdef.production:
 			state.amounts[res] = state.amounts.get(res, 0.0) + float(bdef.production[res]) * count
+
+	# Advance pad cooldown states
+	for pad: GameState.LaunchPadData in state.pads:
+		if pad.status == GameState.PAD_LAUNCHING:
+			pad.status = GameState.PAD_COOLDOWN
+			pad.cargo_loaded = 0.0
+			pad.cooldown_ticks = _launch_cooldown
+		elif pad.status == GameState.PAD_COOLDOWN:
+			pad.cooldown_ticks -= 1
+			if pad.cooldown_ticks <= 0:
+				pad.status = GameState.PAD_EMPTY
+				pad.cooldown_ticks = 0
 
 	execute_programs(state)
 
@@ -79,7 +121,10 @@ func recalculate_caps(state: GameState) -> void:
 			state.caps[sn] = float(rdef.storage_base)
 
 	for bdef in _buildings_data:
-		var count: int = state.buildings_owned.get(bdef.short_name, 0)
+		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
+		if owned == 0:
+			continue
+		var count: int = state.buildings_active.get(bdef.short_name, owned)
 		if count == 0:
 			continue
 		for effect in bdef.effects:
@@ -104,12 +149,19 @@ func buy_building(state: GameState, short_name: String) -> void:
 	var bdef = _get_bdef(short_name)
 	if bdef == null:
 		return
-	var scale: float = pow(float(bdef.cost_scaling), state.buildings_owned.get(short_name, 0))
+	var old_owned: int = state.buildings_owned.get(short_name, 0)
+	var scale: float = pow(float(bdef.cost_scaling), old_owned)
 	for res in bdef.costs:
 		state.amounts[res] -= float(bdef.costs[res]) * scale
 	state.amounts["land"] -= float(bdef.land)
-	state.buildings_owned[short_name] = state.buildings_owned.get(short_name, 0) + 1
+	state.buildings_owned[short_name] = old_owned + 1
+	# New building comes online immediately
+	state.buildings_active[short_name] = state.buildings_active.get(short_name, old_owned) + 1
 	recalculate_caps(state)
+	if short_name == "launch_pad":
+		var pad := GameState.LaunchPadData.new()
+		pad.resource_type = state.loading_priority[0] if not state.loading_priority.is_empty() else "he3"
+		state.pads.append(pad)
 
 
 func get_scaled_costs(state: GameState, short_name: String) -> Dictionary:
@@ -121,6 +173,141 @@ func get_scaled_costs(state: GameState, short_name: String) -> Dictionary:
 	for res in bdef.costs:
 		result[res] = float(bdef.costs[res]) * scale
 	return result
+
+
+func sell_building(state: GameState, short_name: String, sell_count: int = 1) -> void:
+	var owned: int = state.buildings_owned.get(short_name, 0)
+	if owned <= 0:
+		return
+	var actual: int = mini(sell_count, owned)
+	var bdef = _get_bdef(short_name)
+	if bdef:
+		state.amounts["land"] = state.amounts.get("land", 0.0) + float(bdef.land) * actual
+	state.buildings_owned[short_name] = owned - actual
+	state.buildings_active[short_name] = mini(
+		state.buildings_active.get(short_name, owned),
+		state.buildings_owned[short_name]
+	)
+	recalculate_caps(state)
+	_clamp(state)
+	_clamp_processor_assignments(state)
+	if short_name == "launch_pad":
+		var new_owned: int = state.buildings_owned.get(short_name, 0)
+		while state.pads.size() > new_owned:
+			var removed: GameState.LaunchPadData = state.pads.pop_back()
+			if removed.cargo_loaded > 0.0 and removed.status != GameState.PAD_COOLDOWN and removed.status != GameState.PAD_LAUNCHING:
+				state.amounts[removed.resource_type] = state.amounts.get(removed.resource_type, 0.0) + removed.cargo_loaded
+
+
+func set_building_active(state: GameState, short_name: String, delta: int) -> void:
+	var owned: int = state.buildings_owned.get(short_name, 0)
+	var active: int = state.buildings_active.get(short_name, owned)
+	state.buildings_active[short_name] = clampi(active + delta, 0, owned)
+	recalculate_caps(state)
+	_clamp(state)
+	_clamp_processor_assignments(state)
+
+
+func launch_pad_manual(state: GameState, pad_idx: int) -> bool:
+	if pad_idx < 0 or pad_idx >= state.pads.size():
+		return false
+	var pad: GameState.LaunchPadData = state.pads[pad_idx]
+	if pad.status != GameState.PAD_FULL:
+		return false
+	if state.amounts.get("prop", 0.0) < _launch_fuel_cost:
+		return false
+	state.amounts["prop"] -= _launch_fuel_cost
+	var payout: float = _trade_values.get(pad.resource_type, 1.0) * _demand_baseline * pad.cargo_loaded
+	state.amounts["cred"] = state.amounts.get("cred", 0.0) + payout
+	_record_launch(state, pad, payout)
+	pad.status = GameState.PAD_LAUNCHING
+	return true
+
+
+func can_launch_pad(state: GameState, pad_idx: int) -> bool:
+	if pad_idx < 0 or pad_idx >= state.pads.size():
+		return false
+	var pad: GameState.LaunchPadData = state.pads[pad_idx]
+	return pad.status == GameState.PAD_FULL and state.amounts.get("prop", 0.0) >= _launch_fuel_cost
+
+
+func set_pad_resource(state: GameState, pad_idx: int, resource_type: String) -> void:
+	if pad_idx < 0 or pad_idx >= state.pads.size():
+		return
+	var pad: GameState.LaunchPadData = state.pads[pad_idx]
+	if pad.resource_type == resource_type:
+		return
+	if pad.cargo_loaded > 0.0 and (pad.status == GameState.PAD_LOADING or pad.status == GameState.PAD_FULL):
+		state.amounts[pad.resource_type] = state.amounts.get(pad.resource_type, 0.0) + pad.cargo_loaded
+		pad.cargo_loaded = 0.0
+		pad.status = GameState.PAD_EMPTY
+	pad.resource_type = resource_type
+
+
+func _effect_load_pads(state: GameState, load_amount: int) -> void:
+	var active_count: int = state.buildings_active.get("launch_pad", state.buildings_owned.get("launch_pad", 0))
+	for res: String in state.loading_priority:
+		for i in range(mini(state.pads.size(), active_count)):
+			var pad: GameState.LaunchPadData = state.pads[i]
+			if pad.resource_type != res:
+				continue
+			if pad.status == GameState.PAD_FULL or pad.status == GameState.PAD_COOLDOWN or pad.status == GameState.PAD_LAUNCHING:
+				continue
+			var available: float = state.amounts.get(res, 0.0)
+			var space: float = _pad_cargo_capacity - pad.cargo_loaded
+			var to_load: float = minf(float(load_amount), minf(available, space))
+			if to_load > 0.0:
+				state.amounts[res] -= to_load
+				pad.cargo_loaded += to_load
+				if pad.cargo_loaded >= _pad_cargo_capacity:
+					pad.cargo_loaded = _pad_cargo_capacity
+					pad.status = GameState.PAD_FULL
+				else:
+					pad.status = GameState.PAD_LOADING
+			return  # one execution = one pad
+
+
+func _effect_launch_pads(state: GameState) -> void:
+	var active_count: int = state.buildings_active.get("launch_pad", state.buildings_owned.get("launch_pad", 0))
+	for i in range(mini(state.pads.size(), active_count)):
+		var pad: GameState.LaunchPadData = state.pads[i]
+		if pad.status != GameState.PAD_FULL:
+			continue
+		if state.amounts.get("prop", 0.0) < _launch_fuel_cost:
+			continue
+		state.amounts["prop"] -= _launch_fuel_cost
+		var payout: float = _trade_values.get(pad.resource_type, 1.0) * _demand_baseline * pad.cargo_loaded
+		state.amounts["cred"] = state.amounts.get("cred", 0.0) + payout
+		_record_launch(state, pad, payout)
+		pad.status = GameState.PAD_LAUNCHING
+
+
+func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: float) -> void:
+	var record := GameState.LaunchRecord.new()
+	record.resource_type = pad.resource_type
+	record.quantity = pad.cargo_loaded
+	record.credits_earned = payout
+	record.tick = state.current_day
+	state.launch_history.push_front(record)
+	if state.launch_history.size() > 5:
+		state.launch_history.pop_back()
+
+
+func _clamp_processor_assignments(state: GameState) -> void:
+	var total: int = state.total_processors
+	var assigned: int = 0
+	for p: GameState.ProgramData in state.programs:
+		assigned += p.processors_assigned
+	if assigned <= total:
+		return
+	var excess: int = assigned - total
+	for i in range(state.programs.size() - 1, -1, -1):
+		if excess <= 0:
+			break
+		var prog: GameState.ProgramData = state.programs[i]
+		var remove: int = mini(prog.processors_assigned, excess)
+		prog.processors_assigned -= remove
+		excess -= remove
 
 
 func _can_afford_command(state: GameState, short_name: String) -> bool:
@@ -141,7 +328,14 @@ func _apply_command(state: GameState, short_name: String) -> void:
 		state.amounts[res] = state.amounts.get(res, 0.0) - float(cmd.costs[res])
 	for res in cmd.production:
 		state.amounts[res] = state.amounts.get(res, 0.0) + float(cmd.production[res])
-	# Note: effects (boredom_add, load_pads, etc.) handled in later stages
+	for effect in cmd.get("effects", []):
+		match effect.get("effect", ""):
+			"load_pads":
+				_effect_load_pads(state, int(effect.get("value", 5)))
+			"launch_full_pads":
+				_effect_launch_pads(state)
+			"boredom_add":
+				state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + float(effect.get("value", 0.0))
 
 
 func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:

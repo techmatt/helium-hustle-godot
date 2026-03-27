@@ -201,7 +201,8 @@ PURCHASABLE_COMMANDS: dict[str, dict] = {
 # Fractions per processor per tick (averaged over 5-command cycle):
 # ============================================================================
 
-LAUNCH_CHECK_INTERVAL: int = 20   # ticks between automatic launch checks (sim detail)
+LAUNCH_CHECK_INTERVAL: int  = 20   # ticks between automatic launch checks (sim detail)
+LAUNCH_COOLDOWN_TICKS: int  = 10   # ticks a pad is offline after launching
 
 _f_scc  = 2 / 5
 _f_load = 2 / 5

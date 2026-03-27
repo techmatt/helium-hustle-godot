@@ -1,6 +1,7 @@
 extends Node
 
 const DEBUG_PROGRAM_TEST: bool = false
+const DEBUG_UI: bool = true
 
 const SPEED_MAP: Dictionary = {
 	"||":   0.0,
@@ -33,13 +34,15 @@ func _ready() -> void:
 	_commands_data = _load_json("res://data/commands.json")
 
 	sim = GameSimulation.new()
-	sim.init(resources_data, _buildings_data, _commands_data)
+	sim.init(resources_data, _buildings_data, _commands_data, _game_config)
 
 	state = GameState.new()
 	_initialize_state()
 
 	if DEBUG_PROGRAM_TEST:
 		_debug_setup_test_program()
+	if DEBUG_UI:
+		_debug_setup_ui_state()
 
 	_timer = Timer.new()
 	_timer.one_shot = false
@@ -80,6 +83,39 @@ func get_scaled_costs(short_name: String) -> Dictionary:
 	return sim.get_scaled_costs(state, short_name)
 
 
+func sell_building(short_name: String, sell_count: int = 1) -> void:
+	sim.sell_building(state, short_name, sell_count)
+	tick_completed.emit()
+
+
+func set_building_active(short_name: String, delta: int) -> void:
+	sim.set_building_active(state, short_name, delta)
+	tick_completed.emit()
+
+
+func get_building_active(short_name: String) -> int:
+	return state.buildings_active.get(short_name, state.buildings_owned.get(short_name, 0))
+
+
+func launch_pad_manual(pad_idx: int) -> void:
+	if sim.launch_pad_manual(state, pad_idx):
+		tick_completed.emit()
+
+
+func can_launch_pad(pad_idx: int) -> bool:
+	return sim.can_launch_pad(state, pad_idx)
+
+
+func set_pad_resource(pad_idx: int, resource_type: String) -> void:
+	sim.set_pad_resource(state, pad_idx, resource_type)
+	tick_completed.emit()
+
+
+func set_loading_priority(priority: Array) -> void:
+	state.loading_priority = priority.duplicate()
+	tick_completed.emit()
+
+
 func get_buildings_data() -> Array:
 	return _buildings_data
 
@@ -114,6 +150,65 @@ func _debug_setup_test_program() -> void:
 	e3.repeat_count = 3
 	state.programs[0].commands = [e1, e2, e3]
 	state.programs[0].processors_assigned = 1
+
+
+func debug_boost() -> void:
+	# Ensure at least debug minimums, then max all resources to current caps.
+	var minimums: Dictionary = {
+		"panel":         20,
+		"storage_depot": 5,
+		"launch_pad":    3,
+		"data_center":   1,
+	}
+	for sn: String in minimums:
+		var need: int = minimums[sn]
+		var have: int = state.buildings_owned.get(sn, 0)
+		if have < need:
+			state.buildings_owned[sn] = need
+			state.buildings_active[sn] = need
+	# Sync pads array to owned launch pad count
+	var owned_pads: int = state.buildings_owned.get("launch_pad", 0)
+	while state.pads.size() < owned_pads:
+		var pad := GameState.LaunchPadData.new()
+		pad.resource_type = state.loading_priority[0] if not state.loading_priority.is_empty() else "he3"
+		state.pads.append(pad)
+	state.amounts["land"] = maxf(state.amounts.get("land", 0.0), 200.0)
+	sim.recalculate_caps(state)
+	for res: String in ["eng", "reg", "ice", "he3", "ti", "cir", "prop"]:
+		state.amounts[res] = state.caps.get(res, state.amounts.get(res, 0.0))
+	state.amounts["cred"] = maxf(state.amounts.get("cred", 0.0), 1000.0)
+	tick_completed.emit()
+
+
+func _debug_setup_ui_state() -> void:
+	# Override starting state for UI development: rich resources, pads ready to test
+	state.buildings_owned.clear()
+	state.buildings_active.clear()
+	state.pads.clear()
+
+	var debug_buildings: Dictionary = {
+		"panel":         20,
+		"storage_depot": 5,
+		"launch_pad":    3,
+		"data_center":   1,
+	}
+	for sn: String in debug_buildings:
+		state.buildings_owned[sn] = debug_buildings[sn]
+		state.buildings_active[sn] = debug_buildings[sn]
+
+	for i in range(3):
+		var pad := GameState.LaunchPadData.new()
+		pad.resource_type = state.loading_priority[0] if not state.loading_priority.is_empty() else "he3"
+		state.pads.append(pad)
+
+	sim.recalculate_caps(state)
+
+	state.amounts["land"]    = 200.0
+	state.amounts["cred"]    = 1000.0
+	state.amounts["boredom"] = 0.0
+	state.amounts["sci"]     = 0.0
+	for res: String in ["eng", "reg", "ice", "he3", "ti", "cir", "prop"]:
+		state.amounts[res] = state.caps.get(res, 0.0)
 
 
 func _load_json(path: String) -> Variant:

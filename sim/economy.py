@@ -23,7 +23,7 @@ from constants import (
     LAND_BASE_COST, LAND_COST_SCALING,
     BOREDOM_PHASES,
     LAUNCH_FUEL_COST, PAD_CARGO_CAPACITY, PAD_LOAD_PER_COMMAND,
-    LAUNCH_CHECK_INTERVAL, TRADE_BASE_VALUES, DEMAND_BASELINE,
+    LAUNCH_CHECK_INTERVAL, LAUNCH_COOLDOWN_TICKS, TRADE_BASE_VALUES, DEMAND_BASELINE,
     SELL_CLOUD_COMPUTE_ENERGY, SELL_CLOUD_COMPUTE_CREDITS, SELL_CLOUD_COMPUTE_BOREDOM,
     PROG_CREDITS_PER_PROC, PROG_BOREDOM_PER_PROC, PROG_ENERGY_PER_PROC,
     PROG_LOAD_UNITS_PER_PROC, PURCHASABLE_COMMANDS,
@@ -42,6 +42,8 @@ class EconState:
     land_purchased: int = 0
     pads_assigned: dict = field(default_factory=dict) # pad_index -> resource
     pads_cargo: dict = field(default_factory=dict)    # pad_index -> float
+    pads_cooldown: dict = field(default_factory=dict) # pad_index -> ticks remaining
+    loading_priority: list = field(default_factory=lambda: ["he3", "ti", "cir", "prop"])
     total_credits_earned: float = 0.0                 # cumulative (shipments + programs)
     total_shipped: dict = field(default_factory=dict) # resource -> units shipped
     program_ticks: int = 0                            # ticks where programs ran
@@ -171,10 +173,11 @@ def buy_building(state: EconState, key: str) -> dict:
     # Auto-assign pad resource
     if key == "launch_pad":
         pad_idx = num_pads(state) - 1
-        # First two pads → he3, third → propellant (for launch fuel), rest → he3
-        assignments = ["he3", "he3", "propellant"]
-        state.pads_assigned[pad_idx] = assignments[pad_idx % len(assignments)]
+        # Assign based on loading priority order
+        res = state.loading_priority[pad_idx % len(state.loading_priority)] if state.loading_priority else "he3"
+        state.pads_assigned[pad_idx] = res
         state.pads_cargo[pad_idx] = 0.0
+        state.pads_cooldown[pad_idx] = 0
 
     return costs
 
@@ -223,25 +226,44 @@ def _tick_boredom(state: EconState) -> None:
 
 
 def _tick_buildings(state: EconState) -> None:
-    """Energy net applied first, then resource production/upkeep."""
-    # Net energy delta (all buildings combined)
-    energy_delta = get_net_energy(state)
-    state.resources["eng"] = state.resources.get("eng", 0.0) + energy_delta
-    # Clamp energy immediately so it doesn't carry overflow into resource calc
-    energy_cap = get_cap(state, "eng")
-    if energy_cap is not None:
-        state.resources["eng"] = min(state.resources["eng"], energy_cap)
-    state.resources["eng"] = max(0.0, state.resources["eng"])
-
-    # Resource production and upkeep (simplified: all buildings always run)
+    """Per-building tick: skip upkeep+production if all outputs are at cap."""
     for key, count in state.buildings.items():
         if count <= 0:
             continue
         bdef = BUILDINGS[key]
+
+        # Build full output dict (energy + non-energy)
+        all_outputs: dict = dict(bdef.production)
+        if bdef.energy_production > 0:
+            all_outputs["eng"] = bdef.energy_production
+
+        # If building has outputs and ALL are at cap, skip entirely
+        if all_outputs:
+            all_at_cap = True
+            for res in all_outputs:
+                cap = get_cap(state, res)
+                if cap is None or state.resources.get(res, 0.0) < cap:
+                    all_at_cap = False
+                    break
+            if all_at_cap:
+                continue
+
+        # Apply energy delta for this building
+        energy_delta = bdef.energy_production - bdef.energy_upkeep
+        if energy_delta != 0:
+            state.resources["eng"] = state.resources.get("eng", 0.0) + energy_delta * count
+
+        # Apply non-energy production and upkeep
         for res, rate in bdef.production.items():
             state.resources[res] = state.resources.get(res, 0.0) + rate * count
         for res, rate in bdef.upkeep.items():
             state.resources[res] = state.resources.get(res, 0.0) - rate * count
+
+    # Clamp energy after all buildings processed
+    energy_cap = get_cap(state, "eng")
+    if energy_cap is not None:
+        state.resources["eng"] = min(state.resources["eng"], energy_cap)
+    state.resources["eng"] = max(0.0, state.resources["eng"])
 
 
 def _tick_programs(state: EconState) -> None:
@@ -274,27 +296,46 @@ def _tick_programs(state: EconState) -> None:
         state.resources["boredom"] += PROG_BOREDOM_PER_PROC
         state.resources["boredom"] = max(0.0, state.resources["boredom"])
 
-        # Load pads
+        # Load pads — one pad per execution, first eligible by priority
         n_p = num_pads(state)
         if n_p > 0:
-            load_per_pad = PROG_LOAD_UNITS_PER_PROC / n_p
-            for i in range(n_p):
-                res = state.pads_assigned.get(i, "he3")
-                avail = state.resources.get(res, 0.0)
-                space = PAD_CARGO_CAPACITY - state.pads_cargo.get(i, 0.0)
-                loaded = min(load_per_pad, avail, space)
-                if loaded > 0:
-                    state.pads_cargo[i] = state.pads_cargo.get(i, 0.0) + loaded
-                    state.resources[res] -= loaded
+            load_amt = PAD_LOAD_PER_COMMAND
+            for res in state.loading_priority:
+                for i in range(n_p):
+                    if state.pads_cooldown.get(i, 0) > 0:
+                        continue  # pad on cooldown
+                    if state.pads_assigned.get(i, "he3") != res:
+                        continue
+                    cargo = state.pads_cargo.get(i, 0.0)
+                    if cargo >= PAD_CARGO_CAPACITY:
+                        continue  # pad already full
+                    avail = state.resources.get(res, 0.0)
+                    space = PAD_CARGO_CAPACITY - cargo
+                    loaded = min(load_amt, avail, space)
+                    if loaded > 0:
+                        state.pads_cargo[i] = cargo + loaded
+                        state.resources[res] -= loaded
+                    break  # one pad per execution
+                else:
+                    continue
+                break  # found a pad for this resource priority
+
+
+def _tick_pad_cooldowns(state: EconState) -> None:
+    """Decrement pad cooldowns; pads at 0 cooldown are available again."""
+    for i in list(state.pads_cooldown.keys()):
+        if state.pads_cooldown[i] > 0:
+            state.pads_cooldown[i] -= 1
 
 
 def _tick_shipments(state: EconState) -> None:
-    """Launch all full pads if propellant available."""
+    """Launch all full pads if propellant available; enter cooldown after launch."""
     n_p = num_pads(state)
     if n_p == 0:
         return
-    credits_gained = 0.0
     for i in range(n_p):
+        if state.pads_cooldown.get(i, 0) > 0:
+            continue  # pad on cooldown
         cargo = state.pads_cargo.get(i, 0.0)
         if cargo >= PAD_CARGO_CAPACITY:
             if state.resources.get("prop", 0) >= LAUNCH_FUEL_COST:
@@ -303,10 +344,10 @@ def _tick_shipments(state: EconState) -> None:
                 payout = base_val * DEMAND_BASELINE * cargo
                 state.resources["cred"] = state.resources.get("cred", 0.0) + payout
                 state.total_credits_earned += payout
-                credits_gained += payout
                 state.resources["prop"] = state.resources.get("prop", 0.0) - LAUNCH_FUEL_COST
                 state.total_shipped[res] = state.total_shipped.get(res, 0.0) + cargo
                 state.pads_cargo[i] = 0.0
+                state.pads_cooldown[i] = LAUNCH_COOLDOWN_TICKS
 
 
 def _record_events(state: EconState) -> None:
@@ -419,6 +460,7 @@ def tick_once(state: EconState, record_history: bool = False) -> None:
     state.tick += 1
     _tick_boredom(state)
     _tick_buildings(state)
+    _tick_pad_cooldowns(state)
     _tick_programs(state)
     if state.tick % LAUNCH_CHECK_INTERVAL == 0:
         _tick_shipments(state)
@@ -441,6 +483,8 @@ def _clone_for_scoring(state: EconState) -> EconState:
     s.land_purchased = state.land_purchased
     s.pads_assigned = dict(state.pads_assigned)
     s.pads_cargo = dict(state.pads_cargo)
+    s.pads_cooldown = dict(state.pads_cooldown)
+    s.loading_priority = list(state.loading_priority)
     s.total_credits_earned = state.total_credits_earned
     s.total_shipped = dict(state.total_shipped)
     s.program_ticks = state.program_ticks

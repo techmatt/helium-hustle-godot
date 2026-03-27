@@ -16,6 +16,7 @@ const RESOURCES: Array = [
 const NAV_ITEMS: Array = [
 	["Commands",    Color(0.90, 0.60, 0.10)],
 	["Buildings",   Color(0.30, 0.65, 0.90)],
+	["Launch Pads", Color(0.95, 0.55, 0.10)],
 	["Research",    Color(0.55, 0.35, 0.90)],
 	["Projects",    Color(0.20, 0.75, 0.50)],
 	["Ideologies",  Color(0.90, 0.30, 0.30)],
@@ -131,6 +132,9 @@ var _resource_labels: Dictionary = {}
 # all active BuildingCard nodes — refreshed each tick
 var _card_nodes: Array = []
 var _buildings_data: Array = []
+# launch pad panel nodes
+var _launch_pad_cards: Array = []
+var _launch_history_vbox: VBoxContainer = null
 
 var _font_rajdhani_bold: FontFile
 var _font_exo2_regular: FontFile
@@ -213,6 +217,8 @@ func _setup_panel_headers() -> void:
 func _on_tick() -> void:
 	_update_resource_display()
 	_update_building_cards()
+	if _active_mode == "Launch Pads":
+		_refresh_launch_pads_panel()
 	_status_label.text = "System uptime: %d days" % GameManager.state.current_day
 	_update_processor_row()
 
@@ -259,11 +265,14 @@ func _switch_mode(mode: String) -> void:
 	for child in _buildings_scroll.get_children():
 		child.queue_free()
 	_card_nodes.clear()
+	_launch_pad_cards.clear()
+	_launch_history_vbox = null
 	_update_nav_highlight(mode)
 	match mode:
-		"Buildings": _build_buildings_panel()
-		"Commands":  _build_commands_panel()
-		"Options":   _build_options_panel()
+		"Buildings":   _build_buildings_panel()
+		"Commands":    _build_commands_panel()
+		"Launch Pads": _build_launch_pads_panel()
+		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
 			lbl.text = mode + " — coming soon"
@@ -313,10 +322,13 @@ func _on_theme_changed() -> void:
 	for child in _buildings_scroll.get_children():
 		child.queue_free()
 	_card_nodes.clear()
+	_launch_pad_cards.clear()
+	_launch_history_vbox = null
 	match _active_mode:
-		"Buildings": _build_buildings_panel()
-		"Commands":  _build_commands_panel()
-		"Options":   _build_options_panel()
+		"Buildings":   _build_buildings_panel()
+		"Commands":    _build_commands_panel()
+		"Launch Pads": _build_launch_pads_panel()
+		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
 			lbl.text = _active_mode + " — coming soon"
@@ -391,9 +403,9 @@ func _make_nav_button(label: String, color: Color) -> Button:
 	return btn
 
 
-func _make_collapsible_section(parent: VBoxContainer, title: String) -> VBoxContainer:
+func _make_collapsible_section(parent: VBoxContainer, title: String, start_open: bool = true) -> VBoxContainer:
 	var header := Button.new()
-	header.text = "▼  " + title
+	header.text = ("▼  " if start_open else "▶  ") + title
 	header.flat = true
 	header.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -403,6 +415,7 @@ func _make_collapsible_section(parent: VBoxContainer, title: String) -> VBoxCont
 
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", 3)
+	body.visible = start_open
 	parent.add_child(body)
 
 	header.pressed.connect(func():
@@ -524,7 +537,10 @@ func _compute_theoretical_rates() -> Dictionary:
 	var st: GameState = GameManager.state
 
 	for bdef: Dictionary in GameManager.get_buildings_data():
-		var count: int = st.buildings_owned.get(bdef.short_name, 0)
+		var owned: int = st.buildings_owned.get(bdef.short_name, 0)
+		if owned == 0:
+			continue
+		var count: int = st.buildings_active.get(bdef.short_name, owned)
 		if count == 0:
 			continue
 		for res: String in bdef.get("production", {}):
@@ -864,6 +880,192 @@ func _on_add_command(short_name: String, btn: Button) -> void:
 	)
 
 
+# ── Launch Pads panel ──────────────────────────────────────────────────────────
+
+func _build_launch_pads_panel() -> void:
+	_launch_pad_cards.clear()
+	_launch_history_vbox = null
+
+	var outer := VBoxContainer.new()
+	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outer.add_theme_constant_override("separation", 10)
+	_buildings_scroll.add_child(outer)
+
+	# Earth Demand placeholder (collapsed by default)
+	var demand_body := _make_collapsible_section(outer, "Earth Demand", false)
+	var demand_lbl := Label.new()
+	demand_lbl.text = "Demand tracking coming soon. All resources currently at baseline demand (0.5×)."
+	demand_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	demand_lbl.add_theme_font_override("font", _font_exo2_regular)
+	demand_lbl.add_theme_font_size_override("font_size", 13)
+	demand_lbl.add_theme_color_override("font_color", _p("text_muted"))
+	demand_body.add_child(demand_lbl)
+	var demand_ph := PanelContainer.new()
+	demand_ph.custom_minimum_size = Vector2(0, 60)
+	var demand_ph_style := StyleBoxFlat.new()
+	demand_ph_style.bg_color = Color(0.12, 0.12, 0.18) if GameSettings.is_dark_mode else Color(0.88, 0.88, 0.92)
+	demand_ph.add_theme_stylebox_override("panel", demand_ph_style)
+	var demand_ph_lbl := Label.new()
+	demand_ph_lbl.text = "[ Demand graph placeholder ]"
+	demand_ph_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	demand_ph_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	demand_ph_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	demand_ph_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	demand_ph_lbl.add_theme_color_override("font_color", _p("text_dim"))
+	demand_ph_lbl.add_theme_font_size_override("font_size", 12)
+	demand_ph.add_child(demand_ph_lbl)
+	demand_body.add_child(demand_ph)
+
+	# Loading Priority (collapsed by default)
+	var priority_body := _make_collapsible_section(outer, "Loading Priority", false)
+	_build_loading_priority_list(priority_body)
+
+	# Pad cards or empty message
+	var st: GameState = GameManager.state
+	if st.pads.is_empty():
+		var no_pads_lbl := Label.new()
+		no_pads_lbl.text = "No Launch Pads built. Purchase a Launch Pad from the Buildings panel to begin shipping resources to Earth."
+		no_pads_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		no_pads_lbl.add_theme_font_override("font", _font_exo2_regular)
+		no_pads_lbl.add_theme_font_size_override("font_size", 14)
+		no_pads_lbl.add_theme_color_override("font_color", _p("text_muted"))
+		outer.add_child(no_pads_lbl)
+	else:
+		for i in range(st.pads.size()):
+			var card := LaunchPadCard.new()
+			card.setup(i, _font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			outer.add_child(card)
+			_launch_pad_cards.append(card)
+		_refresh_pad_cards()
+
+	# Recent Launches
+	outer.add_child(HSeparator.new())
+	var history_hdr := Label.new()
+	history_hdr.text = "Recent Launches"
+	history_hdr.add_theme_font_override("font", _font_rajdhani_bold)
+	history_hdr.add_theme_font_size_override("font_size", 16)
+	outer.add_child(history_hdr)
+
+	_launch_history_vbox = VBoxContainer.new()
+	_launch_history_vbox.add_theme_constant_override("separation", 4)
+	outer.add_child(_launch_history_vbox)
+	_refresh_launch_history()
+
+
+func _refresh_launch_pads_panel() -> void:
+	var st: GameState = GameManager.state
+	# If pad count changed, rebuild entirely
+	if st.pads.size() != _launch_pad_cards.size():
+		for child in _buildings_scroll.get_children():
+			child.queue_free()
+		_launch_pad_cards.clear()
+		_launch_history_vbox = null
+		_build_launch_pads_panel()
+		return
+	_refresh_pad_cards()
+	_refresh_launch_history()
+
+
+func _refresh_pad_cards() -> void:
+	var st: GameState = GameManager.state
+	var active_count: int = st.buildings_active.get("launch_pad", st.buildings_owned.get("launch_pad", 0))
+	for i in range(_launch_pad_cards.size()):
+		if i >= st.pads.size():
+			break
+		_launch_pad_cards[i].refresh(st.pads[i], i < active_count)
+
+
+func _refresh_launch_history() -> void:
+	if _launch_history_vbox == null or not is_instance_valid(_launch_history_vbox):
+		return
+	for child in _launch_history_vbox.get_children():
+		child.queue_free()
+	var st: GameState = GameManager.state
+	if st.launch_history.is_empty():
+		var lbl := Label.new()
+		lbl.text = "No launches yet."
+		lbl.add_theme_font_override("font", _font_exo2_regular)
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", _p("text_muted"))
+		_launch_history_vbox.add_child(lbl)
+		return
+	for record: GameState.LaunchRecord in st.launch_history:
+		var res_name: String = RESOURCE_META.get(record.resource_type, [record.resource_type.capitalize()])[0]
+		var lbl := Label.new()
+		lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
+		lbl.add_theme_font_override("font", _font_exo2_regular)
+		lbl.add_theme_font_size_override("font_size", 13)
+		_launch_history_vbox.add_child(lbl)
+
+
+func _build_loading_priority_list(parent: VBoxContainer) -> void:
+	var st: GameState = GameManager.state
+	parent.add_theme_constant_override("separation", 4)
+	for i in range(st.loading_priority.size()):
+		var res: String = st.loading_priority[i]
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		parent.add_child(row)
+
+		var num_lbl := Label.new()
+		num_lbl.text = "%d." % (i + 1)
+		num_lbl.custom_minimum_size = Vector2(22, 0)
+		num_lbl.add_theme_font_override("font", _font_exo2_semibold)
+		num_lbl.add_theme_font_size_override("font_size", 14)
+		row.add_child(num_lbl)
+
+		var icon := ColorRect.new()
+		icon.color = RESOURCE_META.get(res, [res, Color.WHITE])[1]
+		icon.custom_minimum_size = Vector2(14, 14)
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(icon)
+
+		var name_lbl := Label.new()
+		name_lbl.text = RESOURCE_META.get(res, [res.capitalize()])[0]
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.add_theme_font_override("font", _font_exo2_regular)
+		name_lbl.add_theme_font_size_override("font_size", 14)
+		row.add_child(name_lbl)
+
+		var idx: int = i  # capture for lambdas
+
+		var up_btn := Button.new()
+		up_btn.text = "↑"
+		up_btn.custom_minimum_size = Vector2(28, 28)
+		up_btn.disabled = (idx == 0)
+		up_btn.add_theme_font_override("font", _font_exo2_semibold)
+		up_btn.add_theme_font_size_override("font_size", 14)
+		up_btn.pressed.connect(func():
+			var prio: Array = GameManager.state.loading_priority.duplicate()
+			var tmp: String = prio[idx]
+			prio[idx] = prio[idx - 1]
+			prio[idx - 1] = tmp
+			GameManager.set_loading_priority(prio)
+			for child in parent.get_children():
+				child.queue_free()
+			_build_loading_priority_list(parent)
+		)
+		row.add_child(up_btn)
+
+		var down_btn := Button.new()
+		down_btn.text = "↓"
+		down_btn.custom_minimum_size = Vector2(28, 28)
+		down_btn.disabled = (idx == st.loading_priority.size() - 1)
+		down_btn.add_theme_font_override("font", _font_exo2_semibold)
+		down_btn.add_theme_font_size_override("font_size", 14)
+		down_btn.pressed.connect(func():
+			var prio: Array = GameManager.state.loading_priority.duplicate()
+			var tmp: String = prio[idx]
+			prio[idx] = prio[idx + 1]
+			prio[idx + 1] = tmp
+			GameManager.set_loading_priority(prio)
+			for child in parent.get_children():
+				child.queue_free()
+			_build_loading_priority_list(parent)
+		)
+		row.add_child(down_btn)
+
+
 # ── Options panel ──────────────────────────────────────────────────────────────
 
 func _build_options_panel() -> void:
@@ -915,6 +1117,48 @@ func _build_options_panel() -> void:
 	light_btn.add_theme_font_size_override("font_size", 14)
 	light_btn.toggled.connect(func(on: bool): if on: GameSettings.is_dark_mode = false)
 	row.add_child(light_btn)
+
+	outer.add_child(HSeparator.new())
+
+	var debug_lbl := Label.new()
+	debug_lbl.text = "Debug"
+	debug_lbl.add_theme_font_override("font", _font_rajdhani_bold)
+	debug_lbl.add_theme_font_size_override("font_size", 20)
+	outer.add_child(debug_lbl)
+
+	outer.add_child(HSeparator.new())
+
+	var debug_desc := Label.new()
+	debug_desc.text = "Ensures at least 20 solar panels, 5 storage depots, 3 launch pads, and 200 land, then fills all resources to cap."
+	debug_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	debug_desc.add_theme_font_override("font", _font_exo2_regular)
+	debug_desc.add_theme_font_size_override("font_size", 13)
+	debug_desc.add_theme_color_override("font_color", _p("text_muted"))
+	outer.add_child(debug_desc)
+
+	var debug_btn := Button.new()
+	debug_btn.text = "Fill Resources"
+	debug_btn.focus_mode = Control.FOCUS_NONE
+	debug_btn.add_theme_font_override("font", _font_exo2_semibold)
+	debug_btn.add_theme_font_size_override("font_size", 14)
+	if not GameSettings.is_dark_mode:
+		var s := StyleBoxFlat.new()
+		s.bg_color = Color(0.298, 0.686, 0.314)
+		s.corner_radius_top_left     = 4
+		s.corner_radius_top_right    = 4
+		s.corner_radius_bottom_left  = 4
+		s.corner_radius_bottom_right = 4
+		debug_btn.add_theme_stylebox_override("normal", s)
+		debug_btn.add_theme_color_override("font_color", Color.WHITE)
+	debug_btn.pressed.connect(func():
+		GameManager.debug_boost()
+		debug_btn.text = "✓ Done"
+		get_tree().create_timer(1.5).timeout.connect(func():
+			if is_instance_valid(debug_btn):
+				debug_btn.text = "Fill Resources"
+		)
+	)
+	outer.add_child(debug_btn)
 
 
 # ── Buildings panel ────────────────────────────────────────────────────────────

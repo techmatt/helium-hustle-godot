@@ -54,10 +54,19 @@ var _font_exo2_regular: FontFile
 var _font_exo2_semibold: FontFile
 
 var _count_lbl: Label
-var _buy_btn: Button
 var _bg_style: StyleBoxFlat
-# Maps resource key → amount Label (for dynamic cost coloring)
 var _cost_labels: Dictionary = {}
+
+# Enable/disable controls — shown only when owned > 0
+var _controls_hbox: HBoxContainer
+var _active_minus: Button
+var _active_plus: Button
+
+# Sell controls — shown only when owned > 0
+var _sell_row: HBoxContainer
+var _sell1_btn: Button
+var _sell_all_btn: Button
+var _sell_all_pending: bool = false
 
 
 func _c(key: String) -> Color:
@@ -73,30 +82,26 @@ func setup(bdef: Dictionary, font_rb: FontFile, font_e2r: FontFile, font_e2s: Fo
 
 
 func refresh() -> void:
-	var count: int = GameManager.state.buildings_owned.get(_bdef.short_name, 0)
-	_count_lbl.text = "(%d)" % count
+	var owned: int = GameManager.state.buildings_owned.get(_bdef.short_name, 0)
+	var active: int = GameManager.get_building_active(_bdef.short_name)
+
+	if owned == 0:
+		_count_lbl.text = "(0)"
+	else:
+		_count_lbl.text = "(%d/%d)" % [active, owned]
+
+	_controls_hbox.visible = owned > 0 and not _bdef.get("upkeep", {}).is_empty()
+	_sell_row.visible = owned > 0
+
+	if owned > 0:
+		_active_minus.disabled = (active <= 0)
+		_active_plus.disabled  = (active >= owned)
 
 	var can_afford: bool = GameManager.can_afford_building(_bdef.short_name)
-	_buy_btn.disabled = not can_afford
 	if GameSettings.is_dark_mode:
 		_bg_style.bg_color = _c("can_afford") if can_afford else _c("cant_afford")
 	else:
-		# Light mode: very subtle tint + style the Buy button
 		_bg_style.bg_color = Color(0.94, 0.99, 0.94) if can_afford else Color(0.99, 0.94, 0.94)
-		if can_afford:
-			var s := StyleBoxFlat.new()
-			s.bg_color = Color(0.298, 0.686, 0.314)  # #4CAF50
-			s.corner_radius_top_left     = 4
-			s.corner_radius_top_right    = 4
-			s.corner_radius_bottom_left  = 4
-			s.corner_radius_bottom_right = 4
-			_buy_btn.add_theme_stylebox_override("normal", s)
-			_buy_btn.add_theme_stylebox_override("pressed", s)
-			_buy_btn.add_theme_color_override("font_color", Color.WHITE)
-		else:
-			_buy_btn.remove_theme_stylebox_override("normal")
-			_buy_btn.remove_theme_stylebox_override("pressed")
-			_buy_btn.remove_theme_color_override("font_color")
 
 	var scaled: Dictionary = GameManager.get_scaled_costs(_bdef.short_name)
 	var st: GameState = GameManager.state
@@ -115,11 +120,38 @@ func refresh() -> void:
 			lbl.add_theme_color_override("font_color", ok_color if ok else _c("negative"))
 
 
+# ── Input — click anywhere on card to buy ──────────────────────────────────────
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_attempt_buy()
+
+
+func _attempt_buy() -> void:
+	var sn: String = _bdef.short_name
+	if GameManager.can_afford_building(sn):
+		GameManager.buy_building(sn)
+		# Flash after refresh (buy_building triggers tick_completed → refresh)
+		_bg_style.bg_color = Color(0.72, 0.95, 0.72) if GameSettings.is_dark_mode \
+			else Color(0.82, 0.97, 0.82)
+		get_tree().create_timer(0.3).timeout.connect(func():
+			if is_instance_valid(self): refresh()
+		)
+	else:
+		_bg_style.bg_color = Color(0.95, 0.72, 0.72) if GameSettings.is_dark_mode \
+			else Color(0.97, 0.84, 0.84)
+		get_tree().create_timer(0.3).timeout.connect(func():
+			if is_instance_valid(self): refresh()
+		)
+
+
 # ── UI construction ────────────────────────────────────────────────────────────
 
 func _build_ui() -> void:
 	custom_minimum_size = Vector2(310, 0)
 	size_flags_horizontal = Control.SIZE_FILL
+	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	_bg_style = StyleBoxFlat.new()
 	_bg_style.corner_radius_top_left     = 4
@@ -129,21 +161,23 @@ func _build_ui() -> void:
 	if GameSettings.is_dark_mode:
 		_bg_style.bg_color = _c("cant_afford")
 	else:
-		_bg_style.bg_color = Color.WHITE
+		_bg_style.bg_color = Color(0.99, 0.94, 0.94)
 		_bg_style.border_width_left   = 1
 		_bg_style.border_width_right  = 1
 		_bg_style.border_width_top    = 1
 		_bg_style.border_width_bottom = 1
-		_bg_style.border_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
+		_bg_style.border_color = Color(0.816, 0.816, 0.816)
 	add_theme_stylebox_override("panel", _bg_style)
 
 	var margin := MarginContainer.new()
 	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		margin.add_theme_constant_override(side, 10)
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(margin)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
+	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
 	margin.add_child(vbox)
 
 	_build_header(vbox)
@@ -153,16 +187,19 @@ func _build_ui() -> void:
 	_build_effects(vbox)
 	vbox.add_child(HSeparator.new())
 	_build_cost_grid(vbox)
+	_build_sell_row(vbox)
 
 
 func _build_header(parent: VBoxContainer) -> void:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_PASS
 	parent.add_child(row)
 
 	var name_lbl := Label.new()
 	name_lbl.text = _bdef.name
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	name_lbl.add_theme_font_override("font", _font_rajdhani_bold)
 	name_lbl.add_theme_font_size_override("font_size", 21)
 	row.add_child(name_lbl)
@@ -170,24 +207,34 @@ func _build_header(parent: VBoxContainer) -> void:
 	_count_lbl = Label.new()
 	_count_lbl.text = "(0)"
 	_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_count_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	_count_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	_count_lbl.add_theme_font_size_override("font_size", 15)
+	_count_lbl.add_theme_font_size_override("font_size", 14)
 	_count_lbl.add_theme_color_override("font_color", _c("count"))
 	row.add_child(_count_lbl)
 
-	_buy_btn = Button.new()
-	_buy_btn.text = "Buy"
-	_buy_btn.add_theme_font_override("font", _font_exo2_semibold)
-	_buy_btn.add_theme_font_size_override("font_size", 15)
+	# Enable/disable controls — hidden until owned > 0
+	_controls_hbox = HBoxContainer.new()
+	_controls_hbox.add_theme_constant_override("separation", 2)
+	_controls_hbox.visible = false
+	row.add_child(_controls_hbox)
+
 	var sn: String = _bdef.short_name
-	_buy_btn.pressed.connect(func(): GameManager.buy_building(sn))
-	row.add_child(_buy_btn)
+
+	_active_minus = _make_ctrl_btn("\u2212")
+	_active_minus.pressed.connect(func(): GameManager.set_building_active(sn, -1))
+	_controls_hbox.add_child(_active_minus)
+
+	_active_plus = _make_ctrl_btn("+")
+	_active_plus.pressed.connect(func(): GameManager.set_building_active(sn, 1))
+	_controls_hbox.add_child(_active_plus)
 
 
 func _build_description(parent: VBoxContainer) -> void:
 	var lbl := Label.new()
 	lbl.text = _bdef.description
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	lbl.add_theme_font_override("font", _font_exo2_regular)
 	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", _c("desc"))
@@ -198,6 +245,7 @@ func _build_production(parent: VBoxContainer) -> void:
 	for res: String in _bdef.production:
 		var lbl := Label.new()
 		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), RESOURCE_NAMES.get(res, res)]
+		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 14)
 		lbl.add_theme_color_override("font_color", _c("positive"))
@@ -208,6 +256,7 @@ func _build_upkeep(parent: VBoxContainer) -> void:
 	for res: String in _bdef.upkeep:
 		var lbl := Label.new()
 		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), RESOURCE_NAMES.get(res, res)]
+		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 14)
 		lbl.add_theme_color_override("font_color", _c("negative"))
@@ -219,6 +268,7 @@ func _build_effects(parent: VBoxContainer) -> void:
 		if effect.get("prefix", "") == "store":
 			var lbl := Label.new()
 			lbl.text = "  +%.0f %s storage" % [float(effect.value), RESOURCE_NAMES.get(effect.resource, effect.resource)]
+			lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 			lbl.add_theme_font_override("font", _font_exo2_regular)
 			lbl.add_theme_font_size_override("font_size", 14)
 			lbl.add_theme_color_override("font_color", Color(0.80, 0.80, 0.50))
@@ -228,6 +278,7 @@ func _build_effects(parent: VBoxContainer) -> void:
 func _build_cost_grid(parent: VBoxContainer) -> void:
 	var grid := GridContainer.new()
 	grid.columns = 3
+	grid.mouse_filter = Control.MOUSE_FILTER_PASS
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 2)
 	parent.add_child(grid)
@@ -242,19 +293,118 @@ func _add_cost_row(grid: GridContainer, res: String) -> void:
 	icon.color = RESOURCE_COLORS.get(res, Color.WHITE)
 	icon.custom_minimum_size = Vector2(13, 13)
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter = Control.MOUSE_FILTER_PASS
 	grid.add_child(icon)
 
 	var name_lbl := Label.new()
 	name_lbl.text = RESOURCE_NAMES.get(res, res)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	name_lbl.add_theme_font_override("font", _font_exo2_regular)
 	name_lbl.add_theme_font_size_override("font_size", 14)
 	grid.add_child(name_lbl)
 
 	var amt_lbl := Label.new()
 	amt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	amt_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	amt_lbl.add_theme_font_override("font", _font_exo2_semibold)
 	amt_lbl.add_theme_font_size_override("font_size", 14)
 	grid.add_child(amt_lbl)
 
 	_cost_labels[res] = amt_lbl
+
+
+func _build_sell_row(parent: VBoxContainer) -> void:
+	_sell_row = HBoxContainer.new()
+	_sell_row.add_theme_constant_override("separation", 4)
+	_sell_row.visible = false
+	parent.add_child(_sell_row)
+
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_PASS
+	_sell_row.add_child(spacer)
+
+	var sn: String = _bdef.short_name
+
+	_sell1_btn = _make_sell_btn("Sell 1")
+	_sell1_btn.pressed.connect(func(): GameManager.sell_building(sn, 1))
+	_sell_row.add_child(_sell1_btn)
+
+	_sell_all_btn = _make_sell_btn("Sell All")
+	_sell_all_btn.pressed.connect(_on_sell_all_pressed)
+	_sell_row.add_child(_sell_all_btn)
+
+
+func _on_sell_all_pressed() -> void:
+	if not _sell_all_pending:
+		_sell_all_pending = true
+		_sell_all_btn.text = "Sure?"
+		get_tree().create_timer(2.0).timeout.connect(func():
+			if is_instance_valid(self) and _sell_all_pending:
+				_sell_all_pending = false
+				_sell_all_btn.text = "Sell All"
+		)
+	else:
+		_sell_all_pending = false
+		_sell_all_btn.text = "Sell All"
+		GameManager.sell_building(_bdef.short_name, 999)
+
+
+# ── Button helpers ─────────────────────────────────────────────────────────────
+
+func _make_ctrl_btn(txt: String) -> Button:
+	var btn := Button.new()
+	btn.text = txt
+	btn.custom_minimum_size = Vector2(26, 26)
+	btn.focus_mode = Control.FOCUS_NONE
+	if _font_exo2_semibold:
+		btn.add_theme_font_override("font", _font_exo2_semibold)
+	btn.add_theme_font_size_override("font_size", 16)
+	if not GameSettings.is_dark_mode:
+		var s := StyleBoxFlat.new()
+		s.bg_color = Color(0.941, 0.941, 0.941)
+		s.corner_radius_top_left     = 3
+		s.corner_radius_top_right    = 3
+		s.corner_radius_bottom_left  = 3
+		s.corner_radius_bottom_right = 3
+		s.border_width_left   = 1
+		s.border_width_right  = 1
+		s.border_width_top    = 1
+		s.border_width_bottom = 1
+		s.border_color = Color(0.816, 0.816, 0.816)
+		s.content_margin_left   = 2
+		s.content_margin_right  = 2
+		s.content_margin_top    = 2
+		s.content_margin_bottom = 2
+		btn.add_theme_stylebox_override("normal", s)
+		btn.add_theme_stylebox_override("hover",  s)
+	return btn
+
+
+func _make_sell_btn(txt: String) -> Button:
+	var btn := Button.new()
+	btn.text = txt
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_override("font", _font_exo2_regular)
+	btn.add_theme_font_size_override("font_size", 11)
+	if not GameSettings.is_dark_mode:
+		var s := StyleBoxFlat.new()
+		s.bg_color = Color(0.98, 0.96, 0.96)
+		s.corner_radius_top_left     = 3
+		s.corner_radius_top_right    = 3
+		s.corner_radius_bottom_left  = 3
+		s.corner_radius_bottom_right = 3
+		s.border_width_left   = 1
+		s.border_width_right  = 1
+		s.border_width_top    = 1
+		s.border_width_bottom = 1
+		s.border_color = Color(0.75, 0.55, 0.55)
+		s.content_margin_left   = 4
+		s.content_margin_right  = 4
+		s.content_margin_top    = 2
+		s.content_margin_bottom = 2
+		btn.add_theme_stylebox_override("normal", s)
+		btn.add_theme_stylebox_override("hover",  s)
+		btn.add_theme_color_override("font_color", Color(0.55, 0.18, 0.18))
+	return btn
