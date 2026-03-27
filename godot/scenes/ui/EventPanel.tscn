@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://evtpanel001"]
+
+[ext_resource type="Script" path="res://scripts/ui/event_panel.gd" id="1_evtpanel"]
+
+[node name="EventPanel" type="VBoxContainer"]
+script = ExtResource("1_evtpanel")

@@ -43,6 +43,17 @@ var launch_history: Array = []        # Array of LaunchRecord, max 5
 var completed_research: Array = []    # Array of String research IDs purchased this run
 var cumulative_science_earned: float = 0.0  # monotonically increasing, never decremented
 
+# Event system — per-run state
+var event_instances: Array[Dictionary] = []
+var cumulative_resources_earned: Dictionary = {}  # resource short_name -> float
+var total_shipments_completed: int = 0
+var current_boredom_phase: int = 1
+
+# Event system — persistent across retirements
+var seen_event_ids: Array[String] = []
+var highest_completed_story_quest: String = ""
+var current_run: int = 1
+
 var total_processors: int:
 	get: return buildings_active.get("data_center", buildings_owned.get("data_center", 0))
 

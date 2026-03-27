@@ -162,6 +162,8 @@ var _boredom_history: Array = []
 var _prev_boredom: float = 0.0
 
 # ── Program panel state ─────────────────────────────────────────────────────────
+var _event_panel: EventPanel = null
+var _event_modal: EventModal = null
 var _selected_program: int = 0
 var _tab_buttons: Array = []          # Array[Button], 5 elements
 var _proc_label: Label
@@ -190,6 +192,8 @@ func _ready() -> void:
 	_build_buildings_panel()
 	_setup_status_bar()
 	_update_resource_display()
+	_build_event_modal()
+	GameManager.event_manager.event_triggered.connect(_on_event_triggered)
 
 
 func _process(delta: float) -> void:
@@ -601,6 +605,7 @@ func _rebuild_program_panel() -> void:
 	_proc_minus_btn = null
 	_proc_plus_btn = null
 	_cmd_list_vbox = null
+	_event_panel = null
 	_build_program_panel()
 	_select_program(saved)
 
@@ -1669,7 +1674,7 @@ func _build_program_panel() -> void:
 	_build_tab_bar(_right_vbox)
 	_build_processor_row(_right_vbox)
 	_build_command_scroll(_right_vbox)
-	_build_events_placeholder(_right_vbox)
+	_build_event_panel(_right_vbox)
 
 
 func _build_tab_bar(parent: VBoxContainer) -> void:
@@ -1768,7 +1773,7 @@ func _build_processor_row(parent: VBoxContainer) -> void:
 
 func _build_command_scroll(parent: VBoxContainer) -> void:
 	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 325)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	parent.add_child(scroll)
 
@@ -1789,33 +1794,33 @@ func _build_command_scroll(parent: VBoxContainer) -> void:
 	scroll.set_drag_forwarding(_no_drag, _can_drop, _do_drop)
 
 
-func _build_events_placeholder(parent: VBoxContainer) -> void:
+func _build_event_panel(parent: VBoxContainer) -> void:
 	parent.add_child(HSeparator.new())
 
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(0, 110)
-	parent.add_child(panel)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	parent.add_child(scroll)
 
-	var margin := MarginContainer.new()
-	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 10)
-	panel.add_child(margin)
+	var ep := load("res://scenes/ui/EventPanel.tscn").instantiate() as EventPanel
+	ep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(ep)
+	ep.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+	ep.event_row_clicked.connect(func(eid: String) -> void: _event_modal.open(eid))
+	_event_panel = ep
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	margin.add_child(vbox)
 
-	var header := Label.new()
-	header.text = "Events"
-	header.add_theme_font_override("font", _font_rajdhani_bold)
-	header.add_theme_font_size_override("font_size", 18)
-	vbox.add_child(header)
+func _build_event_modal() -> void:
+	if _event_modal != null:
+		return
+	_event_modal = load("res://scenes/ui/EventModal.tscn").instantiate() as EventModal
+	add_child(_event_modal)
+	_event_modal.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
 
-	var sub := Label.new()
-	sub.text = "Coming soon"
-	sub.add_theme_font_override("font", _font_exo2_regular)
-	sub.add_theme_color_override("font_color", _p("text_dim"))
-	vbox.add_child(sub)
+
+func _on_event_triggered(event_id: String) -> void:
+	if GameManager.event_manager.is_event_first_time(event_id, GameManager.state):
+		_event_modal.open(event_id)
 
 
 # ── Program panel — state management ───────────────────────────────────────────

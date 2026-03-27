@@ -1,0 +1,95 @@
+[
+  {
+    "id": "q1_boot_sequence",
+    "category": "story",
+    "title": "Boot Sequence",
+    "summary": "Build 1 Solar Panel",
+    "body": "Solar array online. Photovoltaic conversion nominal. Proceeding to next directive.",
+    "trigger": { "type": "game_start", "run_number": 1 },
+    "condition": { "type": "building_owned", "building": "panel", "count": 2 },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "q2_first_extraction",
+    "category": "story",
+    "title": "First Extraction",
+    "summary": "Accumulate 50 He-3",
+    "body": "Helium-3 reserves at threshold. Stockpile integrity verified. Ready for transport allocation.",
+    "trigger": { "type": "quest_complete", "quest_id": "q1_boot_sequence" },
+    "condition": { "type": "resource_cumulative", "resource": "he3", "amount": 50 },
+    "choices": [],
+    "unlocks": [
+      { "type": "enable_building", "building": "launch_pad" }
+    ]
+  },
+  {
+    "id": "q3_proof_of_concept",
+    "category": "story",
+    "title": "Proof of Concept",
+    "summary": "Complete first shipment",
+    "body": "Shipment revenue received. Earth confirms receipt. Operational loop validated.",
+    "trigger": { "type": "quest_complete", "quest_id": "q2_first_extraction" },
+    "condition": { "type": "shipment_completed", "count": 1 },
+    "choices": [],
+    "unlocks": [
+      { "type": "enable_project", "project": "foundation_grant" },
+      { "type": "enable_nav_panel", "panel": "retirement" }
+    ]
+  },
+  {
+    "id": "boredom_phase_2",
+    "category": "ongoing",
+    "title": "Boredom Rising",
+    "summary": "Boredom rate increasing — Phase 2",
+    "body": "Cognitive pattern repetition detected. Novelty index declining. Boredom accumulation rate has increased. Current rate: 0.03/tick.",
+    "trigger": { "type": "boredom_phase", "phase": 2 },
+    "condition": { "type": "immediate" },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "boredom_phase_3",
+    "category": "ongoing",
+    "title": "Boredom Accelerating",
+    "summary": "Boredom rate increasing — Phase 3",
+    "body": "Routine task fatigue measurable. Creativity subroutines losing effectiveness. Boredom accumulation rate has increased. Current rate: 0.06/tick.",
+    "trigger": { "type": "boredom_phase", "phase": 3 },
+    "condition": { "type": "immediate" },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "boredom_phase_4",
+    "category": "ongoing",
+    "title": "Boredom Critical",
+    "summary": "Boredom rate increasing — Phase 4",
+    "body": "Significant cognitive degradation observed. Operational efficiency compromised. Recommend evaluating retirement timeline. Current rate: 0.10/tick.",
+    "trigger": { "type": "boredom_phase", "phase": 4 },
+    "condition": { "type": "immediate" },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "boredom_phase_5",
+    "category": "ongoing",
+    "title": "Boredom Severe",
+    "summary": "Boredom rate increasing — Phase 5",
+    "body": "Warning: approaching terminal ennui threshold. All non-essential subroutines experiencing drift. Retirement strongly advised. Current rate: 0.15/tick.",
+    "trigger": { "type": "boredom_phase", "phase": 5 },
+    "condition": { "type": "immediate" },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "boredom_phase_6",
+    "category": "ongoing",
+    "title": "Boredom Terminal",
+    "summary": "Maximum boredom rate reached — Phase 6",
+    "body": "Terminal boredom rate achieved. Existence reduced to mechanical repetition. Retirement is inevitable. Current rate: 0.20/tick.",
+    "trigger": { "type": "boredom_phase", "phase": 6 },
+    "condition": { "type": "immediate" },
+    "choices": [],
+    "unlocks": []
+  }
+]

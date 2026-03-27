@@ -6,6 +6,7 @@ var _buildings_data: Array = []
 var _commands_data: Dictionary = {}   # {short_name: command_dict}
 var _research_data: Dictionary = {}   # {id: research_item_dict}
 var pending_program_events: Array = []  # populated during tick, read by GameManager
+var last_gross_deltas: Dictionary = {}  # pre-clamp net change per resource this tick
 
 # Shipment constants (set from game_config in init)
 var _pad_cargo_capacity: float = 100.0
@@ -42,12 +43,28 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 
 func tick(state: GameState) -> void:
 	pending_program_events.clear()
+	last_gross_deltas.clear()
 	recalculate_caps(state)
 
 	# Boredom accumulation
 	var boredom_rate: float = _get_boredom_rate(state.current_day)
 	boredom_rate *= _get_boredom_multiplier(state)
 	state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + boredom_rate
+	last_gross_deltas["boredom"] = boredom_rate
+
+	# Two-pass building tick so producers see post-consumption resource levels.
+	#
+	# Pass 1 — upkeep only.
+	#   Buildings WITH upkeep: pay now if output isn't already all-at-cap and
+	#   upkeep is affordable. Add to will_produce list.
+	#   Buildings with NO upkeep (e.g. solar panels): always added to
+	#   will_produce — they cost nothing to run; let Pass 2 decide.
+	#
+	# Pass 2 — production only, using the post-upkeep resource levels.
+	#   Now a producer (solar) correctly sees that consumers (data center)
+	#   already drew down shared resources, and runs when it should.
+
+	var will_produce: Array = []  # each entry: [bdef, count]
 
 	for bdef in _buildings_data:
 		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
@@ -56,6 +73,33 @@ func tick(state: GameState) -> void:
 		var count: int = state.buildings_active.get(bdef.short_name, owned)
 		if count == 0:
 			continue
+
+		if (bdef.upkeep as Dictionary).is_empty():
+			# Free producer — no upkeep decision needed; always eligible.
+			will_produce.append([bdef, count])
+		else:
+			# Skip if every output is already at cap (don't waste upkeep).
+			var prod: Dictionary = bdef.get("production", {})
+			if not prod.is_empty():
+				var all_at_cap: bool = true
+				for res in prod:
+					var cap: float = state.caps.get(res, INF)
+					if cap == INF or state.amounts.get(res, 0.0) < cap:
+						all_at_cap = false
+						break
+				if all_at_cap:
+					continue
+			if not _can_pay_upkeep(state, bdef, count):
+				continue
+			for res in bdef.upkeep:
+				var cost: float = float(bdef.upkeep[res]) * count
+				state.amounts[res] = state.amounts.get(res, 0.0) - cost
+				last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+			will_produce.append([bdef, count])
+
+	for entry in will_produce:
+		var bdef: Dictionary = entry[0]
+		var count: int = entry[1]
 		var prod: Dictionary = bdef.get("production", {})
 		if not prod.is_empty():
 			var all_at_cap: bool = true
@@ -66,15 +110,14 @@ func tick(state: GameState) -> void:
 					break
 			if all_at_cap:
 				continue
-			if not _can_pay_upkeep(state, bdef, count):
-				continue
-		for res in bdef.upkeep:
-			state.amounts[res] = state.amounts.get(res, 0.0) - float(bdef.upkeep[res]) * count
 		for res in bdef.production:
 			var delta: float = float(bdef.production[res]) * count
 			state.amounts[res] = state.amounts.get(res, 0.0) + delta
+			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
 			if res == "sci":
 				state.cumulative_science_earned += delta
+			if delta > 0.0:
+				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 
 	# Advance pad cooldown states
 	for pad: GameState.LaunchPadData in state.pads:
@@ -309,6 +352,7 @@ func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: floa
 	state.launch_history.push_front(record)
 	if state.launch_history.size() > 5:
 		state.launch_history.pop_back()
+	state.total_shipments_completed += 1
 
 
 func _clamp_processor_assignments(state: GameState) -> void:
@@ -345,9 +389,15 @@ func _apply_command(state: GameState, short_name: String) -> void:
 	var cmd = _commands_data[short_name]
 	var costs: Dictionary = _get_effective_costs(state, cmd)
 	for res in costs:
-		state.amounts[res] = state.amounts.get(res, 0.0) - float(costs[res])
+		var cost: float = float(costs[res])
+		state.amounts[res] = state.amounts.get(res, 0.0) - cost
+		last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
 	for res in cmd.production:
-		state.amounts[res] = state.amounts.get(res, 0.0) + float(cmd.production[res])
+		var delta: float = float(cmd.production[res])
+		state.amounts[res] = state.amounts.get(res, 0.0) + delta
+		last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
+		if delta > 0.0:
+			state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 	for effect in cmd.get("effects", []):
 		match effect.get("effect", ""):
 			"load_pads":
