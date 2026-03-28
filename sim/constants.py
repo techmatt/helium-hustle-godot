@@ -162,7 +162,9 @@ LAUNCH_FUEL_COST:      float = float(_shipment["fuel_per_pad"])
 PAD_CARGO_CAPACITY:    float = float(_shipment["pad_cargo_capacity"])
 PAD_LOAD_PER_COMMAND:  float = float(_shipment["load_per_execution"])
 TRADE_BASE_VALUES:     dict  = {k: float(v) for k, v in _shipment["base_values"].items()}
-DEMAND_BASELINE:       float = float(_cfg["demand"]["baseline"])
+DEMAND_BASELINE:       float = 0.5   # mid-point used for shadow pricing only
+DEMAND_CFG:            dict  = _cfg.get("demand", {})
+RIVALS:                list  = _cfg.get("rivals", [])
 
 
 # ============================================================================

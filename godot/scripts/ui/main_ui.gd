@@ -144,11 +144,19 @@ var _buildings_data: Array = []
 # launch pad panel nodes
 var _launch_pad_cards: Array = []
 var _launch_history_vbox: VBoxContainer = null
+var _demand_body: VBoxContainer = null      # demand section container
+var _demand_sparklines: Dictionary = {}     # resource → DemandSparkline
+var _demand_value_labels: Dictionary = {}   # resource → Label (post-MA value)
+var _demand_tier_labels: Dictionary = {}    # resource → Label (pre-MA tier)
+var _demand_has_ma: bool = false            # snapshot of market_awareness research state
 # commands panel: snapshot of buildings_owned used to detect when to rebuild
 var _commands_buildings_snapshot: Dictionary = {}
 # research panel: snapshots used to detect when to rebuild
 var _research_completed_snapshot: Array = []
 var _research_sci_snapshot: float = -1.0
+# adversaries sidebar
+var _spec_count_lbl: Label = null
+var _spec_target_lbl: Label = null
 
 var _font_rajdhani_bold: FontFile
 var _font_exo2_regular: FontFile
@@ -448,6 +456,7 @@ func _update_status_bar() -> void:
 func _on_tick() -> void:
 	_update_nav_visibility()
 	_update_resource_display()
+	_update_adversaries_display()
 	_update_building_cards()
 	if _active_mode == "Launch Pads":
 		_refresh_launch_pads_panel()
@@ -491,6 +500,9 @@ func _build_left_sidebar() -> void:
 	nav_vbox.add_child(HSeparator.new())
 	_build_resources_section(nav_vbox)
 
+	nav_vbox.add_child(HSeparator.new())
+	_build_adversaries_section(nav_vbox)
+
 
 func _build_nav_grid(parent: VBoxContainer) -> void:
 	var grid := GridContainer.new()
@@ -520,6 +532,11 @@ func _switch_mode(mode: String) -> void:
 	_card_nodes.clear()
 	_launch_pad_cards.clear()
 	_launch_history_vbox = null
+	_demand_body = null
+	_demand_sparklines.clear()
+	_demand_value_labels.clear()
+	_demand_tier_labels.clear()
+	_demand_has_ma = false
 	_buy_land_card = null
 	_stats_panel = null
 	_update_nav_highlight(mode)
@@ -594,6 +611,11 @@ func _on_theme_changed() -> void:
 	_card_nodes.clear()
 	_launch_pad_cards.clear()
 	_launch_history_vbox = null
+	_demand_body = null
+	_demand_sparklines.clear()
+	_demand_value_labels.clear()
+	_demand_tier_labels.clear()
+	_demand_has_ma = false
 	_boredom_bar = null
 	_boredom_bar_lbl = null
 	_boredom_fill = null
@@ -629,6 +651,8 @@ func _rebuild_left_sidebar() -> void:
 		child.queue_free()
 	_nav_buttons.clear()
 	_resource_labels.clear()
+	_spec_count_lbl = null
+	_spec_target_lbl = null
 	_build_left_sidebar()
 	_update_nav_highlight(_active_mode)
 
@@ -1147,30 +1171,13 @@ func _build_launch_pads_panel() -> void:
 	outer.add_theme_constant_override("separation", 10)
 	_buildings_scroll.add_child(outer)
 
-	# Earth Demand placeholder (collapsed by default)
-	var demand_body := _make_collapsible_section(outer, "Earth Demand", false)
-	var demand_lbl := Label.new()
-	demand_lbl.text = "Demand tracking coming soon. All resources currently at baseline demand (0.5×)."
-	demand_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	demand_lbl.add_theme_font_override("font", _font_exo2_regular)
-	demand_lbl.add_theme_font_size_override("font_size", 13)
-	demand_lbl.add_theme_color_override("font_color", _p("text_muted"))
-	demand_body.add_child(demand_lbl)
-	var demand_ph := PanelContainer.new()
-	demand_ph.custom_minimum_size = Vector2(0, 60)
-	var demand_ph_style := StyleBoxFlat.new()
-	demand_ph_style.bg_color = Color(0.12, 0.12, 0.18) if GameSettings.is_dark_mode else Color(0.88, 0.88, 0.92)
-	demand_ph.add_theme_stylebox_override("panel", demand_ph_style)
-	var demand_ph_lbl := Label.new()
-	demand_ph_lbl.text = "[ Demand graph placeholder ]"
-	demand_ph_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	demand_ph_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	demand_ph_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	demand_ph_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	demand_ph_lbl.add_theme_color_override("font_color", _p("text_dim"))
-	demand_ph_lbl.add_theme_font_size_override("font_size", 12)
-	demand_ph.add_child(demand_ph_lbl)
-	demand_body.add_child(demand_ph)
+	# Earth Demand section (expanded by default)
+	_demand_body = _make_collapsible_section(outer, "Earth Demand", true)
+	_demand_has_ma = false
+	_demand_sparklines.clear()
+	_demand_value_labels.clear()
+	_demand_tier_labels.clear()
+	_populate_demand_section(GameManager.state, GameManager.state.completed_research.has("market_awareness"))
 
 	# Loading Priority (collapsed by default)
 	var priority_body := _make_collapsible_section(outer, "Loading Priority", false)
@@ -1219,6 +1226,7 @@ func _refresh_launch_pads_panel() -> void:
 		_build_launch_pads_panel()
 		return
 	_refresh_pad_cards()
+	_refresh_demand_section()
 	_refresh_launch_history()
 
 
@@ -1246,12 +1254,211 @@ func _refresh_launch_history() -> void:
 		_launch_history_vbox.add_child(lbl)
 		return
 	for record: GameState.LaunchRecord in st.launch_history:
-		var res_name: String = RESOURCE_META.get(record.resource_type, [record.resource_type.capitalize()])[0]
 		var lbl := Label.new()
-		lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
+		if not record.notification_message.is_empty():
+			lbl.text = "Day %d: %s" % [record.tick, record.notification_message]
+			lbl.add_theme_color_override("font_color", _p("text_muted"))
+		else:
+			var res_name: String = RESOURCE_META.get(record.resource_type, [record.resource_type.capitalize()])[0]
+			lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 13)
 		_launch_history_vbox.add_child(lbl)
+
+
+const DEMAND_TIERS: Array = [
+	[0.85, "VERY HIGH", Color(0.10, 0.80, 0.30)],
+	[0.55, "HIGH",      Color(0.18, 0.49, 0.20)],
+	[0.25, "MEDIUM",    Color(0.0,  0.0,  0.0,  0.0)],  # default text
+	[0.0,  "LOW",       Color(0.78, 0.16, 0.16)],
+]
+
+const TRADEABLE_DISPLAY: Dictionary = {
+	"he3":  ["He-3",       Color(0.50, 0.50, 1.00)],
+	"ti":   ["Titanium",   Color(0.80, 0.80, 0.80)],
+	"cir":  ["Circuits",   Color(0.30, 0.80, 0.70)],
+	"prop": ["Propellant", Color(0.40, 0.70, 0.95)],
+}
+
+
+func _demand_tier(value: float) -> Array:
+	for tier: Array in DEMAND_TIERS:
+		if value >= float(tier[0]):
+			return tier
+	return DEMAND_TIERS[DEMAND_TIERS.size() - 1]
+
+
+func _populate_demand_section(st: GameState, has_ma: bool) -> void:
+	_demand_has_ma = has_ma
+	_demand_sparklines.clear()
+	_demand_value_labels.clear()
+	_demand_tier_labels.clear()
+	if _demand_body == null or not is_instance_valid(_demand_body):
+		return
+
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
+		var demand_val: float = st.demand.get(res, 0.5)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		_demand_body.add_child(row)
+
+		# Color swatch
+		var swatch := ColorRect.new()
+		swatch.color = display[1]
+		swatch.custom_minimum_size = Vector2(12, 12)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(swatch)
+
+		# Resource name
+		var name_lbl := Label.new()
+		name_lbl.text = display[0]
+		name_lbl.add_theme_font_override("font", _font_exo2_regular)
+		name_lbl.add_theme_font_size_override("font_size", 13)
+		if has_ma:
+			name_lbl.custom_minimum_size = Vector2(72, 0)
+		else:
+			name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(name_lbl)
+
+		if has_ma:
+			# Sparkline (stretches to fill)
+			var sparkline := DemandSparkline.new()
+			sparkline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sparkline.custom_minimum_size = Vector2(0, 26)
+			sparkline.set_data(st.demand_history.get(res, [demand_val]), display[1])
+			row.add_child(sparkline)
+			_demand_sparklines[res] = sparkline
+
+			# Exact value
+			var val_lbl := Label.new()
+			val_lbl.text = "%.2f" % demand_val
+			val_lbl.custom_minimum_size = Vector2(36, 0)
+			val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			val_lbl.add_theme_font_override("font", _font_exo2_semibold)
+			val_lbl.add_theme_font_size_override("font_size", 13)
+			var tier_arr: Array = _demand_tier(demand_val)
+			if tier_arr[2] != Color(0, 0, 0, 0):
+				val_lbl.add_theme_color_override("font_color", tier_arr[2])
+			# Speculator warning indicator
+			if st.speculator_target == res and st.speculator_count > 0.0:
+				val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
+			row.add_child(val_lbl)
+			_demand_value_labels[res] = val_lbl
+		else:
+			# Tier label only
+			var tier_arr: Array = _demand_tier(demand_val)
+			var tier_lbl := Label.new()
+			tier_lbl.text = tier_arr[1]
+			tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			tier_lbl.add_theme_font_override("font", _font_exo2_semibold)
+			tier_lbl.add_theme_font_size_override("font_size", 13)
+			if tier_arr[2] != Color(0, 0, 0, 0):
+				tier_lbl.add_theme_color_override("font_color", tier_arr[2])
+			row.add_child(tier_lbl)
+			_demand_tier_labels[res] = tier_lbl
+
+
+func _refresh_demand_section() -> void:
+	if _demand_body == null or not is_instance_valid(_demand_body):
+		return
+	var st: GameState = GameManager.state
+	var has_ma: bool = st.completed_research.has("market_awareness")
+	if has_ma != _demand_has_ma:
+		# MA research state changed — rebuild the section content
+		for child in _demand_body.get_children():
+			child.queue_free()
+		_populate_demand_section(st, has_ma)
+		return
+	# Update labels and sparklines in-place
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var demand_val: float = st.demand.get(res, 0.5)
+		var tier_arr: Array = _demand_tier(demand_val)
+		if has_ma:
+			if _demand_sparklines.has(res):
+				(_demand_sparklines[res] as DemandSparkline).set_data(st.demand_history.get(res, []), TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])[1])
+			if _demand_value_labels.has(res):
+				var val_lbl: Label = _demand_value_labels[res]
+				val_lbl.text = "%.2f" % demand_val
+				if st.speculator_target == res and st.speculator_count > 0.0:
+					val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
+				elif tier_arr[2] != Color(0, 0, 0, 0):
+					val_lbl.add_theme_color_override("font_color", tier_arr[2])
+				else:
+					val_lbl.remove_theme_color_override("font_color")
+		else:
+			if _demand_tier_labels.has(res):
+				var tier_lbl: Label = _demand_tier_labels[res]
+				tier_lbl.text = tier_arr[1]
+				if tier_arr[2] != Color(0, 0, 0, 0):
+					tier_lbl.add_theme_color_override("font_color", tier_arr[2])
+				else:
+					tier_lbl.remove_theme_color_override("font_color")
+
+
+func _build_adversaries_section(parent: VBoxContainer) -> void:
+	var body := _make_collapsible_section(parent, "Adversaries")
+
+	# Speculators row
+	var spec_row := HBoxContainer.new()
+	spec_row.add_theme_constant_override("separation", 6)
+	body.add_child(spec_row)
+
+	var icon_wrap := CenterContainer.new()
+	icon_wrap.custom_minimum_size = Vector2(22, 22)
+	spec_row.add_child(icon_wrap)
+	var icon := ColorRect.new()
+	icon.color = Color(0.90, 0.60, 0.10)
+	icon.custom_minimum_size = Vector2(14, 14)
+	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon_wrap.add_child(icon)
+
+	var name_lbl := Label.new()
+	name_lbl.text = "Speculators"
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_override("font", _font_exo2_regular)
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	spec_row.add_child(name_lbl)
+
+	_spec_count_lbl = Label.new()
+	_spec_count_lbl.text = "0"
+	_spec_count_lbl.custom_minimum_size = Vector2(40, 0)
+	_spec_count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_spec_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_spec_count_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	_spec_count_lbl.add_theme_font_size_override("font_size", 14)
+	spec_row.add_child(_spec_count_lbl)
+
+	# Target sub-row (indented)
+	var tgt_row := HBoxContainer.new()
+	tgt_row.add_theme_constant_override("separation", 4)
+	body.add_child(tgt_row)
+	var tgt_spacer := Control.new()
+	tgt_spacer.custom_minimum_size = Vector2(22, 0)
+	tgt_row.add_child(tgt_spacer)
+	_spec_target_lbl = Label.new()
+	_spec_target_lbl.text = ""
+	_spec_target_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_spec_target_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_spec_target_lbl.add_theme_font_size_override("font_size", 13)
+	_spec_target_lbl.add_theme_color_override("font_color", _p("text_muted"))
+	tgt_row.add_child(_spec_target_lbl)
+
+
+func _update_adversaries_display() -> void:
+	if _spec_count_lbl == null or not is_instance_valid(_spec_count_lbl):
+		return
+	var st: GameState = GameManager.state
+	var count: int = int(st.speculator_count)
+	_spec_count_lbl.text = "%d" % count
+	if count == 0 or st.speculator_target.is_empty():
+		_spec_target_lbl.text = ""
+	else:
+		var res_display: Array = TRADEABLE_DISPLAY.get(st.speculator_target, [st.speculator_target, Color.WHITE])
+		_spec_target_lbl.text = "→ " + str(res_display[0])
+		_spec_target_lbl.add_theme_color_override("font_color", res_display[1])
 
 
 func _build_loading_priority_list(parent: VBoxContainer) -> void:

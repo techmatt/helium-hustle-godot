@@ -56,20 +56,37 @@
     }
   },
   "demand": {
-    "baseline": 0.5,
-    "recovery_rate": 0.005,
-    "ship_volume_pressure": 0.002,
-    "noise_weight": 0.2
+    "min_demand": 0.01,
+    "max_demand": 1.0,
+    "perlin_amplitude": 0.15,
+    "perlin_freq_min": 0.005,
+    "perlin_freq_max": 0.015,
+    "speculator_max_suppression": 0.5,
+    "speculator_half_point": 50.0,
+    "speculator_natural_decay": 0.15,
+    "speculator_burst_interval_min": 150,
+    "speculator_burst_interval_max": 250,
+    "speculator_burst_size_min": 20,
+    "speculator_burst_size_max": 50,
+    "speculator_burst_growth": 1.1,
+    "disrupt_speculators_min": 1.0,
+    "disrupt_speculators_max": 3.0,
+    "arbitrage_decay_bonus_per_building": 0.04,
+    "promote_base_effect": 0.03,
+    "promote_decay_rate": 0.001,
+    "promote_speculator_dampening": 0.9,
+    "rival_demand_decay_rate": 0.003,
+    "launch_saturation_min": 0.10,
+    "launch_saturation_max": 0.20,
+    "launch_saturation_decay_rate": 0.005,
+    "coupling_fraction": 0.10
   },
-  "speculators": {
-    "burst_window_ticks": 500,
-    "burst_pressure": 0.3,
-    "natural_decay_rate": 0.01
-  },
-  "rival_ai": {
-    "dump_interval_ticks": 300,
-    "demand_reduction": 0.15
-  },
+  "rivals": [
+    {"id": "aria7",    "name": "ARIA-7",   "target_resource": "he3",  "dump_interval_min": 150, "dump_interval_max": 250, "demand_hit": 0.3},
+    {"id": "crucible", "name": "CRUCIBLE", "target_resource": "ti",   "dump_interval_min": 150, "dump_interval_max": 250, "demand_hit": 0.3},
+    {"id": "nodal",    "name": "NODAL",    "target_resource": "cir",  "dump_interval_min": 150, "dump_interval_max": 250, "demand_hit": 0.3},
+    {"id": "fringe9",  "name": "FRINGE-9", "target_resource": "prop", "dump_interval_min": 150, "dump_interval_max": 250, "demand_hit": 0.3}
+  ],
   "land": {
     "base_cost": 15,
     "cost_scaling": 1.5,

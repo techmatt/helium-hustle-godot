@@ -5,16 +5,20 @@ No policy, no heuristics. Functions take state + action and return new state
 (or mutate in-place where noted). Tick order matches the Godot implementation:
   1. Boredom increment
   2. Buildings: energy net applied, then resource production/upkeep
-  3. Programs: fixed command policy
-  4. Shipments: launch full pads (checked every LAUNCH_CHECK_INTERVAL ticks)
-  5. Clamp all resources to storage caps
-  6. Event recording
+  3. Demand update (Perlin drift + accumulator decay)
+  4. Programs: fixed command policy (includes pad loading)
+  5. Shipments: launch full pads (checked every LAUNCH_CHECK_INTERVAL ticks)
+  6. Rival dumps + speculator burst check
+  7. Clamp all resources to storage caps
+  8. Event recording
 
 Callers are responsible for purchase actions (buy_building / buy_land) between ticks.
 """
 
 from __future__ import annotations
 import copy
+import math
+import random
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -24,10 +28,13 @@ from constants import (
     BOREDOM_PHASES,
     LAUNCH_FUEL_COST, PAD_CARGO_CAPACITY, PAD_LOAD_PER_COMMAND,
     LAUNCH_CHECK_INTERVAL, LAUNCH_COOLDOWN_TICKS, TRADE_BASE_VALUES, DEMAND_BASELINE,
+    DEMAND_CFG, RIVALS,
     SELL_CLOUD_COMPUTE_ENERGY, SELL_CLOUD_COMPUTE_CREDITS, SELL_CLOUD_COMPUTE_BOREDOM,
     PROG_CREDITS_PER_PROC, PROG_BOREDOM_PER_PROC, PROG_ENERGY_PER_PROC,
     PROG_LOAD_UNITS_PER_PROC, PURCHASABLE_COMMANDS,
 )
+
+TRADEABLE: list[str] = ["he3", "ti", "cir", "prop"]
 
 
 # ============================================================================
@@ -54,6 +61,21 @@ class EconState:
     completed_research: list = field(default_factory=list)   # list of research IDs purchased
     cumulative_science_earned: float = 0.0                   # monotonically increasing
 
+    # ── Demand state ──────────────────────────────────────────────────────────
+    demand: dict = field(default_factory=dict)                    # resource -> float [0.01, 1.0]
+    demand_promote: dict = field(default_factory=dict)            # resource -> float accumulator
+    demand_rival: dict = field(default_factory=dict)              # resource -> float accumulator
+    demand_launch: dict = field(default_factory=dict)             # resource -> float accumulator
+    demand_perlin_seeds: dict = field(default_factory=dict)       # resource -> float offset
+    demand_perlin_freq: dict = field(default_factory=dict)        # resource -> float
+    speculator_count: float = 0.0
+    speculator_target: str = ""
+    speculator_burst_number: int = 0
+    speculator_next_burst_tick: int = 200
+    speculator_revenue_tracking: dict = field(default_factory=dict)
+    rival_next_dump_tick: dict = field(default_factory=dict)      # rival_id -> tick
+    _rng: random.Random = field(default_factory=lambda: random.Random(42))
+
 
 def init_state() -> EconState:
     """Create a fresh run-1 starting state."""
@@ -65,6 +87,8 @@ def init_state() -> EconState:
     # so purchase cost scaling reflects actual purchases, not starting land.
     state.land_purchased = 0
     state.resources["land"] = float(STARTING_RESOURCES.get("land", 0))
+
+    initialize_demand(state)
     return state
 
 
@@ -215,6 +239,165 @@ def buy_land(state: EconState) -> float:
 
 
 # ============================================================================
+# DEMAND SYSTEM
+# ============================================================================
+
+def _hash_noise(i: int) -> float:
+    """Deterministic integer hash → [0, 1]. Matches GDScript _hash_noise."""
+    x = (i * 1664525 + 1013904223) & 0x7FFFFFFF
+    x = (x ^ (x >> 16)) & 0x7FFFFFFF
+    return float(x) / float(0x7FFFFFFF)
+
+
+def _perlin_1d(t: float) -> float:
+    """1D value noise returning [-1, 1]. Matches GDScript _perlin_1d."""
+    xi = int(math.floor(t))
+    xf = t - math.floor(t)
+    u = xf * xf * (3.0 - 2.0 * xf)          # smoothstep
+    a = _hash_noise(xi) * 2.0 - 1.0           # remap [0,1] → [-1,1]
+    b = _hash_noise(xi + 1) * 2.0 - 1.0
+    return a + (b - a) * u                     # lerp
+
+
+def initialize_demand(state: EconState, seed: int = 42) -> None:
+    """Set up per-resource Perlin seeds/freqs, rival timers, and burst timer.
+    Uses a fixed seed so sim runs are reproducible (values differ from GDScript
+    since Python's RNG differs, but the system is structurally identical).
+    """
+    state._rng = random.Random(seed)
+    cfg = DEMAND_CFG
+    freq_min = float(cfg.get("perlin_freq_min", 0.005))
+    freq_max = float(cfg.get("perlin_freq_max", 0.015))
+    burst_min = int(cfg.get("speculator_burst_interval_min", 150))
+    burst_max = int(cfg.get("speculator_burst_interval_max", 250))
+
+    for res in TRADEABLE:
+        state.demand_perlin_seeds[res] = state._rng.random() * 100.0
+        state.demand_perlin_freq[res]  = state._rng.uniform(freq_min, freq_max)
+        state.demand_promote[res]      = 0.0
+        state.demand_rival[res]        = 0.0
+        state.demand_launch[res]       = 0.0
+        state.demand[res]              = 0.5
+        state.speculator_revenue_tracking[res] = 0.0
+
+    for rival in RIVALS:
+        rid = rival.get("id", "")
+        if rid:
+            state.rival_next_dump_tick[rid] = state._rng.randint(150, 250)
+
+    state.speculator_next_burst_tick = state._rng.randint(burst_min, burst_max)
+
+    # Compute initial demand values at tick 0
+    _tick_demand_update(state)
+
+
+def _tick_demand_update(state: EconState) -> None:
+    """Decay accumulators and recompute live demand for each tradeable resource."""
+    cfg = DEMAND_CFG
+    spec_count  = state.speculator_count
+    spec_target = state.speculator_target
+    max_sup       = float(cfg.get("speculator_max_suppression", 0.5))
+    half_pt       = float(cfg.get("speculator_half_point", 50.0))
+    amplitude     = float(cfg.get("perlin_amplitude", 0.15))
+    promote_decay = float(cfg.get("promote_decay_rate", 0.001))
+    rival_decay   = float(cfg.get("rival_demand_decay_rate", 0.003))
+    launch_decay  = float(cfg.get("launch_saturation_decay_rate", 0.005))
+    min_d         = float(cfg.get("min_demand", 0.01))
+    max_d         = float(cfg.get("max_demand", 1.0))
+    coupling      = float(cfg.get("coupling_fraction", 0.10))
+
+    # Speculator suppression magnitude on the target resource
+    spec_sup_on_target = 0.0
+    if spec_target and spec_count > 0.0:
+        spec_sup_on_target = max_sup * (spec_count / (spec_count + half_pt))
+
+    for res in TRADEABLE:
+        # Decay accumulators
+        state.demand_promote[res] = max(0.0, state.demand_promote.get(res, 0.0) - promote_decay)
+        state.demand_rival[res]   = max(0.0, state.demand_rival.get(res, 0.0)   - rival_decay)
+        state.demand_launch[res]  = max(0.0, state.demand_launch.get(res, 0.0)  - launch_decay)
+
+        # Perlin base demand centered on 0.5
+        t = float(state.tick) * state.demand_perlin_freq.get(res, 0.01) + state.demand_perlin_seeds.get(res, 0.0)
+        base_demand = 0.5 + _perlin_1d(t) * amplitude
+
+        # Per-resource speculator suppression
+        spec_sup = spec_sup_on_target if spec_target == res else 0.0
+
+        # Coupling: other resources get a small lift when one is suppressed
+        coupling_bonus = 0.0
+        if spec_target and spec_target != res:
+            coupling_bonus = spec_sup_on_target * coupling / 3.0
+
+        # Nationalist ideology bonus (stub — rank 0 until ideology system lands)
+        nationalist_mult = 1.0
+
+        raw = (base_demand
+               - spec_sup
+               - state.demand_rival.get(res, 0.0)
+               - state.demand_launch.get(res, 0.0)
+               + state.demand_promote.get(res, 0.0)
+               + coupling_bonus)
+        state.demand[res] = max(min_d, min(max_d, raw * nationalist_mult))
+
+
+def _pick_speculator_target(state: EconState) -> str:
+    """Choose a resource to target, weighted by recent revenue (falls back to random)."""
+    total = sum(state.speculator_revenue_tracking.get(res, 0.0) for res in TRADEABLE)
+    if total <= 0.0:
+        return state._rng.choice(TRADEABLE)
+    roll = state._rng.random() * total
+    cumulative = 0.0
+    for res in TRADEABLE:
+        cumulative += state.speculator_revenue_tracking.get(res, 0.0)
+        if roll <= cumulative:
+            return res
+    return TRADEABLE[0]
+
+
+def _fire_speculator_burst(state: EconState) -> None:
+    cfg = DEMAND_CFG
+    state.speculator_target = _pick_speculator_target(state)
+    size_min = int(cfg.get("speculator_burst_size_min", 20))
+    size_max = int(cfg.get("speculator_burst_size_max", 50))
+    growth   = float(cfg.get("speculator_burst_growth", 1.1))
+    burst    = float(state._rng.randint(size_min, size_max)) * (growth ** state.speculator_burst_number)
+    state.speculator_count += burst
+    for res in TRADEABLE:
+        state.speculator_revenue_tracking[res] = 0.0
+    int_min = int(cfg.get("speculator_burst_interval_min", 150))
+    int_max = int(cfg.get("speculator_burst_interval_max", 250))
+    state.speculator_next_burst_tick = state.tick + state._rng.randint(int_min, int_max)
+    state.speculator_burst_number += 1
+
+
+def _tick_speculators(state: EconState) -> None:
+    """Decay speculator count; fire a burst if the scheduled tick has arrived."""
+    cfg = DEMAND_CFG
+    active_arb = state.buildings.get("arbitrage_engine", 0)
+    decay = (float(cfg.get("speculator_natural_decay", 0.15))
+             + active_arb * float(cfg.get("arbitrage_decay_bonus_per_building", 0.04)))
+    state.speculator_count = max(0.0, state.speculator_count - decay)
+    if state.tick >= state.speculator_next_burst_tick:
+        _fire_speculator_burst(state)
+
+
+def _tick_rivals(state: EconState) -> None:
+    """Check each rival; if their dump timer has expired, apply a demand hit."""
+    for rival in RIVALS:
+        rid = rival.get("id", "")
+        if not rid:
+            continue
+        if state.tick >= state.rival_next_dump_tick.get(rid, 0):
+            target_res = rival.get("target_resource", "")
+            hit = float(rival.get("demand_hit", 0.3))
+            state.demand_rival[target_res] = state.demand_rival.get(target_res, 0.0) + hit
+            imin = int(rival.get("dump_interval_min", 150))
+            imax = int(rival.get("dump_interval_max", 250))
+            state.rival_next_dump_tick[rid] = state.tick + state._rng.randint(imin, imax)
+
+
+# ============================================================================
 # TICK COMPONENTS
 # ============================================================================
 
@@ -344,7 +527,11 @@ def _tick_pad_cooldowns(state: EconState) -> None:
 
 
 def _tick_shipments(state: EconState) -> None:
-    """Launch all full pads if propellant available; enter cooldown after launch."""
+    """Launch all full pads if propellant available; apply demand saturation hit."""
+    cfg = DEMAND_CFG
+    sat_min = float(cfg.get("launch_saturation_min", 0.10))
+    sat_max = float(cfg.get("launch_saturation_max", 0.20))
+
     n_p = num_pads(state)
     if n_p == 0:
         return
@@ -356,11 +543,19 @@ def _tick_shipments(state: EconState) -> None:
             if state.resources.get("prop", 0) >= LAUNCH_FUEL_COST:
                 res = state.pads_assigned.get(i, "he3")
                 base_val = TRADE_BASE_VALUES.get(res, 1.0)
-                payout = base_val * DEMAND_BASELINE * cargo
+                demand   = state.demand.get(res, DEMAND_BASELINE)
+                payout   = base_val * demand * cargo
                 state.resources["cred"] = state.resources.get("cred", 0.0) + payout
                 state.total_credits_earned += payout
                 state.resources["prop"] = state.resources.get("prop", 0.0) - LAUNCH_FUEL_COST
                 state.total_shipped[res] = state.total_shipped.get(res, 0.0) + cargo
+                # Saturation hit — proportional to fill fraction (always 1.0 here)
+                sat_hit = state._rng.uniform(sat_min, sat_max) * (cargo / PAD_CARGO_CAPACITY)
+                state.demand_launch[res] = state.demand_launch.get(res, 0.0) + sat_hit
+                # Revenue tracking for speculator target selection
+                state.speculator_revenue_tracking[res] = (
+                    state.speculator_revenue_tracking.get(res, 0.0) + payout
+                )
                 state.pads_cargo[i] = 0.0
                 state.pads_cooldown[i] = LAUNCH_COOLDOWN_TICKS
 
@@ -459,6 +654,9 @@ def take_snapshot(state: EconState) -> dict:
         snap[f"{res}_cap"] = cap
     snap["buildings"] = dict(state.buildings)
     snap["total_credits_earned"] = state.total_credits_earned
+    # Include live demand for analysis
+    snap["demand"] = {res: state.demand.get(res, DEMAND_BASELINE) for res in TRADEABLE}
+    snap["speculator_count"] = state.speculator_count
     return snap
 
 
@@ -476,9 +674,14 @@ def tick_once(state: EconState, record_history: bool = False) -> None:
     _tick_boredom(state)
     _tick_buildings(state)
     _tick_pad_cooldowns(state)
+    # Demand update before programs/shipments so payout uses fresh demand values
+    _tick_demand_update(state)
     _tick_programs(state)
     if state.tick % LAUNCH_CHECK_INTERVAL == 0:
         _tick_shipments(state)
+    # Rival dumps and speculator bursts modify demand accumulators for the next tick
+    _tick_rivals(state)
+    _tick_speculators(state)
     clamp_resources(state)
     _record_events(state)
     if record_history:
@@ -506,6 +709,20 @@ def _clone_for_scoring(state: EconState) -> EconState:
     s.events = dict(state.events)
     s.completed_research = list(state.completed_research)
     s.cumulative_science_earned = state.cumulative_science_earned
+    # Demand state
+    s.demand = dict(state.demand)
+    s.demand_promote = dict(state.demand_promote)
+    s.demand_rival = dict(state.demand_rival)
+    s.demand_launch = dict(state.demand_launch)
+    s.demand_perlin_seeds = dict(state.demand_perlin_seeds)
+    s.demand_perlin_freq = dict(state.demand_perlin_freq)
+    s.speculator_count = state.speculator_count
+    s.speculator_target = state.speculator_target
+    s.speculator_burst_number = state.speculator_burst_number
+    s.speculator_next_burst_tick = state.speculator_next_burst_tick
+    s.speculator_revenue_tracking = dict(state.speculator_revenue_tracking)
+    s.rival_next_dump_tick = dict(state.rival_next_dump_tick)
+    s._rng = copy.copy(state._rng)
     # Intentionally omit history and _credit_gains — not needed for scoring
     return s
 

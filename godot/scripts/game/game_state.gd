@@ -23,6 +23,9 @@ class LaunchRecord:
 	var quantity: float = 0.0
 	var credits_earned: float = 0.0
 	var tick: int = 0
+	var notification_message: String = ""  # non-empty = rival dump notification, not a launch
+
+const TRADEABLE_RESOURCES: Array = ["he3", "ti", "cir", "prop"]
 
 # Pad status constants
 const PAD_EMPTY     = 0
@@ -53,6 +56,23 @@ var enabled_projects: Array[String] = []       # projects enabled via event effe
 var flags: Dictionary = {}                      # named boolean flags set by events
 var unlocked_nav_panels: Array[String] = []    # nav panel ids revealed via event effects
 var triggered_milestones: Array[String] = []   # milestone ids fired this run
+
+# Demand system — all reset on retirement
+var demand: Dictionary = {}                    # resource → current demand float [0.01, 1.0]
+var demand_promote: Dictionary = {}            # resource → accumulated promote effect
+var demand_rival: Dictionary = {}              # resource → accumulated rival pressure
+var demand_launch: Dictionary = {}             # resource → accumulated shipment saturation
+var demand_perlin_seeds: Dictionary = {}       # resource → float noise offset
+var demand_perlin_freq: Dictionary = {}        # resource → float noise frequency
+var demand_history: Dictionary = {}            # resource → Array of last ~200 demand values
+
+var speculator_count: float = 0.0
+var speculator_target: String = ""
+var speculator_burst_number: int = 0
+var speculator_next_burst_tick: int = 200
+var speculator_revenue_tracking: Dictionary = {}  # resource → cumulative base-value shipped
+
+var rival_next_dump_tick: Dictionary = {}      # rival_id → int tick
 
 # Event system — persistent across retirements
 var seen_event_ids: Array[String] = []

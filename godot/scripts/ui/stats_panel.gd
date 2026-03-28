@@ -269,7 +269,7 @@ func _make_source_label(source_key: String, buildings_data: Array, state: GameSt
 			if parts.size() < 3:
 				return source_key
 			var bname: String = parts[1]
-			var kind: String = parts[2]
+			var _kind: String = parts[2]
 			var count: int = state.buildings_active.get(bname, state.buildings_owned.get(bname, 0))
 			var display: String = _get_building_display_name(bname, buildings_data)
 			return "%d× %s" % [count, display]

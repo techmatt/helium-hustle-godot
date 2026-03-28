@@ -17,9 +17,8 @@ const RESOURCE_COLORS: Dictionary = {
 	"prop": Color(0.40, 0.70, 0.95),
 }
 
-# Payout = base_value * demand_baseline * cargo
+# Payout = base_value * live_demand * cargo
 const BASE_VALUES: Dictionary = {"he3": 20.0, "ti": 12.0, "cir": 30.0, "prop": 8.0}
-const DEMAND_BASELINE: float = 0.5
 
 var _pad_idx: int = 0
 var _font_rb: FontFile
@@ -221,13 +220,13 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 		GameState.PAD_LOADING:
 			_cargo_bar.value = cargo
 			_cargo_label.text = "%d / 100 units" % int(cargo)
-			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * DEMAND_BASELINE * cargo)
+			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * GameManager.state.demand.get(pad_data.resource_type, 0.5) * cargo)
 			_status_label.text = "Loading..."
 			_set_launch_btn(false, "")
 		GameState.PAD_FULL:
 			_cargo_bar.value = 100.0
 			_cargo_label.text = "100 / 100 units"
-			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * DEMAND_BASELINE * 100.0)
+			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * GameManager.state.demand.get(pad_data.resource_type, 0.5) * 100.0)
 			var can_launch: bool = is_active and GameManager.can_launch_pad(_pad_idx)
 			_set_launch_btn(can_launch, "Need 20 propellant" if not can_launch else "")
 			_status_label.text = "Full — ready to launch!" if can_launch else "Full — need 20 propellant"

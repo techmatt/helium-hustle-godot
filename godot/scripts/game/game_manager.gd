@@ -70,6 +70,7 @@ func _initialize_state() -> void:
 	for sn in _game_config.starting_buildings:
 		state.buildings_owned[sn] = int(_game_config.starting_buildings[sn])
 	sim.recalculate_caps(state)
+	sim.initialize_demand(state)
 	state.programs[0].processors_assigned = 1
 
 
