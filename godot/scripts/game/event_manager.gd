@@ -3,6 +3,7 @@ extends RefCounted
 
 signal event_triggered(event_id: String)
 signal event_completed(event_id: String)
+signal boredom_phase_changed(old_phase: int, new_phase: int)
 
 var _event_defs: Array = []
 var _def_map: Dictionary = {}
@@ -142,7 +143,9 @@ func get_condition_display(event_id: String, state: GameState) -> String:
 func _check_boredom_phase(state: GameState) -> void:
 	var new_phase: int = _compute_boredom_phase(state)
 	if new_phase != state.current_boredom_phase:
+		var old_phase: int = state.current_boredom_phase
 		state.current_boredom_phase = new_phase
+		boredom_phase_changed.emit(old_phase, new_phase)
 
 
 func _compute_boredom_phase(state: GameState) -> int:
@@ -188,6 +191,8 @@ func _check_condition(state: GameState, def: Dictionary) -> bool:
 		"boredom_threshold":
 			var value: float = float(cond.get("value", 0))
 			return state.amounts.get("boredom", 0.0) >= value
+		"research_completed_any":
+			return not state.completed_research.is_empty()
 	return false
 
 
@@ -203,16 +208,25 @@ func _complete_event(state: GameState, inst: Dictionary, choice_id: String) -> v
 	event_completed.emit(inst.id)
 
 
-func _apply_unlock(_state: GameState, effect: Dictionary) -> void:
+func _apply_unlock(state: GameState, effect: Dictionary) -> void:
 	match effect.get("type", ""):
 		"enable_building":
-			print("[EventManager] Unlock: enable_building " + effect.get("building", ""))
+			var bname: String = effect.get("building", "")
+			if bname and not state.unlocked_buildings.has(bname):
+				state.unlocked_buildings.append(bname)
 		"enable_nav_panel":
-			print("[EventManager] Unlock: enable_nav_panel " + effect.get("panel", ""))
+			var panel: String = effect.get("panel", "")
+			if panel and not state.unlocked_nav_panels.has(panel):
+				state.unlocked_nav_panels.append(panel)
 		"enable_project":
-			print("[EventManager] Unlock: enable_project " + effect.get("project", ""))
+			var proj: String = effect.get("project", "")
+			print("[EventManager] Unlock: enable_project " + proj)
+			if proj and not state.enabled_projects.has(proj):
+				state.enabled_projects.append(proj)
 		"set_flag":
-			print("[EventManager] Unlock: set_flag " + effect.get("flag", "") + " = " + str(effect.get("value", false)))
+			var flag: String = effect.get("flag", "")
+			if flag:
+				state.flags[flag] = bool(effect.get("value", false))
 
 
 func _get_instance(state: GameState, event_id: String) -> Dictionary:

@@ -85,5 +85,25 @@
       570,
       925
     ]
-  }
+  },
+  "milestones": [
+    {
+      "id": "first_shipment_credits",
+      "condition": {"type": "shipment_completed", "count": 1},
+      "boredom_reduction": 25.0,
+      "label": "First Shipment Revenue"
+    },
+    {
+      "id": "first_research",
+      "condition": {"type": "research_completed_any"},
+      "boredom_reduction": 15.0,
+      "label": "First Research Breakthrough"
+    },
+    {
+      "id": "credits_threshold",
+      "condition": {"type": "resource_cumulative", "resource": "cred", "amount": 500},
+      "boredom_reduction": 15.0,
+      "label": "Economic Threshold"
+    }
+  ]
 }

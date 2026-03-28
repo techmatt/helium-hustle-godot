@@ -7,7 +7,9 @@ var _resources_data: Array = []
 var _buildings_data: Array = []
 var _commands_data: Dictionary = {}   # {short_name: command_dict}
 var _research_data: Dictionary = {}   # {id: research_item_dict}
-var pending_program_events: Array = []  # populated during tick, read by GameManager
+var _milestones: Array = []           # milestone definitions from game_config
+var pending_program_events: Array = []   # populated during tick, read by GameManager
+var pending_milestone_triggers: Array = []  # {id, label, boredom_reduction} — read by GameManager
 var last_gross_deltas: Dictionary = {}  # pre-clamp net change per resource this tick
 
 # Shipment constants (set from game_config in init)
@@ -53,10 +55,12 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 		_land_cost_scaling = float(lc.get("cost_scaling", 1.5))
 		_land_per_purchase = int(lc.get("land_per_purchase", 10))
 	_land_starting = int(game_config.get("starting_resources", {}).get("land", 40))
+	_milestones = game_config.get("milestones", [])
 
 
 func tick(state: GameState) -> void:
 	pending_program_events.clear()
+	pending_milestone_triggers.clear()
 	last_gross_deltas.clear()
 	if rate_tracker != null:
 		rate_tracker.begin_tick()
@@ -134,8 +138,6 @@ func tick(state: GameState) -> void:
 			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
 			if rate_tracker != null:
 				rate_tracker.record("building:" + bdef.short_name + ":prod", res, delta)
-			if res == "sci":
-				state.cumulative_science_earned += delta
 			if delta > 0.0:
 				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 
@@ -153,6 +155,7 @@ func tick(state: GameState) -> void:
 
 	execute_programs(state)
 
+	_check_milestones(state)
 	_clamp(state)
 	state.current_day += 1
 
@@ -216,9 +219,54 @@ func recalculate_caps(state: GameState) -> void:
 				state.caps[effect.resource] = state.caps.get(effect.resource, 0.0) + float(effect.value) * count
 
 
+func is_building_locked(state: GameState, short_name: String) -> bool:
+	var bdef = _get_bdef(short_name)
+	if bdef == null:
+		return false
+	return not _check_requires(state, bdef)
+
+
+func get_building_requires_text(state: GameState, short_name: String) -> String:
+	var bdef = _get_bdef(short_name)
+	if bdef == null:
+		return ""
+	var req: Dictionary = bdef.get("requires", {})
+	var req_type: String = req.get("type", "none")
+	if req_type == "none":
+		return ""
+	if req.has("label"):
+		return "Requires: " + str(req.get("label", ""))
+	match req_type:
+		"building":
+			var needed: String = req.get("value", "")
+			for b in _buildings_data:
+				if b.short_name == needed:
+					return "Requires: " + b.get("name", needed)
+			return "Requires: " + needed
+		"research":
+			return "Requires: Research " + req.get("value", "")
+	return "Requires: " + req.get("value", "")
+
+
+func _check_requires(state: GameState, bdef: Dictionary) -> bool:
+	var req: Dictionary = bdef.get("requires", {})
+	match req.get("type", "none"):
+		"none":
+			return true
+		"building":
+			return state.buildings_owned.get(req.get("value", ""), 0) >= 1
+		"quest":
+			return state.unlocked_buildings.has(bdef.short_name)
+		"research":
+			return state.completed_research.has(req.get("value", ""))
+	return true
+
+
 func can_buy_building(state: GameState, short_name: String) -> bool:
 	var bdef = _get_bdef(short_name)
 	if bdef == null:
+		return false
+	if not _check_requires(state, bdef):
 		return false
 	if state.amounts.get("land", 0.0) < float(bdef.land):
 		return false
@@ -232,6 +280,8 @@ func can_buy_building(state: GameState, short_name: String) -> bool:
 func buy_building(state: GameState, short_name: String) -> void:
 	var bdef = _get_bdef(short_name)
 	if bdef == null:
+		return
+	if not _check_requires(state, bdef):
 		return
 	var old_owned: int = state.buildings_owned.get(short_name, 0)
 	var scale: float = pow(float(bdef.cost_scaling), old_owned)
@@ -531,6 +581,43 @@ func buy_land(state: GameState) -> void:
 	state.amounts["cred"] -= float(get_land_purchase_cost(state))
 	state.amounts["land"] = state.amounts.get("land", 0.0) + float(_land_per_purchase)
 	state.land_purchases += 1
+
+
+func _check_milestones(state: GameState) -> void:
+	for milestone in _milestones:
+		var mid: String = milestone.get("id", "")
+		if mid.is_empty() or state.triggered_milestones.has(mid):
+			continue
+		if _check_milestone_condition(state, milestone.get("condition", {})):
+			state.triggered_milestones.append(mid)
+			var reduction: float = float(milestone.get("boredom_reduction", 0.0))
+			var label: String = milestone.get("label", mid)
+			state.amounts["boredom"] = maxf(0.0, state.amounts.get("boredom", 0.0) - reduction)
+			_on_boredom_reduced(reduction, "milestone:" + mid)
+			pending_milestone_triggers.append({
+				"id": mid,
+				"label": label,
+				"boredom_reduction": reduction,
+			})
+
+
+func _check_milestone_condition(state: GameState, cond: Dictionary) -> bool:
+	if cond.is_empty():
+		return false
+	match cond.get("type", ""):
+		"shipment_completed":
+			return state.total_shipments_completed >= int(cond.get("count", 1))
+		"resource_cumulative":
+			var res: String = cond.get("resource", "")
+			var amount: float = float(cond.get("amount", 0))
+			return state.cumulative_resources_earned.get(res, 0.0) >= amount
+		"research_completed_any":
+			return not state.completed_research.is_empty()
+	return false
+
+
+func _on_boredom_reduced(_amount: float, _source: String) -> void:
+	pass  # stub — wire to consciousness accumulator when implemented
 
 
 func _get_bdef(short_name: String) -> Variant:

@@ -41,7 +41,6 @@ var pads: Array = []                  # Array of LaunchPadData
 var loading_priority: Array = ["he3", "ti", "cir", "prop"]
 var launch_history: Array = []        # Array of LaunchRecord, max 5
 var completed_research: Array = []    # Array of String research IDs purchased this run
-var cumulative_science_earned: float = 0.0  # monotonically increasing, never decremented
 var land_purchases: int = 0           # number of times Buy Land has been used this run
 
 # Event system — per-run state
@@ -49,6 +48,11 @@ var event_instances: Array[Dictionary] = []
 var cumulative_resources_earned: Dictionary = {}  # resource short_name -> float
 var total_shipments_completed: int = 0
 var current_boredom_phase: int = 1
+var unlocked_buildings: Array[String] = []     # buildings unlocked via event effects
+var enabled_projects: Array[String] = []       # projects enabled via event effects
+var flags: Dictionary = {}                      # named boolean flags set by events
+var unlocked_nav_panels: Array[String] = []    # nav panel ids revealed via event effects
+var triggered_milestones: Array[String] = []   # milestone ids fired this run
 
 # Event system — persistent across retirements
 var seen_event_ids: Array[String] = []

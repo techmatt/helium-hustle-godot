@@ -23,6 +23,7 @@ var current_speed_key: String = "1x"
 signal tick_completed
 signal program_step_executed(program_index: int, entry_index: int, success: bool)
 signal program_cycle_reset(program_index: int)
+signal milestone_triggered(milestone_id: String, label: String, boredom_reduction: float)
 
 var _timer: Timer
 var _game_config: Dictionary
@@ -90,6 +91,14 @@ func buy_building(short_name: String) -> void:
 
 func can_afford_building(short_name: String) -> bool:
 	return sim.can_buy_building(state, short_name)
+
+
+func is_building_locked(short_name: String) -> bool:
+	return sim.is_building_locked(state, short_name)
+
+
+func get_building_requires_text(short_name: String) -> String:
+	return sim.get_building_requires_text(state, short_name)
 
 
 func get_scaled_costs(short_name: String) -> Dictionary:
@@ -178,6 +187,9 @@ func _on_tick() -> void:
 			program_step_executed.emit(event.program_index, event.entry_index, event.success)
 		elif event.type == "cycle_reset":
 			program_cycle_reset.emit(event.program_index)
+	for m in sim.pending_milestone_triggers:
+		print("[Milestone] %s — Boredom -%s" % [m.label, m.boredom_reduction])
+		milestone_triggered.emit(m.id, m.label, m.boredom_reduction)
 	tick_completed.emit()
 
 

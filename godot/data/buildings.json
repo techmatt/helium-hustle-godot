@@ -165,7 +165,8 @@
     "category": "Trade",
     "requires": {
       "type": "quest",
-      "value": "Q2"
+      "value": "Q2",
+      "label": "First Extraction (Q2)"
     },
     "land": 3,
     "cost_scaling": 1.3,

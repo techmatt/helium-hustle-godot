@@ -24,9 +24,17 @@ const NAV_ITEMS: Array = [
 	["Adversaries", Color(0.80, 0.20, 0.20)],
 	["Stats",       Color(0.40, 0.80, 0.80)],
 	["Achievements",Color(0.95, 0.80, 0.10)],
+	["Retire",      Color(0.60, 0.30, 0.80)],
 	["Options",     Color(0.60, 0.60, 0.65)],
 	["Exit",        Color(0.50, 0.15, 0.15)],
 ]
+
+# Maps event unlock panel id → nav button label; these buttons start hidden
+const HIDDEN_NAV_PANELS: Dictionary = {
+	"retirement":  "Retire",
+	"projects":    "Projects",
+	"ideologies":  "Ideologies",
+}
 
 const SPEEDS: Array = ["||", "1x", "3x", "10x", "50x", "200x"]
 const CATEGORY_ORDER: Array = ["Mining", "Power", "Storage", "Processors"]
@@ -438,6 +446,7 @@ func _update_status_bar() -> void:
 # ── Tick handler ───────────────────────────────────────────────────────────────
 
 func _on_tick() -> void:
+	_update_nav_visibility()
 	_update_resource_display()
 	_update_building_cards()
 	if _active_mode == "Launch Pads":
@@ -451,9 +460,9 @@ func _on_tick() -> void:
 			_build_commands_panel()
 	elif _active_mode == "Research":
 		var st: GameState = GameManager.state
-		if st.completed_research != _research_completed_snapshot or st.cumulative_science_earned != _research_sci_snapshot:
+		if st.completed_research != _research_completed_snapshot or st.cumulative_resources_earned.get("sci", 0.0) != _research_sci_snapshot:
 			_research_completed_snapshot = st.completed_research.duplicate()
-			_research_sci_snapshot = st.cumulative_science_earned
+			_research_sci_snapshot = st.cumulative_resources_earned.get("sci", 0.0)
 			for child in _buildings_scroll.get_children():
 				child.queue_free()
 			_build_research_panel()
@@ -491,10 +500,16 @@ func _build_nav_grid(parent: VBoxContainer) -> void:
 	grid.add_theme_constant_override("v_separation", 6)
 	parent.add_child(grid)
 
+	var unlocked_panels: Array = GameManager.state.unlocked_nav_panels
 	for item: Array in NAV_ITEMS:
 		var btn := _make_nav_button(item[0], item[1])
 		grid.add_child(btn)
 		_nav_buttons[item[0]] = btn
+		# Hide panels that must be unlocked via events
+		for panel_id: String in HIDDEN_NAV_PANELS:
+			if HIDDEN_NAV_PANELS[panel_id] == item[0]:
+				btn.visible = unlocked_panels.has(panel_id)
+				break
 
 
 func _switch_mode(mode: String) -> void:
@@ -516,7 +531,7 @@ func _switch_mode(mode: String) -> void:
 		"Launch Pads": _build_launch_pads_panel()
 		"Research":
 			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
-			_research_sci_snapshot = GameManager.state.cumulative_science_earned
+			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
 		"Options":     _build_options_panel()
@@ -562,6 +577,14 @@ func _update_nav_highlight(mode: String) -> void:
 				btn.remove_theme_stylebox_override("normal")
 
 
+func _update_nav_visibility() -> void:
+	var unlocked: Array = GameManager.state.unlocked_nav_panels
+	for panel_id: String in HIDDEN_NAV_PANELS:
+		var btn_label: String = HIDDEN_NAV_PANELS[panel_id]
+		if _nav_buttons.has(btn_label):
+			_nav_buttons[btn_label].visible = unlocked.has(panel_id)
+
+
 func _on_theme_changed() -> void:
 	_setup_theme()
 	_rebuild_left_sidebar()
@@ -589,7 +612,7 @@ func _on_theme_changed() -> void:
 		"Launch Pads": _build_launch_pads_panel()
 		"Research":
 			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
-			_research_sci_snapshot = GameManager.state.cumulative_science_earned
+			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
 		"Options":     _build_options_panel()
@@ -1333,7 +1356,7 @@ func _build_research_panel() -> void:
 	var has_visible: bool = false
 	for cat: String in category_order:
 		var threshold: float = category_min_cost[cat] * 0.5
-		if st.cumulative_science_earned < threshold:
+		if st.cumulative_resources_earned.get("sci", 0.0) < threshold:
 			continue
 		has_visible = true
 		_add_research_category_section(outer, cat, by_category[cat])

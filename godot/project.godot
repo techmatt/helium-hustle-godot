@@ -22,8 +22,8 @@ GameSettings="*res://scripts/game/game_settings.gd"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
+window/size/viewport_width=1666
+window/size/viewport_height=1009
 window/size/mode=2
 
 [dotnet]

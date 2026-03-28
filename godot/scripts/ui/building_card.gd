@@ -6,6 +6,8 @@ const COLORS_DARK: Dictionary = {
 	"negative":    Color(0.749, 0.498, 0.498),
 	"can_afford":  Color(0.20, 0.40, 0.20, 0.35),
 	"cant_afford": Color(0.40, 0.20, 0.20, 0.35),
+	"card_locked": Color(0.07, 0.07, 0.09),
+	"requires":    Color(0.65, 0.45, 0.45),
 	"desc":        Color(0.70, 0.70, 0.70),
 	"count":       Color(0.75, 0.75, 0.75),
 }
@@ -14,6 +16,8 @@ const COLORS_LIGHT: Dictionary = {
 	"negative":    Color(0.58, 0.08, 0.08),
 	"can_afford":  Color(0.50, 0.86, 0.50, 0.30),
 	"cant_afford": Color(0.86, 0.50, 0.50, 0.30),
+	"card_locked": Color(0.93, 0.93, 0.93),
+	"requires":    Color(0.58, 0.29, 0.00),
 	"desc":        Color(0.26, 0.26, 0.30),
 	"count":       Color(0.32, 0.32, 0.36),
 }
@@ -54,6 +58,7 @@ var _font_exo2_regular: FontFile
 var _font_exo2_semibold: FontFile
 
 var _count_lbl: Label
+var _requires_lbl: Label
 var _bg_style: StyleBoxFlat
 var _cost_labels: Dictionary = {}
 
@@ -84,6 +89,7 @@ func setup(bdef: Dictionary, font_rb: FontFile, font_e2r: FontFile, font_e2s: Fo
 func refresh() -> void:
 	var owned: int = GameManager.state.buildings_owned.get(_bdef.short_name, 0)
 	var active: int = GameManager.get_building_active(_bdef.short_name)
+	var is_locked: bool = GameManager.is_building_locked(_bdef.short_name)
 
 	if owned == 0:
 		_count_lbl.text = "(0)"
@@ -96,6 +102,14 @@ func refresh() -> void:
 	if owned > 0:
 		_active_minus.disabled = (active <= 0)
 		_active_plus.disabled  = (active >= owned)
+
+	if is_locked:
+		_requires_lbl.text = GameManager.get_building_requires_text(_bdef.short_name)
+		_requires_lbl.visible = true
+		_bg_style.bg_color = _c("card_locked")
+		return
+
+	_requires_lbl.visible = false
 
 	var can_afford: bool = GameManager.can_afford_building(_bdef.short_name)
 	if GameSettings.is_dark_mode:
@@ -130,6 +144,8 @@ func _gui_input(event: InputEvent) -> void:
 
 func _attempt_buy() -> void:
 	var sn: String = _bdef.short_name
+	if GameManager.is_building_locked(sn):
+		return
 	if GameManager.can_afford_building(sn):
 		GameManager.buy_building(sn)
 		# Flash after refresh (buy_building triggers tick_completed → refresh)
@@ -182,6 +198,7 @@ func _build_ui() -> void:
 
 	_build_header(vbox)
 	_build_description(vbox)
+	_build_requires_label(vbox)
 	_build_production(vbox)
 	_build_upkeep(vbox)
 	_build_effects(vbox)
@@ -239,6 +256,17 @@ func _build_description(parent: VBoxContainer) -> void:
 	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", _c("desc"))
 	parent.add_child(lbl)
+
+
+func _build_requires_label(parent: VBoxContainer) -> void:
+	_requires_lbl = Label.new()
+	_requires_lbl.visible = false
+	_requires_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_requires_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+	_requires_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_requires_lbl.add_theme_font_size_override("font_size", 14)
+	_requires_lbl.add_theme_color_override("font_color", _c("requires"))
+	parent.add_child(_requires_lbl)
 
 
 func _build_production(parent: VBoxContainer) -> void:
