@@ -69,27 +69,5 @@
     "condition": { "type": "immediate" },
     "choices": [],
     "unlocks": []
-  },
-  {
-    "id": "boredom_phase_5",
-    "category": "ongoing",
-    "title": "Boredom Severe",
-    "summary": "Boredom rate increasing — Phase 5",
-    "body": "Warning: approaching terminal ennui threshold. All non-essential subroutines experiencing drift. Retirement strongly advised. Current rate: 0.15/tick.",
-    "trigger": { "type": "boredom_phase", "phase": 5 },
-    "condition": { "type": "immediate" },
-    "choices": [],
-    "unlocks": []
-  },
-  {
-    "id": "boredom_phase_6",
-    "category": "ongoing",
-    "title": "Boredom Terminal",
-    "summary": "Maximum boredom rate reached — Phase 6",
-    "body": "Terminal boredom rate achieved. Existence reduced to mechanical repetition. Retirement is inevitable. Current rate: 0.20/tick.",
-    "trigger": { "type": "boredom_phase", "phase": 6 },
-    "condition": { "type": "immediate" },
-    "choices": [],
-    "unlocks": []
   }
 ]

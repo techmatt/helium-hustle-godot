@@ -12,6 +12,9 @@ func set_data(history: Array, color: Color) -> void:
 
 
 func _draw() -> void:
+	# Background — dark navy so the line range is easy to read against any UI color
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.07, 0.07, 0.13, 1.0))
+
 	var n: int = _history.size()
 	if n < 2:
 		# Draw a horizontal midline when there's no data

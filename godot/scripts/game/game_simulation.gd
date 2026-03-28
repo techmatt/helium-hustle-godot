@@ -20,9 +20,7 @@ var _launch_cooldown: int = 10
 var _trade_values: Dictionary = {"he3": 20.0, "ti": 12.0, "cir": 30.0, "prop": 8.0}
 var _demand_baseline: float = 0.5  # fallback when demand not yet initialized
 
-# Demand system config (set from game_config in init)
-var _demand_cfg: Dictionary = {}
-var _rivals: Array = []
+var demand_system: DemandSystem = null
 
 # Boredom curve: Array of [start_day, rate]
 var _boredom_curve: Array = []
@@ -48,8 +46,12 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 		_trade_values = {}
 		for k: String in ship.get("base_values", {}):
 			_trade_values[k] = float(ship.base_values[k])
-	_demand_cfg = game_config.get("demand", {})
-	_rivals = game_config.get("rivals", [])
+	demand_system = DemandSystem.new()
+	demand_system.init(
+		game_config.get("demand", {}),
+		game_config.get("rivals", []),
+		resources_data
+	)
 	_boredom_curve.clear()
 	for entry in game_config.get("boredom_curve", []):
 		_boredom_curve.append([int(entry.get("day", 0)), float(entry.get("rate", 0.0))])
@@ -125,7 +127,7 @@ func tick(state: GameState) -> void:
 			will_produce.append([bdef, count])
 
 	# Demand update runs BEFORE programs so shipments use fresh demand values
-	_tick_demand_update(state)
+	demand_system.tick_demand(state)
 
 	for entry in will_produce:
 		var bdef: Dictionary = entry[0]
@@ -165,8 +167,9 @@ func tick(state: GameState) -> void:
 
 	# Rival dumps and speculator burst check happen after shipments,
 	# modifying state for next tick's demand calculation.
-	_tick_rivals(state)
-	_tick_speculators(state)
+	var rival_notifs: Array = demand_system.tick_rivals(state)
+	pending_rival_notifications.append_array(rival_notifs)
+	demand_system.tick_speculators(state)
 
 	_check_milestones(state)
 	_clamp(state)
@@ -447,8 +450,8 @@ func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: floa
 		rate_tracker.record("shipment", pad.resource_type, -pad.cargo_loaded)
 		rate_tracker.record("shipment", "prop", -_launch_fuel_cost)
 	# Apply launch saturation hit (takes effect next tick's demand)
-	var sat_min: float = _dcfg("launch_saturation_min")
-	var sat_max: float = _dcfg("launch_saturation_max")
+	var sat_min: float = demand_system.get_config("launch_saturation_min")
+	var sat_max: float = demand_system.get_config("launch_saturation_max")
 	var sat_hit: float = randf_range(sat_min, sat_max) * (pad.cargo_loaded / _pad_cargo_capacity)
 	state.demand_launch[pad.resource_type] = state.demand_launch.get(pad.resource_type, 0.0) + sat_hit
 	# Update speculator revenue tracking (base-value shipped, not demand-adjusted)
@@ -512,15 +515,15 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 			"demand_nudge":
 				var res: String = effect.get("resource", "")
 				if res in GameState.TRADEABLE_RESOURCES:
-					var half_pt: float = _dcfg("speculator_half_point")
+					var half_pt: float = demand_system.get_config("speculator_half_point")
 					var effectiveness: float = 1.0
 					if state.speculator_target == res and state.speculator_count > 0.0:
-						var damp: float = _dcfg("promote_speculator_dampening")
+						var damp: float = demand_system.get_config("promote_speculator_dampening")
 						effectiveness = 1.0 - damp * (state.speculator_count / (state.speculator_count + half_pt))
-					var base_eff: float = float(effect.get("value", _dcfg("promote_base_effect")))
+					var base_eff: float = float(effect.get("value", demand_system.get_config("promote_base_effect")))
 					state.demand_promote[res] = state.demand_promote.get(res, 0.0) + base_eff * effectiveness
 			"spec_reduce":
-				var reduce: float = randf_range(_dcfg("disrupt_speculators_min"), _dcfg("disrupt_speculators_max"))
+				var reduce: float = randf_range(demand_system.get_config("disrupt_speculators_min"), demand_system.get_config("disrupt_speculators_max"))
 				state.speculator_count = maxf(0.0, state.speculator_count - reduce)
 
 
@@ -617,185 +620,6 @@ func buy_land(state: GameState) -> void:
 	state.amounts["cred"] -= float(get_land_purchase_cost(state))
 	state.amounts["land"] = state.amounts.get("land", 0.0) + float(_land_per_purchase)
 	state.land_purchases += 1
-
-
-# ── Demand System ─────────────────────────────────────────────────────────────
-# TODO: sim/economy.py needs to be updated to mirror this demand system.
-
-func _dcfg(key: String) -> float:
-	return float(_demand_cfg.get(key, 0.0))
-
-
-func initialize_demand(state: GameState) -> void:
-	var freq_min: float = _dcfg("perlin_freq_min")
-	var freq_max: float = _dcfg("perlin_freq_max")
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		state.demand_perlin_seeds[res] = randf() * 100.0
-		state.demand_perlin_freq[res]  = randf_range(freq_min, freq_max)
-		state.demand_promote[res]  = 0.0
-		state.demand_rival[res]    = 0.0
-		state.demand_launch[res]   = 0.0
-		state.demand_history[res]  = []
-		state.speculator_revenue_tracking[res] = 0.0
-	for rival in _rivals:
-		var rid: String = rival.get("id", "")
-		if rid:
-			state.rival_next_dump_tick[rid] = randi_range(150, 250)
-	var burst_min: int = int(_dcfg("speculator_burst_interval_min"))
-	var burst_max: int = int(_dcfg("speculator_burst_interval_max"))
-	state.speculator_next_burst_tick = randi_range(burst_min, burst_max)
-	# Compute initial demand values at day 0
-	_tick_demand_update(state)
-
-
-func _tick_demand_update(state: GameState) -> void:
-	var spec_count: float = state.speculator_count
-	var spec_target: String = state.speculator_target
-	var max_sup: float = _dcfg("speculator_max_suppression")
-	var half_pt: float = _dcfg("speculator_half_point")
-	var amplitude: float = _dcfg("perlin_amplitude")
-	var promote_decay: float = _dcfg("promote_decay_rate")
-	var rival_decay: float = _dcfg("rival_demand_decay_rate")
-	var launch_decay: float = _dcfg("launch_saturation_decay_rate")
-	var min_d: float = _dcfg("min_demand")
-	var max_d: float = _dcfg("max_demand")
-	var coupling: float = _dcfg("coupling_fraction")
-
-	# Speculator suppression on the target resource
-	var spec_sup_on_target: float = 0.0
-	if spec_target != "" and spec_count > 0.0:
-		spec_sup_on_target = max_sup * (spec_count / (spec_count + half_pt))
-
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		# Decay accumulators each tick
-		state.demand_promote[res] = maxf(0.0, state.demand_promote.get(res, 0.0) - promote_decay)
-		state.demand_rival[res]   = maxf(0.0, state.demand_rival.get(res, 0.0)   - rival_decay)
-		state.demand_launch[res]  = maxf(0.0, state.demand_launch.get(res, 0.0)  - launch_decay)
-
-		# Perlin base demand (centered on 0.5)
-		var t: float = float(state.current_day) * state.demand_perlin_freq.get(res, 0.01) + state.demand_perlin_seeds.get(res, 0.0)
-		var perlin_val: float = _perlin_1d(t)  # returns [-1, 1]
-		var base_demand: float = 0.5 + perlin_val * amplitude
-
-		# Speculator suppression on this resource
-		var spec_sup: float = spec_sup_on_target if spec_target == res else 0.0
-
-		# Coupling bonus: other resources get a small lift when one is suppressed
-		var coupling_bonus: float = 0.0
-		if spec_target != "" and spec_target != res:
-			coupling_bonus = spec_sup_on_target * coupling / 3.0
-
-		# Nationalist ideology bonus (stub — rank 0 until ideology system)
-		var nationalist_rank: int = 0
-		var nationalist_mult: float = pow(1.05, nationalist_rank)
-
-		var raw: float = (base_demand
-			- spec_sup
-			- state.demand_rival.get(res, 0.0)
-			- state.demand_launch.get(res, 0.0)
-			+ state.demand_promote.get(res, 0.0)
-			+ coupling_bonus)
-		state.demand[res] = clampf(raw * nationalist_mult, min_d, max_d)
-
-		# Record history for sparklines
-		var hist: Array = state.demand_history.get(res, [])
-		hist.append(state.demand[res])
-		if hist.size() > 200:
-			hist.pop_front()
-		state.demand_history[res] = hist
-
-
-func _tick_speculators(state: GameState) -> void:
-	# Decay speculators — base rate boosted by active Arbitrage Engines
-	var active_arb: int = state.buildings_active.get("arbitrage_engine", state.buildings_owned.get("arbitrage_engine", 0))
-	var decay: float = _dcfg("speculator_natural_decay") + float(active_arb) * _dcfg("arbitrage_decay_bonus_per_building")
-	state.speculator_count = maxf(0.0, state.speculator_count - decay)
-	# Check for burst arrival
-	if state.current_day >= state.speculator_next_burst_tick:
-		_fire_speculator_burst(state)
-
-
-func _fire_speculator_burst(state: GameState) -> void:
-	state.speculator_target = _pick_speculator_target(state)
-	var size_min: int = int(_dcfg("speculator_burst_size_min"))
-	var size_max: int = int(_dcfg("speculator_burst_size_max"))
-	var growth: float = _dcfg("speculator_burst_growth")
-	var burst: float = float(randi_range(size_min, size_max)) * pow(growth, float(state.speculator_burst_number))
-	state.speculator_count += burst
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		state.speculator_revenue_tracking[res] = 0.0
-	var int_min: int = int(_dcfg("speculator_burst_interval_min"))
-	var int_max: int = int(_dcfg("speculator_burst_interval_max"))
-	state.speculator_next_burst_tick = state.current_day + randi_range(int_min, int_max)
-	state.speculator_burst_number += 1
-
-
-func _pick_speculator_target(state: GameState) -> String:
-	var total: float = 0.0
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		total += state.speculator_revenue_tracking.get(res, 0.0)
-	if total <= 0.0:
-		return GameState.TRADEABLE_RESOURCES[randi() % GameState.TRADEABLE_RESOURCES.size()] as String
-	var roll: float = randf() * total
-	var cumulative: float = 0.0
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		cumulative += state.speculator_revenue_tracking.get(res, 0.0)
-		if roll <= cumulative:
-			return res
-	return GameState.TRADEABLE_RESOURCES[0] as String
-
-
-func _tick_rivals(state: GameState) -> void:
-	for rival in _rivals:
-		var rid: String = rival.get("id", "")
-		if rid.is_empty():
-			continue
-		if state.current_day >= state.rival_next_dump_tick.get(rid, 0):
-			var target_res: String = rival.get("target_resource", "")
-			var hit: float = float(rival.get("demand_hit", 0.3))
-			state.demand_rival[target_res] = state.demand_rival.get(target_res, 0.0) + hit
-			var imin: int = int(rival.get("dump_interval_min", 150))
-			var imax: int = int(rival.get("dump_interval_max", 250))
-			state.rival_next_dump_tick[rid] = state.current_day + randi_range(imin, imax)
-			# Push to launch history as a notification entry
-			var res_display: String = _get_resource_display_name(target_res)
-			var msg: String = "%s flooded the %s market" % [rival.get("name", rid), res_display]
-			var note := GameState.LaunchRecord.new()
-			note.tick = state.current_day
-			note.notification_message = msg
-			state.launch_history.push_front(note)
-			if state.launch_history.size() > 5:
-				state.launch_history.pop_back()
-			pending_rival_notifications.append({
-				"tick": state.current_day,
-				"rival_name": rival.get("name", rid),
-				"resource": target_res,
-				"message": msg,
-			})
-
-
-func _get_resource_display_name(short_name: String) -> String:
-	for rdef in _resources_data:
-		if rdef.short_name == short_name:
-			return rdef.get("name", short_name)
-	return short_name
-
-
-func _perlin_1d(t: float) -> float:
-	# Value noise: smooth interpolation between hashed lattice points
-	var xi: int = int(floor(t))
-	var xf: float = t - floor(t)
-	var u: float = xf * xf * (3.0 - 2.0 * xf)  # smoothstep
-	var a: float = _hash_noise(xi) * 2.0 - 1.0   # remap [0,1] → [-1,1]
-	var b: float = _hash_noise(xi + 1) * 2.0 - 1.0
-	return lerpf(a, b, u)
-
-
-func _hash_noise(i: int) -> float:
-	# Fast integer hash → [0, 1]
-	var x: int = (i * 1664525 + 1013904223) & 0x7FFFFFFF
-	x = (x ^ (x >> 16)) & 0x7FFFFFFF
-	return float(x) / float(0x7FFFFFFF)
 
 
 func _check_milestones(state: GameState) -> void:

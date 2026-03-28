@@ -156,7 +156,7 @@ var _research_completed_snapshot: Array = []
 var _research_sci_snapshot: float = -1.0
 # adversaries sidebar
 var _spec_count_lbl: Label = null
-var _spec_target_lbl: Label = null
+var _spec_name_lbl: Label = null
 
 var _font_rajdhani_bold: FontFile
 var _font_exo2_regular: FontFile
@@ -652,7 +652,7 @@ func _rebuild_left_sidebar() -> void:
 	_nav_buttons.clear()
 	_resource_labels.clear()
 	_spec_count_lbl = null
-	_spec_target_lbl = null
+	_spec_name_lbl = null
 	_build_left_sidebar()
 	_update_nav_highlight(_active_mode)
 
@@ -1296,67 +1296,87 @@ func _populate_demand_section(st: GameState, has_ma: bool) -> void:
 	if _demand_body == null or not is_instance_valid(_demand_body):
 		return
 
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
-		var demand_val: float = st.demand.get(res, 0.5)
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		_demand_body.add_child(row)
+	var resources: Array = GameState.TRADEABLE_RESOURCES
+	var idx := 0
+	while idx < resources.size():
+		# Outer row holds two resource blocks side-by-side
+		var pair_row := HBoxContainer.new()
+		pair_row.add_theme_constant_override("separation", 8)
+		_demand_body.add_child(pair_row)
 
-		# Color swatch
-		var swatch := ColorRect.new()
-		swatch.color = display[1]
-		swatch.custom_minimum_size = Vector2(12, 12)
-		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(swatch)
+		for slot in range(2):
+			if idx + slot >= resources.size():
+				# Pad with a spacer so the left block doesn't stretch to full width
+				var spacer := Control.new()
+				spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				pair_row.add_child(spacer)
+				continue
 
-		# Resource name
-		var name_lbl := Label.new()
-		name_lbl.text = display[0]
-		name_lbl.add_theme_font_override("font", _font_exo2_regular)
-		name_lbl.add_theme_font_size_override("font_size", 13)
-		if has_ma:
-			name_lbl.custom_minimum_size = Vector2(72, 0)
-		else:
-			name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(name_lbl)
+			var res: String = resources[idx + slot]
+			var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
+			var demand_val: float = st.demand.get(res, 0.5)
 
-		if has_ma:
-			# Sparkline (stretches to fill)
-			var sparkline := DemandSparkline.new()
-			sparkline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			sparkline.custom_minimum_size = Vector2(0, 26)
-			sparkline.set_data(st.demand_history.get(res, [demand_val]), display[1])
-			row.add_child(sparkline)
-			_demand_sparklines[res] = sparkline
+			var block := HBoxContainer.new()
+			block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			block.add_theme_constant_override("separation", 6)
+			pair_row.add_child(block)
 
-			# Exact value
-			var val_lbl := Label.new()
-			val_lbl.text = "%.2f" % demand_val
-			val_lbl.custom_minimum_size = Vector2(36, 0)
-			val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			val_lbl.add_theme_font_override("font", _font_exo2_semibold)
-			val_lbl.add_theme_font_size_override("font_size", 13)
-			var tier_arr: Array = _demand_tier(demand_val)
-			if tier_arr[2] != Color(0, 0, 0, 0):
-				val_lbl.add_theme_color_override("font_color", tier_arr[2])
-			# Speculator warning indicator
-			if st.speculator_target == res and st.speculator_count > 0.0:
-				val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
-			row.add_child(val_lbl)
-			_demand_value_labels[res] = val_lbl
-		else:
-			# Tier label only
-			var tier_arr: Array = _demand_tier(demand_val)
-			var tier_lbl := Label.new()
-			tier_lbl.text = tier_arr[1]
-			tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			tier_lbl.add_theme_font_override("font", _font_exo2_semibold)
-			tier_lbl.add_theme_font_size_override("font_size", 13)
-			if tier_arr[2] != Color(0, 0, 0, 0):
-				tier_lbl.add_theme_color_override("font_color", tier_arr[2])
-			row.add_child(tier_lbl)
-			_demand_tier_labels[res] = tier_lbl
+			# Color swatch
+			var swatch := ColorRect.new()
+			swatch.color = display[1]
+			swatch.custom_minimum_size = Vector2(12, 12)
+			swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			block.add_child(swatch)
+
+			# Resource name
+			var name_lbl := Label.new()
+			name_lbl.text = display[0]
+			name_lbl.add_theme_font_override("font", _font_exo2_regular)
+			name_lbl.add_theme_font_size_override("font_size", 13)
+			if has_ma:
+				name_lbl.custom_minimum_size = Vector2(66, 0)
+			else:
+				name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			block.add_child(name_lbl)
+
+			if has_ma:
+				# Sparkline — doubled height, stretches to fill remaining block width
+				var sparkline := DemandSparkline.new()
+				sparkline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				sparkline.custom_minimum_size = Vector2(0, 104)
+				sparkline.set_data(st.demand_history.get(res, [demand_val]), display[1])
+				block.add_child(sparkline)
+				_demand_sparklines[res] = sparkline
+
+				# Exact value
+				var val_lbl := Label.new()
+				val_lbl.text = "%.2f" % demand_val
+				val_lbl.custom_minimum_size = Vector2(36, 0)
+				val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				val_lbl.add_theme_font_override("font", _font_exo2_semibold)
+				val_lbl.add_theme_font_size_override("font_size", 13)
+				var tier_arr: Array = _demand_tier(demand_val)
+				if tier_arr[2] != Color(0, 0, 0, 0):
+					val_lbl.add_theme_color_override("font_color", tier_arr[2])
+				# Speculator warning indicator
+				if st.speculator_target == res and st.speculator_count > 0.0:
+					val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
+				block.add_child(val_lbl)
+				_demand_value_labels[res] = val_lbl
+			else:
+				# Tier label only
+				var tier_arr: Array = _demand_tier(demand_val)
+				var tier_lbl := Label.new()
+				tier_lbl.text = tier_arr[1]
+				tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				tier_lbl.add_theme_font_override("font", _font_exo2_semibold)
+				tier_lbl.add_theme_font_size_override("font_size", 13)
+				if tier_arr[2] != Color(0, 0, 0, 0):
+					tier_lbl.add_theme_color_override("font_color", tier_arr[2])
+				block.add_child(tier_lbl)
+				_demand_tier_labels[res] = tier_lbl
+
+		idx += 2
 
 
 func _refresh_demand_section() -> void:
@@ -1414,13 +1434,13 @@ func _build_adversaries_section(parent: VBoxContainer) -> void:
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_wrap.add_child(icon)
 
-	var name_lbl := Label.new()
-	name_lbl.text = "Speculators"
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_override("font", _font_exo2_regular)
-	name_lbl.add_theme_font_size_override("font_size", 14)
-	spec_row.add_child(name_lbl)
+	_spec_name_lbl = Label.new()
+	_spec_name_lbl.text = "Speculators"
+	_spec_name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_spec_name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_spec_name_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_spec_name_lbl.add_theme_font_size_override("font_size", 14)
+	spec_row.add_child(_spec_name_lbl)
 
 	_spec_count_lbl = Label.new()
 	_spec_count_lbl.text = "0"
@@ -1431,21 +1451,6 @@ func _build_adversaries_section(parent: VBoxContainer) -> void:
 	_spec_count_lbl.add_theme_font_size_override("font_size", 14)
 	spec_row.add_child(_spec_count_lbl)
 
-	# Target sub-row (indented)
-	var tgt_row := HBoxContainer.new()
-	tgt_row.add_theme_constant_override("separation", 4)
-	body.add_child(tgt_row)
-	var tgt_spacer := Control.new()
-	tgt_spacer.custom_minimum_size = Vector2(22, 0)
-	tgt_row.add_child(tgt_spacer)
-	_spec_target_lbl = Label.new()
-	_spec_target_lbl.text = ""
-	_spec_target_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_spec_target_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_spec_target_lbl.add_theme_font_size_override("font_size", 13)
-	_spec_target_lbl.add_theme_color_override("font_color", _p("text_muted"))
-	tgt_row.add_child(_spec_target_lbl)
-
 
 func _update_adversaries_display() -> void:
 	if _spec_count_lbl == null or not is_instance_valid(_spec_count_lbl):
@@ -1454,11 +1459,10 @@ func _update_adversaries_display() -> void:
 	var count: int = int(st.speculator_count)
 	_spec_count_lbl.text = "%d" % count
 	if count == 0 or st.speculator_target.is_empty():
-		_spec_target_lbl.text = ""
+		_spec_name_lbl.text = "Speculators"
 	else:
 		var res_display: Array = TRADEABLE_DISPLAY.get(st.speculator_target, [st.speculator_target, Color.WHITE])
-		_spec_target_lbl.text = "→ " + str(res_display[0])
-		_spec_target_lbl.add_theme_color_override("font_color", res_display[1])
+		_spec_name_lbl.text = "Speculators (%s)" % str(res_display[0])
 
 
 func _build_loading_priority_list(parent: VBoxContainer) -> void:

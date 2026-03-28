@@ -2,7 +2,7 @@ extends Node
 
 const DEBUG_PROGRAM_TEST: bool = false
 const DEBUG_UI: bool = false
-const DEBUG_DEMAND: bool = true
+const DEBUG_DEMAND: bool = false
 
 const SPEED_MAP: Dictionary = {
 	"||":   0.0,
@@ -73,7 +73,7 @@ func _initialize_state() -> void:
 	for sn in _game_config.starting_buildings:
 		state.buildings_owned[sn] = int(_game_config.starting_buildings[sn])
 	sim.recalculate_caps(state)
-	sim.initialize_demand(state)
+	sim.demand_system.initialize_demand(state)
 	state.programs[0].processors_assigned = 1
 
 
@@ -276,6 +276,7 @@ func _debug_setup_ui_state() -> void:
 
 func _debug_setup_demand_state() -> void:
 	# Sets up all prerequisites for testing the demand/trading system.
+	sim.demand_system.debug_pure_noise = false
 	_debug_setup_ui_state()  # rich resources + 3 launch pads
 	# Unlock market_awareness so the demand section shows sparklines + exact values
 	if not state.completed_research.has("market_awareness"):
