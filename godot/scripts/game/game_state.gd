@@ -42,6 +42,7 @@ var loading_priority: Array = ["he3", "ti", "cir", "prop"]
 var launch_history: Array = []        # Array of LaunchRecord, max 5
 var completed_research: Array = []    # Array of String research IDs purchased this run
 var cumulative_science_earned: float = 0.0  # monotonically increasing, never decremented
+var land_purchases: int = 0           # number of times Buy Land has been used this run
 
 # Event system — per-run state
 var event_instances: Array[Dictionary] = []

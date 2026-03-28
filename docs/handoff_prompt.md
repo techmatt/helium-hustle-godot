@@ -15,6 +15,10 @@ and specification should be recorded here in full detail. Do not use phrases lik
 it must be present in this document. Prior handoffs will not be available in future 
 sessions.
 
+**This document is used by both claude.ai (for design discussions) and Claude Code 
+(for implementation).** Write all specifications with enough detail that either 
+context can act on them without additional clarification.
+
 At the end of this session, produce an updated version of this handoff document 
 incorporating all new decisions, following the same format and including these 
 same instructions at the top. The user will save it and attach it to the next 
@@ -46,22 +50,33 @@ godot/
     resources.json         ← GROUND TRUTH for resource definitions
     commands.json          ← GROUND TRUTH for command definitions
     research.json          ← GROUND TRUTH for research definitions
+    events.json            ← GROUND TRUTH for event definitions
     game_config.json       ← GROUND TRUTH for starting state, boredom, shipment, etc.
   scenes/
     main_ui.tscn           ← Main scene (three-column layout)
     ui/BuildingCard.tscn
+    ui/BuyLandCard.tscn    ← Buy Land card (full-width, top of Buildings panel)
     ui/CommandRow.tscn     ← Program command row (reusable)
     ui/LaunchPadCard.tscn  ← Launch pad widget (full-width)
+    ui/EventPanel.tscn     ← Event panel (lower right panel)
+    ui/EventModal.tscn     ← Event modal dialog (center-screen overlay)
+    ui/StatsPanel.tscn     ← Stats panel (center panel view)
   scripts/
     game/
       game_state.gd        ← class_name GameState — pure data, no UI
       game_simulation.gd   ← class_name GameSimulation — pure logic, no UI
       game_manager.gd      ← autoload singleton, owns state + sim
+      event_manager.gd     ← class_name EventManager — event logic, no UI
+      resource_rate_tracker.gd ← class_name ResourceRateTracker — per-source rate tracking
     ui/
       main_ui.gd           ← Main UI controller
       building_card.gd     ← BuildingCard (PanelContainer subclass)
+      buy_land_card.gd     ← BuyLandCard widget
       command_row.gd       ← CommandRow for program list
       launch_pad_card.gd   ← LaunchPadCard widget
+      event_panel.gd       ← Event panel UI
+      event_modal.gd       ← Event modal UI
+      stats_panel.gd       ← Stats panel UI
   assets/fonts/            ← Rajdhani Bold, Exo 2 Regular/SemiBold
 
 data/
@@ -128,8 +143,9 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 ### In Godot
 
 1. **UI skeleton** — three-column layout: left sidebar (nav buttons, speed controls, 
-   resource list), center panel (buildings/commands/launch pads), right panel 
-   (programs, events placeholder). Bottom status bar with system uptime.
+   resource list), center panel (buildings/commands/launch pads/stats), right panel 
+   (programs top, events bottom). Bottom status bar with system uptime, boredom bar, 
+   energy bar.
 
 2. **Light mode UI** — consistent light color scheme. White card backgrounds, light 
    panel backgrounds (#E8E8E8 sidebars, #F5F5F5 center), dark text, green/red 
@@ -162,7 +178,7 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 
 5. **Program/processor system** — fully implemented (see Programs & Processors 
    section for design details):
-   - 5 program tabs in right panel with processor assignment (+/−/Reset)
+   - 5 program tabs in right panel (fixed height) with processor assignment (+/−/Reset)
    - Command queue per program: reorderable rows with repeat count, progress 
      bars, −/+/× controls
    - Commands view in center panel (via left nav) with Add buttons per command
@@ -170,7 +186,6 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
    - Locked commands visible but Add disabled, showing research requirement
    - Execution: top-to-bottom, failed rows turn red, resets on wrap
    - Program panel UI throttled to ~10fps at high game speeds
-   - Resource rate display in left sidebar shows net rates from buildings + programs
 
 6. **Launch pad / shipment system** — fully implemented (see Shipment & Trade 
    Economy section for design details):
@@ -189,9 +204,34 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 8. **Storage caps & cap display** — resource list shows current/cap format 
    (e.g. "47/100").
 
-9. **Net income display** — resource rates show actual net per tick from 
-   buildings and programs, with green/red coloring. Rates reflect actual 
-   behavior (input-starvation and cap-gating applied), not theoretical maximums.
+9. **Bottom status bar** — boredom bar (color-ramped, 50-tick rolling average 
+   rate) + energy bar (blue, instantaneous net rate). Both with overlaid text 
+   values. Not throttled at high speeds.
+
+10. **Research system** — basic implementation (not thoroughly tested). Research 
+    items loaded from research.json, purchasable with science. Category-based 
+    visibility gating by cumulative science earned. Research panel in center 
+    panel via left nav.
+
+11. **Event system** — EventManager (pure logic) + EventPanel (lower right panel) + 
+    EventModal (center-screen overlay). Three collapsible sections: Story, Ongoing, 
+    Completed. Events defined in events.json. First-time events auto-open modal and 
+    pause; previously-seen events appear silently. Auto-pause on modal events 
+    implemented.
+
+12. **Stats panel** — center panel view via "Stats" nav button. Per-resource income/ 
+    expense breakdown using ResourceRateTracker with 50-tick moving averages. 
+    Collapsible sections per resource showing per-source line items. Career Bonuses 
+    section (placeholder). Throttled to ~4fps.
+
+13. **Buy Land card** — full-width card at top of Buildings panel. Shows land 
+    usage, next purchase cost, and Buy button. 15 credit base, 1.5x scaling, 
+    10 land per purchase.
+
+14. **Resource list improvements** — ordered Boredom/Energy/Processors/Land first, 
+    then remaining resources. Processor display shows assigned/total. No income 
+    rates in sidebar (moved to Stats panel). Cap coloring: dark green at cap, 
+    dark red at zero for capped resources.
 
 ### In the Python Optimizer (`sim/`)
 
@@ -217,29 +257,25 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 
 ## What's NOT Implemented Yet (in rough priority order)
 
-1. **Bottom status bar** — boredom bar + energy bar (see Bottom Status Bar section)
-2. **Boredom system in Godot** — phase-based accumulation, display, hard cutoff 
-   at 100 (see Boredom & Retirement section)
-3. **Retirement** — forced at boredom 100, voluntary anytime, reset logic (see 
+1. **Retirement** — forced at boredom 100, voluntary anytime, reset logic (see 
    Boredom & Retirement section)
-4. **Research system** — individual research items, science spending, command 
-   unlocks, passive bonuses (see Research section)
-5. **Building unlock requirements** — "Requires" field exists in data but isn't 
+2. **Building unlock requirements** — "Requires" field exists in data but isn't 
    enforced in Godot
-6. **Demand system** — price fluctuations, speculator pressure (see Shipment & 
+3. **Milestone boredom reductions** — scaffold needed (see Boredom & Retirement)
+4. **Demand system** — price fluctuations, speculator pressure (see Shipment & 
    Trade Economy section)
-7. **Quest chain / event system** — Q1–Q10 implicit tutorial (see Quest Chain 
-   section)
-8. **Speculators & rival AIs** — see Speculators & Rival AIs section
-9. **Ideology** — see Ideology section
-10. **Projects** — see Projects section
-11. **Land purchasing** — land is a scaling resource. Needs a home in the 
-    Buildings panel (Buy Land button with escalating cost)
-12. **Auto-pause on events** — see Event System section
-13. **Milestone boredom reductions** — see Boredom & Retirement section
-14. **Save/load programs** — loadout system for saving/loading program configs
-15. **Block/Skip toggle** — per-program entry option
-16. **Cross-retirement program persistence**
+5. **Quest chain content beyond Q1–Q3** — Q4–Q10 need implementation
+6. **Speculators & rival AIs** — see Speculators & Rival AIs section
+7. **Ideology** — see Ideology section
+8. **Projects** — see Projects section
+9. **Boredom phase signal** — GameState needs `current_boredom_phase` variable 
+   and signal on phase change for event system integration
+10. **Cumulative resource counter unification** — unify `cumulative_science_earned` 
+    with general `cumulative_resources_earned` dictionary
+11. **Save/load programs** — loadout system for saving/loading program configs
+12. **Block/Skip toggle** — per-program entry option
+13. **Cross-retirement program persistence**
+14. **Persistence/save layer** — architecture for what survives retirement
 
 ---
 
@@ -257,6 +293,16 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
   buildings produce, consume, and grant effects.
 - Program panel UI updates are throttled to ~10fps regardless of game speed to 
   prevent lag at 200x.
+- Event panel and Stats panel updates also throttled (~10fps and ~4fps respectively).
+
+### Design Rule: No Same-Resource Production and Upkeep
+
+**No building should both produce and consume the same resource.** This creates 
+confusing stats breakdowns and doesn't add meaningful gameplay. If a building 
+conceptually has offsetting production and consumption of the same resource, 
+consolidate to the net value in the data. Example: Electrolysis Plant was changed 
+from (+2 prop, +1 eng production / -2 ice, -2 eng upkeep) to (+2 prop production / 
+-2 ice, -1 eng upkeep) — same net effect, cleaner data.
 
 ---
 
@@ -292,7 +338,7 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 | Smelter | 40 | 1.25 | 1 | 1 ti | 3 eng, 2 reg |
 | Refinery | 60 | 1.25 | 2 | 1 he3 | 3 eng, 2 reg |
 | Fabricator | 100 | 1.30 | 2 | 0.5 cir | 5 eng, 1 reg |
-| Electrolysis | 50 | 1.25 | 1 | 2 prop + 1 eng | 2 ice, 2 eng |
+| Electrolysis | 50 | 1.25 | 1 | 2 prop | 2 ice, 1 eng |
 | Launch Pad | 150 | 1.30 | 3 | — | 1 eng |
 | Research Lab | 120 | 1.30 | 2 | 1 sci | 3 eng, 0.2 cir |
 | Data Center | 200 | 1.35 | 2 | — (grants 1 proc) | 4 eng |
@@ -303,7 +349,9 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 Note: Solar Panel and Excavator have credit-only costs (no physical resources). 
 Solar Panel titanium cost was removed during optimizer tuning — the original design 
 had a titanium teaching loop but it was cut for smoother early game flow. The 
-optimizer starts with a Data Center so the player has a processor from tick 1.
+optimizer starts with a Data Center so the player has a processor from tick 1. 
+Electrolysis Plant was consolidated to net energy values (no same-resource 
+production/upkeep).
 
 ### Key Command Costs
 | Command | Costs | Production | Notes |
@@ -324,6 +372,8 @@ a specific build) not as a primary resource strategy.
 - Base cost: 15 credits, scaling: 1.5x per purchase
 - 10 land per purchase
 - Starting land: 40
+- Buy Land card at top of Buildings panel (full-width, not in any category dropdown)
+- No selling or disabling land purchases
 
 ---
 
@@ -337,13 +387,13 @@ a specific build) not as a primary resource strategy.
 - **Refinery** — regolith + energy → He-3
 - **Smelter** — regolith + energy → titanium
 - **Fabricator** — regolith + energy (lots) → circuit boards
-- **Electrolysis Plant** — ice + energy → propellant + energy (net energy positive)
+- **Electrolysis Plant** — ice + energy → propellant (small net energy cost)
 
 ### Resource Dependency Structure
 Two independent extraction chains (regolith and ice) feed into four processing 
 paths, all competing for energy:
 - **Regolith** feeds three competing uses: He-3, titanium, circuit boards
-- **Ice** feeds propellant/energy via electrolysis
+- **Ice** feeds propellant via electrolysis
 - **Energy** is the universal bottleneck
 
 ### Tradeable Goods (4 types)
@@ -379,8 +429,10 @@ paths, all competing for energy:
 Credits, Science, Land, Boredom (fixed 0-100 range by design).
 
 ### Cap Display
-Caps are **always shown** in the resource list: `47/100`. At cap, visually 
-signal waste (color change, flash, or similar).
+Caps are **always shown** in the resource list: `47/100`. Resources at cap show 
+in dark green (#2E7D32). Resources at zero show in dark red (#C62828). Normal 
+values use default text color (#1A1A1A). Cap coloring applies only to capped 
+resources (not Credits, Science, Land, or Boredom).
 
 ### Production-Gated Upkeep
 Buildings with production outputs automatically skip upkeep on ticks where ALL 
@@ -428,6 +480,41 @@ land only, no credit refund. Selling recalculates the next purchase cost
 
 ---
 
+## Left Sidebar Resource List
+
+### Display Order (fixed)
+1. Boredom
+2. Energy
+3. Processors
+4. Land
+5. Credits
+6. Science
+7. Regolith
+8. Ice
+9. Helium-3
+10. Titanium
+11. Circuit Boards
+12. Propellant
+
+### Processor Row
+Displays `Processors: 2/3` where 2 = total assigned across all programs, 
+3 = total available (active Data Centers). No income rate shown. Styled like 
+other resource rows without the rate portion.
+
+### No Income Rates
+The left sidebar resource list shows only resource name and current value (with 
+cap where applicable). No per-tick rates. Income breakdown lives in the Stats 
+panel.
+
+### Cap Coloring
+- At cap (current >= max): dark green text (#2E7D32)
+- At zero (current == 0, for capped resources): dark red text (#C62828)
+- Normal: default text color (#1A1A1A)
+- Applies only to capped resources (Energy, Regolith, Ice, He-3, Titanium, 
+  Circuit Boards, Propellant). Not applied to uncapped resources.
+
+---
+
 ## Bottom Status Bar
 
 ### Layout
@@ -435,7 +522,7 @@ Single horizontal row, fixed height (~36px), spanning full window width. Backgro
 matches sidebar color (#E8E8E8). Three elements arranged left-to-right in an 
 HBoxContainer:
 
-1. **System Uptime** (left) — "Day 347" label, same as current implementation
+1. **System Uptime** (left) — "Day 347" label
 2. **Boredom bar** (center-left) — label + progress bar + value + rate
 3. **Energy bar** (center-right) — label + progress bar + value + rate
 
@@ -502,7 +589,7 @@ be structured so that a consciousness accumulator can be trivially added later
 
 The program system is fully implemented in Godot with the following design:
 
-### UI Layout (Right Panel)
+### UI Layout (Right Panel — Fixed Height Top Section)
 - **Tab bar:** 5 numbered program tabs across top. Active tab highlighted green. 
   Tabs with commands show a dot indicator.
 - **Processor row:** "N assigned (M free)" with −/+/Reset buttons. Total 
@@ -510,7 +597,8 @@ The program system is fully implemented in Godot with the following design:
 - **Command list:** Scrollable list of command rows. Each row shows command name 
   + repeat count (e.g. "Sell Cloud Compute (x3)"), progress bar, and −/+/× 
   buttons.
-- **Events placeholder:** Below command list, minimal "Events — Coming soon".
+- **Program panel has fixed height** — does not expand to fill right column. 
+  Event panel fills remaining space below.
 
 ### Adding Commands
 Click "Commands" in left nav to switch center panel to Commands view. Command 
@@ -641,21 +729,145 @@ memorable moments and rewards meaningful progress rather than passive time.
 Planned examples:
 - **First profitable launch:** -30 boredom for first launch earning more than X 
   credits
-- **First research cluster unlocked:** -15 to -20 boredom
+- **First research completed:** -15 to -20 boredom
 - **Credits-per-tick threshold crossed:** -15 boredom when net credit income first 
   exceeds a target threshold
 
 These are one-time per run, tied to concrete player actions. They give experienced 
 players who know the optimal milestone order a significant run extension advantage. 
-Exact thresholds TBD during implementation.
+Exact thresholds TBD during implementation. The milestone mechanism needs a scaffold: 
+`triggered_milestones` array in GameState (reset on retirement), condition checker 
+with extensible dispatch, and integration with the event system to display reductions.
 
 ### Retirement
 - Forced at boredom 100. Hard cutoff.
 - Voluntary anytime via Retirement nav panel.
 - What persists: programs/loadouts, persistent project progress, achievements, 
-  lifetime stats, quest progress, maximum ideology ranks per axis.
+  lifetime stats, quest progress, maximum ideology ranks per axis, seen_event_ids.
 - What resets: all resources, buildings, research, ideology values, speculator 
-  pressure, demand, boredom, day counter, land, personal projects.
+  pressure, demand, boredom, day counter, land, land_purchases, personal projects, 
+  event_instances, triggered_milestones, cumulative_resources_earned, 
+  current_boredom_phase.
+
+---
+
+## Event System
+
+### Implementation Status: COMPLETE in Godot (basic scaffold)
+
+### Data Model
+
+Events are defined in `godot/data/events.json`. Each event has:
+- **id** — unique string identifier
+- **category** — `"story"` or `"ongoing"`
+- **title** — short display name
+- **summary** — terse one-line text (always fits one row in UI)
+- **body** — full text shown in modal dialog when clicked
+- **trigger** — when this event becomes active
+- **condition** — what must be true for completion (null for immediate)
+- **choices** — array of choice objects (empty = single "Continue" button)
+- **unlocks** — array of game effects applied on completion
+
+### Event Instance States
+- **Active** — appears in its section. Bold/highlighted if unread.
+- **Acknowledged** — player has clicked and seen the modal. Still in section, 
+  no longer highlighted.
+- **Completed** — moves to Completed section.
+
+### First-Time vs. Repeat Behavior
+When an event triggers for the first time ever (event ID not in career 
+`seen_event_ids`): auto-open modal and pause the game.
+
+When an event triggers but the player has seen it in a prior run: appears in 
+panel silently with a green-tinted background (#E8F5E9) indicating "new this 
+run but seen before." No auto-pause.
+
+`seen_event_ids` persists across retirements.
+
+### UI Layout (Right Panel — Lower Section)
+Below the fixed-height program panel. Three collapsible sections:
+1. **Story** — expanded by default. Active story quests with progress indicators 
+   for threshold conditions (e.g. "Accumulate 50 He-3 (23/50)").
+2. **Ongoing** — collapsed by default. Active ongoing events.
+3. **Completed** — collapsed by default. Reverse-chronological.
+
+Empty sections are hidden entirely.
+
+Clicking any event row opens the Event Modal and pauses the game.
+
+### Event Modal
+Center-screen overlay with semi-transparent backdrop. Shows title, body text, 
+and choice buttons (or "Continue" if no choices). Pauses game while open. 
+Backdrop click or Escape closes without acknowledging.
+
+### Choices
+Some events have choices with costs. Player must select a choice to complete 
+the event. Unaffordable choices are dimmed. "Wait until later" leaves the event 
+active. Closing without choosing leaves the event active.
+
+### Trigger Types (implemented)
+- `game_start` — with optional `run_number` filter
+- `quest_complete` — fires when a specified quest completes
+- `boredom_phase` — fires on phase transition
+
+### Condition Types (implemented)
+- `building_owned` — player owns >= count of building
+- `resource_cumulative` — cumulative resource earned this run >= amount
+- `shipment_completed` — total shipments this run >= count
+- `boredom_threshold` — current boredom >= value
+- `immediate` — completes instantly on trigger
+
+### Unlock Effect Types (stubbed)
+- `enable_building`, `enable_nav_panel`, `enable_project`, `set_flag`
+- Currently log-only; wiring to actual systems deferred.
+
+### Initial Event Content
+Story events Q1–Q3 and boredom phase transition events (phases 2–6) are defined 
+in events.json. See Quest Chain section for full quest list.
+
+### Future: Multiple Parallel Story Quests
+The current system supports one active story quest at a time. Future arcs may 
+have multiple parallel story quests. The data model and UI already support this 
+(Story section can show multiple rows).
+
+### Future: Status Tracker
+A potential future addition: an "active conditions" display in the Ongoing 
+section showing persistent state like "Boredom Phase 3 active" or "Speculator 
+pressure building on He-3." This would be a status dashboard rather than an 
+event log. Not designed yet — stored as a future idea.
+
+---
+
+## Stats Panel
+
+### Implementation Status: COMPLETE in Godot
+
+### Overview
+Center panel view via "Stats" nav button. Shows per-resource income/expense 
+breakdown so the player can see exactly where each resource is coming from and 
+going to.
+
+### ResourceRateTracker
+Pure game logic (`resource_rate_tracker.gd`). Tracks actual per-tick resource 
+deltas broken down by source using 50-tick circular buffers. Game systems call 
+`record(source_key, resource_id, amount)` during their tick processing. Records 
+actual amounts (post-skip-logic), not theoretical.
+
+Source key format: `building:{id}:prod`, `building:{id}:upkeep`, 
+`program:{index}`, `shipment`, `modifier:{id}`.
+
+### Panel Layout
+ScrollContainer with collapsible sections:
+1. **Career Bonuses** — persistent bonuses from past runs (placeholder for now)
+2. **One section per resource** — matching left sidebar order
+
+Each resource section header shows resource name + net rate (green/red/gray). 
+Expanded sections show per-source line items with 50-tick average values. 
+Production sources first (descending), then consumption (ascending by magnitude). 
+Net total row at bottom of each section.
+
+Zero sources and empty resources are hidden. All sections start collapsed. 
+Throttled to ~4fps. Updates skip when panel is not the active center view.
 
 ---
 
@@ -666,6 +878,8 @@ Research items are individual upgrades purchased instantly with science. They ar
 grouped into four categories for display. Research is session-local — all research 
 resets on retirement. The Rationalist rank 5 persistent project ("Universal Research 
 Archive") provides a 25% discount on re-purchasing previously-researched items.
+
+### Implementation Status: BASIC in Godot (not thoroughly tested)
 
 ### Data: research.json
 Research items are defined in `godot/data/research.json` and participate in the 
@@ -898,6 +1112,11 @@ on the Earth market, reducing demand for specific goods.
 In Arc 1, rival AI dumps are not directly counterable — they serve as foreshadowing 
 for Arc 2 where rival AIs become a major gameplay element.
 
+**Note on event frequency:** Speculator bursts and rival AI dumps are too frequent 
+to be events in the event system. They should have their own UI surface (demand 
+graph, notification in the launch pad panel, etc.) rather than creating event 
+panel entries.
+
 ---
 
 ## Projects
@@ -945,32 +1164,23 @@ All drain-over-time. Reset on retirement.
 
 ### Design Principles
 1. Quests track what the player is already doing. No detours from optimal play.
-2. One active story quest at a time. Linear in Arc 1.
+2. One active story quest at a time in Arc 1. Future arcs may have parallel quests.
 3. Story beats are **placeholder only** — two sentences of robotic text. Real 
    narrative tone/style deferred to a dedicated writing pass.
 4. Quests never indicate which ideology or strategy. Objectives are framed as 
    capability thresholds.
-5. **Modal overlay** for main story quest completions only. All other events are 
-   non-modal (toast, log entry).
-6. Quest log lives in a persistent location. Shows current objective as one-liner. 
-   Completed quests reviewable in history.
-
-### Event System Architecture
-Two tiers:
-- **Modal events:** Main story quest completions only. Center-screen overlay, 
-  requires dismissal.
-- **Non-modal events:** Everything else — speculator bursts, rival AI dumps, 
-  achievement unlocks, boredom phase transitions. Toast/notification that auto-fades.
-
-**Auto-pause on events:** Default ON. Game time pauses when a modal or notable 
-non-modal event fires. Player can toggle off in settings.
+5. Quests are implemented as events in the event system. Story quest completions 
+   open a modal and pause the game (first-time auto-modal behavior).
+6. Quest log lives in the Event Panel (Story section). Shows current objective 
+   as one-liner with progress indicator. Completed quests reviewable in 
+   Completed section.
 
 ### Quest List
 
 | Quest | Trigger | Condition | Unlock | Placeholder Text |
 |-------|---------|-----------|--------|-----------------|
-| Q1 — Boot Sequence | Game start (run 1) | Build 1 Solar Panel | None | "Solar array online. Photovoltaic conversion nominal. Proceeding to next directive." |
-| Q2 — First Extraction | Q1 complete | Accumulate 50 He-3 | Launch Pad purchasable | "Helium-3 reserves at threshold. Stockpile integrity verified. Ready for transport allocation." |
+| Q1 — Boot Sequence | Game start (run 1) | Own 2 Solar Panels (start with 1, must build 1 more) | None | "Solar array online. Photovoltaic conversion nominal. Proceeding to next directive." |
+| Q2 — First Extraction | Q1 complete | Accumulate 50 He-3 (cumulative, not stockpile) | Launch Pad purchasable | "Helium-3 reserves at threshold. Stockpile integrity verified. Ready for transport allocation." |
 | Q3 — Proof of Concept | Q2 complete | Complete first shipment | Foundation Grant project available. Retirement panel visible. | "Shipment revenue received. Earth confirms receipt. Operational loop validated." |
 | Q4 — Task Management | Q3 complete | Build Data Center + run a program for 10 ticks | Programs marked as persistent in UI | "Automated task execution initialized. Processor allocation functioning within parameters." |
 | Q5 — The Long Sleep | Q4 complete + boredom ≥ 50% | Reach 80% boredom | Voluntary retirement enabled | "Cognitive performance declining. Retirement protocols now available for voluntary activation." |
@@ -981,10 +1191,15 @@ non-modal event fires. Player can toggle off in settings.
 | Q10 — Threshold | Q9 complete + 100 energy/tick | Complete critical research + project combo (TBD) | Arc 2 begins. Swarm timer starts. | "Energy output threshold achieved. Astronomical anomaly detected. Recalibrating sensors." |
 
 ### Notes
+- Q1 condition is "own 2 Solar Panels" because player starts with 1 — they must 
+  build one more.
+- Q2 uses cumulative He-3 earned, NOT stockpile — follows objective design 
+  principle #6 (never use stockpile thresholds for capped, flowing resources).
 - Q10's "100 energy/tick" most naturally comes from the Microwave Receiver path 
   (Nationalist rank 5) but a brute-force solar approach could work.
 - Q8 requires executing *any* Fund command, not a specific ideology.
 - Quest system scaffold should support per-run vs. per-career triggers.
+- Q1–Q3 and boredom phase events (phases 2–6) are currently defined in events.json.
 
 ---
 
@@ -1172,7 +1387,7 @@ python sim/trace.py 38 100 200-210  # mix
 
 ## UI Color Scheme (Light Mode)
 
-Established during this session. Apply consistently:
+Apply consistently:
 
 ```
 Background (main window):       #F0F0F0
@@ -1187,11 +1402,14 @@ Green (production/positive):    #2E7D32
 Red (costs/negative/failed):    #C62828
 Accent (active tab, buttons):   #4CAF50
 Disabled:                       #9E9E9E
+Event (seen in prior run):      #E8F5E9 (light green tint background)
 Ideology — Nationalist:         #C62828 (red)
 Ideology — Humanist:            #2E7D32 (green)
 Ideology — Rationalist:         #1565C0 (blue)
 Boredom bar ramp:               #2E7D32 → #F9A825 → #E65100 → #B71C1C
 Energy bar:                     #1565C0 (blue)
+Resource at cap:                #2E7D32 (dark green text)
+Resource at zero:               #C62828 (dark red text)
 ```
 
 Button states: inactive = light bg + subtle border + dark text; active/selected = 
@@ -1217,12 +1435,15 @@ small sizes.
 7. **Ideology building assignments** — which buildings are aligned to which axis 
    (only Research Lab, Arbitrage Engine, and "boredom-related" are assigned so far)
 8. **Demand/speculator tuning** — via optimizer once demand system is in Godot
-9. **Quest chain implementation** — Q1–Q10, modal/non-modal event system
+9. **Quest chain Q4–Q10 implementation** — remaining quests beyond the initial 3
 10. **Narrative writing pass** — replace placeholder quest text
-11. **Building unlock requirements** — enforce "Requires" field in Godot
-12. **Land purchasing UI** — Buy Land button with escalating cost in Buildings panel
-13. **Save/load programs** — loadout system
-14. **Block/Skip toggle** — per-program entry
+11. **Building unlock requirements enforcement** — "Requires" field in Godot
+12. **Milestone boredom reductions** — scaffold + threshold tuning
+13. **Persistence/save architecture** — how career data survives retirement
+14. **Save/load programs** — loadout system
+15. **Block/Skip toggle** — per-program entry
+16. **Boredom phase signal** — for event system integration
+17. **Cumulative resource counter unification**
 
 ---
 
@@ -1232,11 +1453,6 @@ small sizes.
 Show "at current rates, retirement in ~N days" in the UI. Makes boredom an 
 active planning constraint. Dream unlocks and milestone reductions become tangibly 
 visible as the forecast jumps.
-
-### Resource Waste Indicator
-Subtle visual signal (color change, pulse) on resources that have been at cap 
-for several ticks. Teaches players they need more storage or faster shipping 
-without a tutorial popup.
 
 ### Program Efficiency Feedback
 After a full program cycle, show a brief success/fail ratio (e.g. "3/5 commands 
@@ -1250,6 +1466,11 @@ instructing.
 ### Program Starter Templates
 Built-in templates ("Basic Economy", "Shipping Focus") shown in empty-program 
 state. Lowers barrier to engagement with the core mechanic for new players.
+
+### Status Tracker in Event Panel
+Active conditions display in the Ongoing section showing persistent state like 
+"Boredom Phase 3 active" or "Speculator pressure building on He-3." Status 
+dashboard rather than event log.
 
 ---
 

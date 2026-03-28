@@ -15,6 +15,7 @@ const SPEED_MAP: Dictionary = {
 
 var state: GameState
 var sim: GameSimulation
+var rate_tracker: ResourceRateTracker
 var event_manager: EventManager
 var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
@@ -40,6 +41,8 @@ func _ready() -> void:
 
 	sim = GameSimulation.new()
 	sim.init(resources_data, _buildings_data, _commands_data, _game_config, _research_data)
+	rate_tracker = ResourceRateTracker.new()
+	sim.rate_tracker = rate_tracker
 
 	state = GameState.new()
 	_initialize_state()
@@ -128,6 +131,28 @@ func set_loading_priority(priority: Array) -> void:
 
 func get_buildings_data() -> Array:
 	return _buildings_data
+
+
+func can_buy_land() -> bool:
+	return sim.can_buy_land(state)
+
+
+func get_land_purchase_cost() -> int:
+	return sim.get_land_purchase_cost(state)
+
+
+func get_total_land() -> int:
+	return sim.get_total_land(state)
+
+
+func get_land_per_purchase() -> int:
+	return sim.get_land_per_purchase()
+
+
+func buy_land() -> void:
+	if sim.can_buy_land(state):
+		sim.buy_land(state)
+		tick_completed.emit()
 
 
 func get_commands_data() -> Array:

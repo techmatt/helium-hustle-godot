@@ -1,6 +1,8 @@
 class_name GameSimulation
 extends RefCounted
 
+var rate_tracker: ResourceRateTracker = null
+
 var _resources_data: Array = []
 var _buildings_data: Array = []
 var _commands_data: Dictionary = {}   # {short_name: command_dict}
@@ -17,6 +19,12 @@ var _demand_baseline: float = 0.5
 
 # Boredom curve: Array of [start_day, rate]
 var _boredom_curve: Array = []
+
+# Land purchase config (set from game_config in init)
+var _land_base_cost: float = 15.0
+var _land_cost_scaling: float = 1.5
+var _land_per_purchase: int = 10
+var _land_starting: int = 40
 
 
 func init(resources_data: Array, buildings_data: Array, commands_data: Array, game_config: Dictionary = {}, research_data: Array = []) -> void:
@@ -39,11 +47,19 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 	_boredom_curve.clear()
 	for entry in game_config.get("boredom_curve", []):
 		_boredom_curve.append([int(entry.get("day", 0)), float(entry.get("rate", 0.0))])
+	var lc: Dictionary = game_config.get("land", {})
+	if not lc.is_empty():
+		_land_base_cost = float(lc.get("base_cost", 15))
+		_land_cost_scaling = float(lc.get("cost_scaling", 1.5))
+		_land_per_purchase = int(lc.get("land_per_purchase", 10))
+	_land_starting = int(game_config.get("starting_resources", {}).get("land", 40))
 
 
 func tick(state: GameState) -> void:
 	pending_program_events.clear()
 	last_gross_deltas.clear()
+	if rate_tracker != null:
+		rate_tracker.begin_tick()
 	recalculate_caps(state)
 
 	# Boredom accumulation
@@ -95,6 +111,8 @@ func tick(state: GameState) -> void:
 				var cost: float = float(bdef.upkeep[res]) * count
 				state.amounts[res] = state.amounts.get(res, 0.0) - cost
 				last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+				if rate_tracker != null:
+					rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
 			will_produce.append([bdef, count])
 
 	for entry in will_produce:
@@ -114,6 +132,8 @@ func tick(state: GameState) -> void:
 			var delta: float = float(bdef.production[res]) * count
 			state.amounts[res] = state.amounts.get(res, 0.0) + delta
 			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
+			if rate_tracker != null:
+				rate_tracker.record("building:" + bdef.short_name + ":prod", res, delta)
 			if res == "sci":
 				state.cumulative_science_earned += delta
 			if delta > 0.0:
@@ -142,6 +162,7 @@ func execute_programs(state: GameState) -> void:
 		var prog: GameState.ProgramData = state.programs[prog_idx]
 		if prog.processors_assigned <= 0 or prog.commands.is_empty():
 			continue
+		var prog_delta: Dictionary = {}
 		for _proc in range(prog.processors_assigned):
 			if prog.commands.is_empty():
 				break
@@ -149,7 +170,7 @@ func execute_programs(state: GameState) -> void:
 			var entry: GameState.ProgramEntry = prog.commands[ip]
 			var success: bool = _can_afford_command(state, entry.command_shortname)
 			if success:
-				_apply_command(state, entry.command_shortname)
+				_apply_command(state, entry.command_shortname, prog_delta)
 			else:
 				entry.failed_this_cycle = true
 			entry.current_progress += 1
@@ -170,6 +191,9 @@ func execute_programs(state: GameState) -> void:
 						"type": "cycle_reset",
 						"program_index": prog_idx,
 					})
+		if rate_tracker != null:
+			for res: String in prog_delta:
+				rate_tracker.record("program:" + str(prog_idx), res, prog_delta[res])
 
 
 func recalculate_caps(state: GameState) -> void:
@@ -353,6 +377,10 @@ func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: floa
 	if state.launch_history.size() > 5:
 		state.launch_history.pop_back()
 	state.total_shipments_completed += 1
+	if rate_tracker != null:
+		rate_tracker.record("shipment", "cred", payout)
+		rate_tracker.record("shipment", pad.resource_type, -pad.cargo_loaded)
+		rate_tracker.record("shipment", "prop", -_launch_fuel_cost)
 
 
 func _clamp_processor_assignments(state: GameState) -> void:
@@ -383,7 +411,7 @@ func _can_afford_command(state: GameState, short_name: String) -> bool:
 	return true
 
 
-func _apply_command(state: GameState, short_name: String) -> void:
+func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary = {}) -> void:
 	if not _commands_data.has(short_name):
 		return
 	var cmd = _commands_data[short_name]
@@ -392,10 +420,12 @@ func _apply_command(state: GameState, short_name: String) -> void:
 		var cost: float = float(costs[res])
 		state.amounts[res] = state.amounts.get(res, 0.0) - cost
 		last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+		prog_delta[res] = prog_delta.get(res, 0.0) - cost
 	for res in cmd.production:
 		var delta: float = float(cmd.production[res])
 		state.amounts[res] = state.amounts.get(res, 0.0) + delta
 		last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
+		prog_delta[res] = prog_delta.get(res, 0.0) + delta
 		if delta > 0.0:
 			state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 	for effect in cmd.get("effects", []):
@@ -477,6 +507,30 @@ func _clamp(state: GameState) -> void:
 	for res in state.amounts.keys():
 		var cap: float = state.caps.get(res, INF)
 		state.amounts[res] = clampf(state.amounts.get(res, 0.0), 0.0, cap)
+
+
+func get_land_purchase_cost(state: GameState) -> int:
+	return int(floorf(_land_base_cost * pow(_land_cost_scaling, float(state.land_purchases))))
+
+
+func get_total_land(state: GameState) -> int:
+	return _land_starting + state.land_purchases * _land_per_purchase
+
+
+func get_land_per_purchase() -> int:
+	return _land_per_purchase
+
+
+func can_buy_land(state: GameState) -> bool:
+	return state.amounts.get("cred", 0.0) >= float(get_land_purchase_cost(state))
+
+
+func buy_land(state: GameState) -> void:
+	if not can_buy_land(state):
+		return
+	state.amounts["cred"] -= float(get_land_purchase_cost(state))
+	state.amounts["land"] = state.amounts.get("land", 0.0) + float(_land_per_purchase)
+	state.land_purchases += 1
 
 
 func _get_bdef(short_name: String) -> Variant:

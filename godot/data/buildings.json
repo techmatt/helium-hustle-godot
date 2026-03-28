@@ -150,15 +150,14 @@
       "ice": 8.0
     },
     "production": {
-      "prop": 2.0,
-      "eng": 1.0
+      "prop": 2.0
     },
     "upkeep": {
       "ice": 2.0,
-      "eng": 2.0
+      "eng": 1.0
     },
     "effects": [],
-    "description": "Ice to propellant + energy. Net energy positive. Only propellant source."
+    "description": "Ice to propellant. Net -1 energy. Only propellant source."
   },
   {
     "name": "Launch Pad",

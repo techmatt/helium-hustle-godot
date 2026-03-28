@@ -2,15 +2,15 @@ extends Control
 
 # [short_name, display_name, icon_color]
 const RESOURCES: Array = [
+	["boredom","Boredom",    Color(0.55, 0.55, 0.55)],
 	["eng",    "Energy",     Color(1.00, 0.85, 0.00)],
+	["proc",   "Processors", Color(0.80, 0.20, 0.80)],
+	["land",   "Land",       Color(0.40, 0.70, 0.30)],
 	["reg",    "Regolith",   Color(0.60, 0.42, 0.22)],
 	["ice",    "Ice",        Color(0.70, 0.92, 1.00)],
 	["he3",    "Helium-3",   Color(0.50, 0.50, 1.00)],
 	["cred",   "Credits",    Color(0.20, 0.85, 0.20)],
 	["sci",    "Science",    Color(0.70, 0.50, 0.90)],
-	["land",   "Land",       Color(0.40, 0.70, 0.30)],
-	["boredom","Boredom",    Color(0.55, 0.55, 0.55)],
-	["proc",   "Processors", Color(0.80, 0.20, 0.80)],
 ]
 
 # [label, icon_color]
@@ -128,7 +128,7 @@ const PALETTE: Dictionary = {
 var _nav_buttons: Dictionary = {}    # label → Button
 var _active_mode: String = "Buildings"
 
-# {short_name: {val: Label, rate: Label}}
+# {short_name: {val: Label}}
 var _resource_labels: Dictionary = {}
 # all active BuildingCard nodes — refreshed each tick
 var _card_nodes: Array = []
@@ -175,6 +175,12 @@ const PROG_REFRESH_INTERVAL: float = 0.1
 var _prog_refresh_accum: float = 0.0
 var _command_row_scene: PackedScene
 
+# ── Stats panel ─────────────────────────────────────────────────────────────────
+var _buy_land_card: BuyLandCard = null
+var _stats_panel: StatsPanel = null
+const STATS_REFRESH_INTERVAL: float = 0.25
+var _stats_refresh_accum: float = 0.0
+
 
 func _p(key: String) -> Color:
 	return PALETTE["dark" if GameSettings.is_dark_mode else "light"][key]
@@ -201,6 +207,11 @@ func _process(delta: float) -> void:
 	if _prog_refresh_accum >= PROG_REFRESH_INTERVAL:
 		_prog_refresh_accum = 0.0
 		_refresh_command_rows()
+	if _active_mode == "Stats" and _stats_panel != null:
+		_stats_refresh_accum += delta
+		if _stats_refresh_accum >= STATS_REFRESH_INTERVAL:
+			_stats_refresh_accum = 0.0
+			_stats_panel.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)
 
 
 # ── Theme & typography ─────────────────────────────────────────────────────────
@@ -494,6 +505,8 @@ func _switch_mode(mode: String) -> void:
 	_card_nodes.clear()
 	_launch_pad_cards.clear()
 	_launch_history_vbox = null
+	_buy_land_card = null
+	_stats_panel = null
 	_update_nav_highlight(mode)
 	match mode:
 		"Buildings":   _build_buildings_panel()
@@ -505,6 +518,7 @@ func _switch_mode(mode: String) -> void:
 			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
 			_research_sci_snapshot = GameManager.state.cumulative_science_earned
 			_build_research_panel()
+		"Stats":       _build_stats_panel()
 		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
@@ -577,6 +591,7 @@ func _on_theme_changed() -> void:
 			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
 			_research_sci_snapshot = GameManager.state.cumulative_science_earned
 			_build_research_panel()
+		"Stats":       _build_stats_panel()
 		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
@@ -770,48 +785,43 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 	val_lbl.add_theme_font_size_override("font_size", 14)
 	row.add_child(val_lbl)
 
-	var rate_lbl := Label.new()
-	rate_lbl.text = "+0.0/s"
-	rate_lbl.custom_minimum_size = Vector2(56, 0)
-	rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	rate_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	rate_lbl.add_theme_font_override("font", _font_exo2_regular)
-	rate_lbl.add_theme_font_size_override("font_size", 13)
-	row.add_child(rate_lbl)
-
-	_resource_labels[sn] = {"val": val_lbl, "rate": rate_lbl}
+	_resource_labels[sn] = {"val": val_lbl}
 
 
 func _compute_theoretical_rates() -> Dictionary:
-	# Return actual deltas from the most recent tick — reflects real building
-	# starvation/cap behaviour without duplicating simulation logic.
 	return GameManager.last_deltas
 
 
 func _update_resource_display() -> void:
 	var st: GameState = GameManager.state
-	var deltas: Dictionary = _compute_theoretical_rates()
 	for entry: Array in RESOURCES:
 		var sn: String = entry[0]
 		if not _resource_labels.has(sn):
 			continue
-		var lbls: Dictionary = _resource_labels[sn]
+		var val_lbl: Label = _resource_labels[sn].val
+
+		# Processors: show assigned / total, no coloring
+		if sn == "proc":
+			var assigned: int = 0
+			for p: GameState.ProgramData in st.programs:
+				assigned += p.processors_assigned
+			val_lbl.text = "%d / %d" % [assigned, st.total_processors]
+			val_lbl.remove_theme_color_override("font_color")
+			continue
+
 		var amount: float = st.amounts.get(sn, 0.0)
 		var cap: float = st.caps.get(sn, INF)
 		if cap == INF:
-			lbls.val.text = "%d" % int(amount)
+			val_lbl.text = "%d" % int(amount)
+			val_lbl.remove_theme_color_override("font_color")
 		else:
-			lbls.val.text = "%d / %d" % [int(amount), int(cap)]
-		var delta: float = deltas.get(sn, 0.0)
-		if absf(delta) < 0.001:
-			lbls.rate.text = "0/s"
-			lbls.rate.add_theme_color_override("font_color", _p("text_zero"))
-		elif delta > 0.0:
-			lbls.rate.text = "+%.1f/s" % delta
-			lbls.rate.add_theme_color_override("font_color", _p("text_positive"))
-		else:
-			lbls.rate.text = "%.1f/s" % delta
-			lbls.rate.add_theme_color_override("font_color", _p("text_negative"))
+			val_lbl.text = "%d / %d" % [int(amount), int(cap)]
+			if amount >= cap:
+				val_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))  # #2E7D32
+			elif amount <= 0.0:
+				val_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))  # #C62828
+			else:
+				val_lbl.remove_theme_color_override("font_color")
 
 
 # ── Commands panel ─────────────────────────────────────────────────────────────
@@ -1481,6 +1491,20 @@ func _on_research_purchased(item_id: String) -> void:
 	GameManager.purchase_research(item_id)
 
 
+# ── Stats panel ────────────────────────────────────────────────────────────────
+
+func _build_stats_panel() -> void:
+	_stats_panel = null
+	_stats_refresh_accum = 0.0
+
+	var panel := StatsPanel.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+	_buildings_scroll.add_child(panel)
+	_stats_panel = panel
+	_stats_panel.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)
+
+
 # ── Options panel ──────────────────────────────────────────────────────────────
 
 func _build_options_panel() -> void:
@@ -1582,12 +1606,20 @@ func _build_buildings_panel() -> void:
 	for child in _buildings_scroll.get_children():
 		child.queue_free()
 	_card_nodes.clear()
+	_buy_land_card = null
 	_buildings_data = GameManager.get_buildings_data()
 
 	var outer := VBoxContainer.new()
 	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	outer.add_theme_constant_override("separation", 6)
 	_buildings_scroll.add_child(outer)
+
+	# Buy Land card — full-width, above all categories
+	var land_card := BuyLandCard.new()
+	land_card.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+	outer.add_child(land_card)
+	_buy_land_card = land_card
+	_buy_land_card.refresh()
 
 	# Group buildings by category
 	var by_category: Dictionary = {}
@@ -1663,6 +1695,8 @@ func _add_category_section(parent: VBoxContainer, category: String, buildings: A
 
 
 func _update_building_cards() -> void:
+	if _buy_land_card != null:
+		_buy_land_card.refresh()
 	for card: BuildingCard in _card_nodes:
 		card.refresh()
 
