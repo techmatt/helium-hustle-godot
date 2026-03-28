@@ -2,6 +2,7 @@ extends Node
 
 const DEBUG_PROGRAM_TEST: bool = false
 const DEBUG_UI: bool = false
+const DEBUG_DEMAND: bool = true
 
 const SPEED_MAP: Dictionary = {
 	"||":   0.0,
@@ -56,6 +57,8 @@ func _ready() -> void:
 		_debug_setup_test_program()
 	if DEBUG_UI:
 		_debug_setup_ui_state()
+	if DEBUG_DEMAND:
+		_debug_setup_demand_state()
 
 	_timer = Timer.new()
 	_timer.one_shot = false
@@ -269,6 +272,19 @@ func _debug_setup_ui_state() -> void:
 	state.amounts["sci"]     = 0.0
 	for res: String in ["eng", "reg", "ice", "he3", "ti", "cir", "prop"]:
 		state.amounts[res] = state.caps.get(res, 0.0)
+
+
+func _debug_setup_demand_state() -> void:
+	# Sets up all prerequisites for testing the demand/trading system.
+	_debug_setup_ui_state()  # rich resources + 3 launch pads
+	# Unlock market_awareness so the demand section shows sparklines + exact values
+	if not state.completed_research.has("market_awareness"):
+		state.completed_research.append("market_awareness")
+	# Trigger speculators very soon so suppression behavior is immediately testable
+	state.speculator_next_burst_tick = 5
+	# Bring all rival dump timers forward so market disruptions appear within ~10–20 ticks
+	for rid: String in ["aria7", "crucible", "nodal", "fringe9"]:
+		state.rival_next_dump_tick[rid] = randi_range(8, 20)
 
 
 func _load_json(path: String) -> Variant:

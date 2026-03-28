@@ -17,7 +17,8 @@
       "Bash(python:*)",
       "Bash(grep:*)",
       "Bash(cd sim && python*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(python -c \":*)"
     ]
   }
 }

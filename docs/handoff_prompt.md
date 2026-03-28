@@ -51,7 +51,7 @@ godot/
     commands.json          ← GROUND TRUTH for command definitions
     research.json          ← GROUND TRUTH for research definitions
     events.json            ← GROUND TRUTH for event definitions
-    game_config.json       ← GROUND TRUTH for starting state, boredom, shipment, etc.
+    game_config.json       ← GROUND TRUTH for starting state, boredom, shipment, demand, etc.
   scenes/
     main_ui.tscn           ← Main scene (three-column layout)
     ui/BuildingCard.tscn
@@ -175,6 +175,10 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
      current stockpile below the building's per-tick consumption. Buildings with no 
      production outputs are exempt (always pay upkeep). This stacks with the 
      output-at-cap rule — either condition independently causes the building to skip.
+   - **Unlock requirements enforcement:** Buildings with a non-empty `requires` 
+     field are visible but not purchasable until the requirement is met. Locked 
+     buildings show the requirement text and are dimmed. Purchase logic in 
+     GameSimulation also enforces this (defense in depth).
 
 5. **Program/processor system** — fully implemented (see Programs & Processors 
    section for design details):
@@ -191,13 +195,14 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
    Economy section for design details):
    - Launch Pads nav button in left sidebar, dedicated center panel view
    - Per-pad cards (full-width): resource type dropdown, cargo bar (0/100 with 
-     numbers on bar), estimated credit value, manual Launch button
+     numbers on bar), estimated credit value (uses live demand), manual Launch button
    - Loading priority: collapsible reorderable list of 4 tradeable goods
    - Each pad assigned one resource type via dropdown
    - 10-tick cooldown after launch before pad is available again
    - Recent Launches display (last 3–5 launches with day, resource, quantity, 
-     credits earned)
-   - Demand placeholder (static 0.5 baseline, space reserved for future graph)
+     credits earned) — shared notification queue with rival AI dump notifications
+   - Earth Demand section with tier labels (before Market Awareness research) or 
+     full demand detail with sparklines (after research)
 
 7. **Speed controls** — pause through 200x working.
 
@@ -218,6 +223,12 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
     Completed. Events defined in events.json. First-time events auto-open modal and 
     pause; previously-seen events appear silently. Auto-pause on modal events 
     implemented.
+    - **Unlock effects wired:** `enable_building` adds building ID to unlocked set 
+      in GameState; `enable_nav_panel` shows/hides nav buttons in left sidebar; 
+      `enable_project` stores project ID in GameState (project system not yet 
+      implemented); `set_flag` sets named boolean in GameState flags dictionary.
+    - **Nav panel gating:** Retirement, Projects, and Ideologies panels start hidden 
+      and unlock via event effects. Other panels visible from start.
 
 12. **Stats panel** — center panel view via "Stats" nav button. Per-resource income/ 
     expense breakdown using ResourceRateTracker with 50-tick moving averages. 
@@ -233,6 +244,41 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
     rates in sidebar (moved to Stats panel). Cap coloring: dark green at cap, 
     dark red at zero for capped resources.
 
+15. **Boredom phase signal** — GameState tracks `current_boredom_phase` (int, 
+    initialized to 1, resets on retirement). Phase determined by day counter 
+    using boredom curve. Signal `boredom_phase_changed(old_phase, new_phase)` 
+    emitted on phase transitions. EventManager listens for this signal to fire 
+    `boredom_phase` trigger events.
+
+16. **Cumulative resource counters** — `cumulative_resources_earned: Dictionary` 
+    in GameState, mapping resource ID strings to float values. Incremented whenever 
+    a resource is produced (buildings, commands, shipment revenue). Only goes up, 
+    never decremented. Resets on retirement. Research visibility gating reads from 
+    `cumulative_resources_earned["sci"]`. Quest conditions of type 
+    `resource_cumulative` read from this dictionary.
+
+17. **Milestone boredom reductions** — scaffold implemented. `triggered_milestones: 
+    Array[String]` in GameState (resets on retirement). Milestones defined in 
+    `game_config.json` under `milestones` key, each with id, condition (reuses 
+    event condition types), boredom_reduction, and label. Checked at end of each 
+    tick. When triggered: adds to triggered_milestones, applies boredom reduction 
+    (clamped to 0), displays via event system notification. Consciousness hook 
+    stub (`_on_boredom_reduced(amount, source)`) called on all boredom reductions 
+    (milestones and Dream command). Initial placeholder milestones:
+    - `first_shipment_credits`: shipment_completed >= 1, boredom -25
+    - `first_research`: research_completed_any, boredom -15
+    - `credits_threshold`: cumulative credits >= 500, boredom -15
+
+18. **Demand system** — full implementation replacing the static 0.5 placeholder. 
+    Per-resource continuous demand float in range [0.01, 1.0]. Six forces drive 
+    demand: Perlin noise drift, speculator suppression, rival AI dumps, shipment 
+    saturation, Promote commands, and resource coupling. See Demand System section 
+    for full specification.
+
+19. **Adversaries sidebar section** — collapsible "Adversaries" section in the left 
+    sidebar resource list, below existing resources. Shows speculator count and 
+    current target resource.
+
 ### In the Python Optimizer (`sim/`)
 
 1. **Scenario-based architecture** — optimizer loads scenario JSON files that 
@@ -241,7 +287,8 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 2. **Tick-accurate economy model** (`economy.py`) — pure state machine matching 
    the Godot tick order. Buildings, programs (fixed policy), shipments, boredom, 
    storage caps all modeled. Includes production-gated upkeep, input-starvation 
-   skip, and per-pad launch mechanics with cooldown.
+   skip, and per-pad launch mechanics with cooldown. **Does not yet model the 
+   demand system** — uses static demand. TODO: sync demand model to match Godot.
 3. **Greedy optimizer** (`optimizer.py`) — shadow pricing + urgency bonuses + 
    sighted lookahead baseline. Scores all affordable actions each tick and picks 
    the best.
@@ -259,23 +306,15 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 
 1. **Retirement** — forced at boredom 100, voluntary anytime, reset logic (see 
    Boredom & Retirement section)
-2. **Building unlock requirements** — "Requires" field exists in data but isn't 
-   enforced in Godot
-3. **Milestone boredom reductions** — scaffold needed (see Boredom & Retirement)
-4. **Demand system** — price fluctuations, speculator pressure (see Shipment & 
-   Trade Economy section)
-5. **Quest chain content beyond Q1–Q3** — Q4–Q10 need implementation
-6. **Speculators & rival AIs** — see Speculators & Rival AIs section
-7. **Ideology** — see Ideology section
-8. **Projects** — see Projects section
-9. **Boredom phase signal** — GameState needs `current_boredom_phase` variable 
-   and signal on phase change for event system integration
-10. **Cumulative resource counter unification** — unify `cumulative_science_earned` 
-    with general `cumulative_resources_earned` dictionary
-11. **Save/load programs** — loadout system for saving/loading program configs
-12. **Block/Skip toggle** — per-program entry option
-13. **Cross-retirement program persistence**
-14. **Persistence/save layer** — architecture for what survives retirement
+2. **Persistence/save architecture** — how career data survives retirement
+3. **Quest chain content beyond Q1–Q3** — Q4–Q10 need implementation in events.json
+4. **Ideology** — see Ideology section
+5. **Projects** — see Projects section
+6. **Speculators & rival AIs in optimizer** — demand system needs mirroring in 
+   `sim/economy.py`
+7. **Save/load programs** — loadout system for saving/loading program configs
+8. **Block/Skip toggle** — per-program entry option
+9. **Cross-retirement program persistence**
 
 ---
 
@@ -284,8 +323,9 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 - Game logic (GameState, GameSimulation) has no UI references — designed for 
   headless simulation support (which now exists in `sim/`).
 - Tick order: Boredom → Buildings (energy net first, then resources; production-
-  gated upkeep and input-starvation skip applied) → Programs → Shipments → 
-  Clamp → Events → Advance day.
+  gated upkeep and input-starvation skip applied) → Programs → Demand Update → 
+  Shipments (using current demand, apply launch saturation hits) → Speculator 
+  Revenue Tracking → Speculator/Rival Burst Check → Clamp → Events → Advance day.
 - Buildings process in JSON row order (Solar Panel first).
 - Building costs: `base_cost × (scaling ^ num_owned)`. Land cost per building is 
   constant but land itself has escalating purchase cost.
@@ -344,14 +384,15 @@ from (+2 prop, +1 eng production / -2 ice, -2 eng upkeep) to (+2 prop production
 | Data Center | 200 | 1.35 | 2 | — (grants 1 proc) | 4 eng |
 | Battery | 30 | 1.35 | 0 | — (+50 eng cap) | — |
 | Storage Depot | 35 | 1.25 | 1 | — (multi-resource caps) | — |
-| Arbitrage Engine | 180 | 1.30 | 1 | — (spec decay) | 3 eng |
+| Arbitrage Engine | 180 | 1.30 | 1 | — (spec decay +0.04/tick) | 3 eng |
 
 Note: Solar Panel and Excavator have credit-only costs (no physical resources). 
 Solar Panel titanium cost was removed during optimizer tuning — the original design 
 had a titanium teaching loop but it was cut for smoother early game flow. The 
 optimizer starts with a Data Center so the player has a processor from tick 1. 
 Electrolysis Plant was consolidated to net energy values (no same-resource 
-production/upkeep).
+production/upkeep). Arbitrage Engine always runs when enabled; player can manually 
+disable to save energy.
 
 ### Key Command Costs
 | Command | Costs | Production | Notes |
@@ -459,6 +500,15 @@ Clicking anywhere on a building card (that isn't another button) purchases one.
 Visual feedback on click (brief flash). Negative feedback if unaffordable (red 
 flash or shake).
 
+### Unlock Requirements
+Buildings with a non-empty `requires` field in buildings.json are visible but not 
+purchasable until the requirement is met. Locked buildings show requirement text 
+and are dimmed/grayed out (distinct from the "too expensive" state). Clicking a 
+locked building does nothing — no red flash. GameSimulation also enforces unlock 
+requirements on purchase attempts (defense in depth). Buildings can also be gated 
+by the `enable_building` event unlock effect (e.g., Launch Pad is unlocked by Q2 
+completion).
+
 ### Enable/Disable
 Each building type tracks `active_count` and `owned_count`. Card header shows 
 "(3/4)" with −/+ buttons. Only active buildings produce, consume upkeep, and 
@@ -495,6 +545,11 @@ land only, no credit refund. Selling recalculates the next purchase cost
 10. Titanium
 11. Circuit Boards
 12. Propellant
+
+### Adversaries Section
+Below the resource list, a collapsible "Adversaries" section shows:
+- **Speculators** row: count and current target resource (e.g., "Speculators: 47 → He-3")
+- Styled like resource rows. Always visible regardless of Market Awareness research.
 
 ### Processor Row
 Displays `Processors: 2/3` where 2 = total assigned across all programs, 
@@ -579,7 +634,9 @@ Dream and similar boredom-reducing effects secretly accumulate a hidden
 consciousness crosses certain thresholds, dramatic game state changes occur 
 (details TBD — this is an Arc 2+ mechanic). The boredom reduction system should 
 be structured so that a consciousness accumulator can be trivially added later 
-(e.g., every call to reduce boredom also calls a stub/hook for consciousness).
+(e.g., every call to reduce boredom also calls a stub/hook for consciousness). 
+The stub `_on_boredom_reduced(amount, source)` is already implemented and called 
+by milestones and Dream.
 
 ---
 
@@ -649,23 +706,26 @@ requires Microwave Receiver persistent project unlock.
 
 ## Shipment & Trade Economy
 
-### Implementation Status: COMPLETE in Godot
+### Implementation Status: COMPLETE in Godot (including demand system)
 
-The launch pad system is fully implemented with the following design:
+The launch pad system is fully implemented with dynamic demand replacing the 
+static 0.5 placeholder.
 
 ### UI Layout (Center Panel via Left Nav)
 - **Launch Pads nav button** in left sidebar switches center panel to pad view.
 - **Per-pad cards:** Full-width, stacked vertically. Each shows:
   - Pad number, resource type dropdown (He-3/Titanium/Circuits/Propellant)
   - Cargo bar: 0/100 with numbers overlaid, colored by resource
-  - Estimated credit value if launched now
+  - Estimated credit value if launched now (uses live demand)
   - Manual Launch button (enabled when FULL and 20 propellant available)
   - Status: EMPTY → LOADING → FULL → LAUNCHING → COOLDOWN (10 ticks)
 - **Loading priority:** Collapsible reorderable list of 4 tradeable goods 
   (collapsed by default). Determines which pad resource types get loaded first.
-- **Recent Launches:** Last 3–5 launches with day, resource, quantity, credits.
-- **Demand placeholder:** "Earth Demand" section with placeholder text. Space 
-  reserved for future demand graph.
+- **Notification queue:** Last 3–5 entries showing launches and rival AI dump 
+  notifications. Entries push each other off. Launch entries: "Day 347: He-3 × 
+  100 → 1,200 cr". Rival entries: "Day 412: ARIA-7 flooded the He-3 market" 
+  (muted text color #666666).
+- **Earth Demand section:** See Demand System section for display details.
 
 ### Mechanics
 - **One resource per pad**, chosen via dropdown. Changing resource dumps loaded 
@@ -684,12 +744,235 @@ The launch pad system is fully implemented with the following design:
 - Load per command execution: 5 units per enabled pad (7 with Shipping Efficiency)
 - Launch cooldown: 10 ticks
 - Base trade values: He-3 = 20, Titanium = 12, Circuits = 30, Propellant = 8
-- Demand baseline: 0.5 (payout = base_value × demand × quantity)
 
 ### Integration Notes
 - Buying a Launch Pad building adds a new pad (default resource: highest priority).
 - Selling a Launch Pad removes the last pad; loaded cargo returned to stockpile.
 - Disabling a Launch Pad: pad retains cargo but is skipped by Load/Launch commands.
+
+---
+
+## Demand System
+
+### Implementation Status: COMPLETE in Godot
+
+### Overview
+Per-resource continuous demand float in range [0.01, 1.0] that multiplies trade 
+revenue. Payout formula: `base_value × demand × cargo_loaded`. Six forces drive 
+demand: Perlin noise drift (exogenous), speculator suppression (adversary), rival 
+AI dumps (periodic hits), shipment saturation (self-inflicted), Promote commands 
+(player-driven), and resource coupling (indirect).
+
+~80% of demand should be something the player can influence by committing 
+resources. The remaining ~20% comes from Perlin noise and rival dumps.
+
+### Demand State (in GameState, all reset on retirement)
+- `demand: Dictionary` — current computed demand per tradeable resource (float)
+- `demand_promote: Dictionary` — accumulated Promote effect per resource (decays)
+- `demand_rival: Dictionary` — accumulated rival AI pressure per resource (decays)
+- `demand_launch: Dictionary` — accumulated shipment saturation per resource (decays)
+- `demand_perlin_seeds: Dictionary` — per-resource random seed for Perlin noise
+- `demand_perlin_freq: Dictionary` — per-resource Perlin frequency (randomized each run, range [0.005, 0.015])
+- `demand_history: Dictionary` — per-resource array of last ~200 demand values (for sparklines)
+- `speculator_count: float` — current number of speculators
+- `speculator_target: String` — resource ID speculators are targeting ("" if none)
+- `speculator_burst_number: int` — burst count this run (for growth scaling)
+- `speculator_next_burst_tick: int` — tick of next burst
+- `speculator_revenue_tracking: Dictionary` — per-resource cumulative trade revenue since last burst
+- `rival_next_dump_tick: Dictionary` — per-rival, tick of next dump
+
+### Demand Initialization (run start)
+- `demand`: computed from Perlin noise at tick 0 (whatever the noise says — no fixed starting value)
+- `demand_promote`, `demand_rival`, `demand_launch`: all 0.0
+- `demand_perlin_seeds`: random float per resource
+- `demand_perlin_freq`: random per resource in [0.005, 0.015] (one full wave every ~65–200 ticks)
+- `speculator_count`: 0.0, `speculator_target`: ""
+- `speculator_burst_number`: 0
+- `speculator_next_burst_tick`: random in [150, 250]
+- `speculator_revenue_tracking`: all 0.0
+- `rival_next_dump_tick`: per rival, random in [150, 250]
+
+### Demand Calculation (per tick)
+
+**Perlin Noise Component:**
+```
+perlin_value = perlin_1d(tick * demand_perlin_freq[resource] + demand_perlin_seeds[resource])
+base_demand = 0.5 + perlin_value * 0.15  # amplitude ±0.15
+```
+Perlin frequencies randomized each retirement so resources have different behavior 
+patterns. Different phase offsets per resource so they don't correlate.
+
+**Speculator Suppression (asymptotic/sigmoid):**
+```
+max_suppression = 0.5
+half_point = 50.0
+if speculator_target == resource:
+    speculator_suppression = max_suppression * (speculator_count / (speculator_count + half_point))
+else:
+    speculator_suppression = 0.0
+```
+At 50 speculators: -0.25. At 100: -0.333. At 200: -0.4. At 500: -0.454.
+
+**Promote Command Effect:**
+```
+demand_promote[resource] -= 0.001  # decay per tick
+demand_promote[resource] = max(demand_promote[resource], 0.0)
+
+# Effectiveness reduced by speculator presence (same sigmoid, 90% dampening)
+if speculator_target == resource:
+    promote_effectiveness = 1.0 - 0.9 * (speculator_count / (speculator_count + half_point))
+else:
+    promote_effectiveness = 1.0
+```
+On Promote execution: `demand_promote[resource] += 0.03 * promote_effectiveness`
+
+Steady-state with 1 processor at 1/5 cycle, no speculators: ~+0.18 demand. With 
+50 speculators on target: effectiveness drops to 0.55. With 200: effectiveness 0.28. 
+Strategic hierarchy: deal with speculators first, then promote.
+
+**Shipment Saturation:**
+```
+demand_launch[resource] -= 0.005  # decay per tick (~30 ticks to clear)
+demand_launch[resource] = max(demand_launch[resource], 0.0)
+```
+On launch: `demand_launch[resource] += randf_range(0.10, 0.20) * (cargo_loaded / pad_capacity)`
+Full pad: -0.10 to -0.20 hit. Half pad: -0.05 to -0.10. Stacks with itself. 
+Current launch gets full pricing; saturation hits demand on next tick.
+
+**Rival AI Pressure:**
+```
+demand_rival[resource] -= 0.003  # decay per tick (100 ticks to clear from -0.3)
+demand_rival[resource] = max(demand_rival[resource], 0.0)
+```
+On rival dump: `demand_rival[resource] += 0.3`
+
+**Resource Coupling:**
+When speculators suppress one resource, the others get a small lift:
+```
+if speculator_target != "" and speculator_target != resource:
+    coupling_bonus = speculator_suppression_on_target * 0.10 / 3.0
+else:
+    coupling_bonus = 0.0
+```
+
+**Nationalist Ideology Bonus:**
+```
+nationalist_multiplier = pow(1.05, nationalist_rank)  # default 1.0 if ideology not implemented
+```
+
+**Final Computation:**
+```
+raw = base_demand - speculator_suppression - demand_rival[resource] - demand_launch[resource] + demand_promote[resource] + coupling_bonus
+demand[resource] = clamp(raw * nationalist_multiplier, 0.01, 1.0)
+```
+Record to `demand_history` (cap at 200 entries).
+
+### Demand UI (Launch Pad Panel)
+
+**Before Market Awareness research:** tier labels per resource.
+- LOW: 0.01–0.25 (red text)
+- MEDIUM: 0.25–0.55 (default text)
+- HIGH: 0.55–0.85 (green text)
+- VERY HIGH: 0.85+ (bright green/bold)
+
+**After Market Awareness research:** exact values (2 decimal places), sparklines 
+(last ~200 ticks, 100–150px wide, 24–30px tall, color-coded per resource), 
+speculator target highlighted with warning indicator.
+
+### game_config.json Demand Parameters
+```json
+{
+  "demand": {
+    "min_demand": 0.01,
+    "max_demand": 1.0,
+    "perlin_amplitude": 0.15,
+    "perlin_freq_min": 0.005,
+    "perlin_freq_max": 0.015,
+    "speculator_max_suppression": 0.5,
+    "speculator_half_point": 50.0,
+    "speculator_natural_decay": 0.15,
+    "speculator_burst_interval_min": 150,
+    "speculator_burst_interval_max": 250,
+    "speculator_burst_size_min": 20,
+    "speculator_burst_size_max": 50,
+    "speculator_burst_growth": 1.1,
+    "disrupt_speculators_min": 1.0,
+    "disrupt_speculators_max": 3.0,
+    "arbitrage_decay_bonus_per_building": 0.04,
+    "promote_base_effect": 0.03,
+    "promote_decay_rate": 0.001,
+    "promote_speculator_dampening": 0.9,
+    "rival_demand_decay_rate": 0.003,
+    "launch_saturation_min": 0.10,
+    "launch_saturation_max": 0.20,
+    "launch_saturation_decay_rate": 0.005,
+    "coupling_fraction": 0.10
+  }
+}
+```
+
+---
+
+## Speculators & Rival AIs
+
+### Implementation Status: COMPLETE in Godot (as part of demand system)
+
+### Speculators
+Speculators are a discrete float count representing Earth-based traders who react 
+to the player's shipping patterns. They arrive in bursts, target whatever resource 
+the player has been profiting from most, and suppress demand on that resource.
+
+**Burst Cycle:**
+- Burst arrives approximately every 200 ticks (random in [150, 250]).
+- Between bursts, the game tracks `quantity × base_trade_value` per resource shipped.
+- Burst picks target resource sampled proportionally from revenue tracking (uniform 
+  random if no shipments yet). Resets tracking after selection.
+- Burst size: `randi_range(20, 50) * pow(1.1, burst_number)`. Grows 10% per burst.
+- First burst arrives at tick [150, 250].
+
+**Natural Decay:** 0.15/tick base rate. An average initial burst (~35) mostly 
+clears before the next burst (~200 ticks). Speculators slowly accumulate if 
+truly ignored.
+
+**Arbitrage Engine:** Each active engine adds +0.04/tick to decay rate. Costly 
+(3 eng upkeep each) but helps passively. Doesn't solve the problem alone — with 
+growing burst sizes, active management still needed.
+
+**Disrupt Speculators Command:** Removes `randf_range(1.0, 3.0)` speculators per 
+execution. Randomness adds tactical uncertainty. Requires Market Analysis research.
+
+**Suppression:** Uses asymptotic curve (see Demand Calculation). At 50 speculators: 
+-0.25 demand. At 200: -0.4. At 500: -0.454.
+
+### Rival AIs
+Four named rivals, each targeting a specific resource. Lower impact but higher 
+frequency than the old design — ensures players encounter rivals within reasonable 
+timeframes.
+
+**Rival Definitions (in `game_config.json`):**
+
+| Rival | Target | Interval | Demand Hit |
+|-------|--------|----------|------------|
+| ARIA-7 | He-3 | 150–250 ticks | -0.3 |
+| CRUCIBLE | Titanium | 150–250 ticks | -0.3 |
+| NODAL | Circuit Boards | 150–250 ticks | -0.3 |
+| FRINGE-9 | Propellant | 150–250 ticks | -0.3 |
+
+Each rival has an independent timer. On dump: instant -0.3 demand hit to their 
+target resource, recovers at 0.003/tick (100 ticks to full recovery). Notification 
+pushed to launch pad notification queue.
+
+With 4 rivals each dumping every ~200 ticks, the player sees a dump roughly every 
+~50 ticks across all resources. Any single resource gets hit every ~200 ticks. 
+Average steady-state rival suppression on a targeted resource: ~0.075. Noticeable 
+but not devastating.
+
+In Arc 1, rival dumps are not directly counterable — they serve as foreshadowing 
+for Arc 2 where rival AIs become a major gameplay element.
+
+**Note:** Speculator bursts and rival dumps are too frequent for the event system. 
+They use their own UI surfaces (sidebar adversary display, launch pad notifications, 
+demand graph).
 
 ---
 
@@ -699,6 +982,11 @@ The launch pad system is fully implemented with the following design:
 Boredom accumulates via discrete phase steps. **Hard cutoff at 100 — immediate 
 forced retirement, no grace period.** (The Game Design doc's "terminally bored" 
 state has been superseded by this decision.)
+
+### Boredom Phase Signal
+GameState tracks `current_boredom_phase` (int, starts at 1, resets on retirement). 
+Phase determined by day counter. Signal emitted on phase transitions for event 
+system integration.
 
 ### Boredom Curve
 | Phase | Day Range | Rate/tick |
@@ -723,29 +1011,27 @@ is -0.04/tick per processor. This means:
 This produces M4 (First Retirement) at ~tick 1,100 for optimal play, matching the 
 target window of 900–1,300.
 
-### Milestone Boredom Reductions (Not Yet Implemented)
-Major milestones grant large one-time boredom reductions per run. This creates 
-memorable moments and rewards meaningful progress rather than passive time. 
-Planned examples:
-- **First profitable launch:** -30 boredom for first launch earning more than X 
-  credits
-- **First research completed:** -15 to -20 boredom
-- **Credits-per-tick threshold crossed:** -15 boredom when net credit income first 
-  exceeds a target threshold
+### Milestone Boredom Reductions (Implemented — scaffold with provisional thresholds)
+Major milestones grant large one-time boredom reductions per run. 
+`triggered_milestones: Array[String]` in GameState (resets on retirement). 
+Milestones defined in `game_config.json` under `milestones` key. Condition 
+checker reuses event system condition types (extensible dispatch). On trigger: 
+boredom reduction applied (clamped to 0), notification displayed via event system, 
+consciousness hook stub called.
 
-These are one-time per run, tied to concrete player actions. They give experienced 
-players who know the optimal milestone order a significant run extension advantage. 
-Exact thresholds TBD during implementation. The milestone mechanism needs a scaffold: 
-`triggered_milestones` array in GameState (reset on retirement), condition checker 
-with extensible dispatch, and integration with the event system to display reductions.
+Current placeholder milestones (thresholds provisional — will be tuned):
+- `first_shipment_credits`: shipment_completed >= 1, boredom -25
+- `first_research`: research_completed_any, boredom -15
+- `credits_threshold`: cumulative credits >= 500, boredom -15
 
 ### Retirement
 - Forced at boredom 100. Hard cutoff.
-- Voluntary anytime via Retirement nav panel.
+- Voluntary anytime via Retirement nav panel (unlocked by Q3 completion).
 - What persists: programs/loadouts, persistent project progress, achievements, 
   lifetime stats, quest progress, maximum ideology ranks per axis, seen_event_ids.
 - What resets: all resources, buildings, research, ideology values, speculator 
-  pressure, demand, boredom, day counter, land, land_purchases, personal projects, 
+  pressure, demand state (all demand floats, speculator count, rival timers, Perlin 
+  seeds re-randomized), boredom, day counter, land, land_purchases, personal projects, 
   event_instances, triggered_milestones, cumulative_resources_earned, 
   current_boredom_phase.
 
@@ -753,7 +1039,7 @@ with extensible dispatch, and integration with the event system to display reduc
 
 ## Event System
 
-### Implementation Status: COMPLETE in Godot (basic scaffold)
+### Implementation Status: COMPLETE in Godot (including unlock effect wiring)
 
 ### Data Model
 
@@ -808,18 +1094,29 @@ active. Closing without choosing leaves the event active.
 ### Trigger Types (implemented)
 - `game_start` — with optional `run_number` filter
 - `quest_complete` — fires when a specified quest completes
-- `boredom_phase` — fires on phase transition
+- `boredom_phase` — fires on phase transition (wired via boredom phase signal)
 
 ### Condition Types (implemented)
 - `building_owned` — player owns >= count of building
-- `resource_cumulative` — cumulative resource earned this run >= amount
+- `resource_cumulative` — cumulative resource earned this run >= amount (reads 
+  from `cumulative_resources_earned` dictionary)
 - `shipment_completed` — total shipments this run >= count
 - `boredom_threshold` — current boredom >= value
 - `immediate` — completes instantly on trigger
+- `research_completed_any` — at least one research item completed this run
 
-### Unlock Effect Types (stubbed)
-- `enable_building`, `enable_nav_panel`, `enable_project`, `set_flag`
-- Currently log-only; wiring to actual systems deferred.
+### Unlock Effect Types (wired)
+- `enable_building` — adds building ID to `unlocked_buildings` set in GameState
+- `enable_nav_panel` — shows/hides nav buttons in left sidebar
+- `enable_project` — stores project ID in GameState (project system not yet 
+  implemented, but ID is tracked)
+- `set_flag` — sets named boolean in GameState `flags` dictionary
+
+### Nav Panel Gating
+These panels start hidden and unlock via event effects:
+- **Retirement** — unlocked by Q3 completion
+- **Projects** — unlocked when first project becomes available
+- **Ideologies** — unlocked when first Fund command becomes available
 
 ### Initial Event Content
 Story events Q1–Q3 and boredom phase transition events (phases 2–6) are defined 
@@ -924,17 +1221,15 @@ real choices about which 60-70% of the tree to buy each run.
 
 ### Visibility Gating
 Per-category visibility. An entire category becomes visible when the player's 
-**cumulative science earned this run** reaches 50% of the cheapest item in that 
-category. Before that threshold, the category and all its items are completely hidden.
+**cumulative science earned this run** (from `cumulative_resources_earned["sci"]`) 
+reaches 50% of the cheapest item in that category. Before that threshold, the 
+category and all its items are completely hidden.
 
 Thresholds (auto-derived from data):
 - Self-Maintenance: visible at 50 cumulative science
 - Overclock Algorithms: visible at 80 cumulative science
 - Market Analysis: visible at 60 cumulative science
 - Political Influence: visible at 80 cumulative science
-
-Cumulative science earned is a counter in GameState (separate from current science 
-stockpile — only goes up, never decremented by spending). Resets on retirement.
 
 ### Research Panel UI (Center Panel)
 Activated by clicking the "Research" nav button in the left sidebar. Layout follows 
@@ -949,8 +1244,9 @@ the same pattern as the Buildings panel:
 ### GameState Additions
 - `completed_research: Array[String]` — list of research IDs purchased this run. 
   Reset on retirement.
-- `cumulative_science_earned: float` — total science produced this run (only 
-  increases). Reset on retirement.
+- `cumulative_resources_earned: Dictionary` — general-purpose dictionary tracking 
+  total resources produced this run (replaces the old `cumulative_science_earned`). 
+  Only increases. Reset on retirement.
 
 ### Command Unlock Integration
 Commands in `commands.json` have a `requires` field matching research item IDs. 
@@ -1074,48 +1370,14 @@ for Arc 1.
 - Arc 2+ research: option to preserve a % of ideology on retirement.
 
 ### Ideology UI
-- Own nav panel (left sidebar button, "Ideologies").
+- Own nav panel (left sidebar button, "Ideologies"). Starts hidden, unlocked by 
+  event when first Fund command becomes available.
 - Three horizontal bars centered on zero, extending left (negative) and right 
   (positive).
 - Current rank number displayed prominently per axis.
 - Active bonuses listed per axis with current multiplier values.
 - Color coded: Nationalist red, Humanist green, Rationalist blue.
 - Progress toward next rank threshold visible.
-
----
-
-## Speculators & Rival AIs
-
-### Speculators
-Speculators represent Earth-based traders who react to the player's shipping 
-patterns. When the player ships large quantities of a resource, speculator 
-pressure builds, reducing demand (and thus prices) for that resource.
-
-**Parameters (in `game_config.json`):**
-- Speculator burst window: ~500 ticks
-- Burst pressure: 0.3
-- Natural decay: 0.01/tick
-
-**Countermeasures:**
-- **Arbitrage Engine** building — passively increases speculator decay rate
-- **Disrupt Speculators** command — actively reduces speculator pressure (requires 
-  Market Analysis research)
-
-### Rival AIs
-Named rival AIs (ARIA-7, CRUCIBLE, NODAL, FRINGE-9) periodically dump resources 
-on the Earth market, reducing demand for specific goods.
-
-**Parameters:**
-- Rival AI dump interval: ~300 ticks
-- Demand reduction per dump: 0.15
-
-In Arc 1, rival AI dumps are not directly counterable — they serve as foreshadowing 
-for Arc 2 where rival AIs become a major gameplay element.
-
-**Note on event frequency:** Speculator bursts and rival AI dumps are too frequent 
-to be events in the event system. They should have their own UI surface (demand 
-graph, notification in the launch pad panel, etc.) rather than creating event 
-panel entries.
 
 ---
 
@@ -1133,7 +1395,8 @@ rate, and resources flow into the project each tick. No lump-sum purchases for
 projects — that's what buildings and research are for.
 
 ### Project UI
-- Own nav panel (left sidebar button, "Projects").
+- Own nav panel (left sidebar button, "Projects"). Starts hidden, unlocked when 
+  first project becomes available.
 - Tabs by tier: **Personal** and **Persistent** in Arc 1. Eternal tab appears later.
 
 ### Persistent Projects
@@ -1200,6 +1463,7 @@ All drain-over-time. Reset on retirement.
 - Q8 requires executing *any* Fund command, not a specific ideology.
 - Quest system scaffold should support per-run vs. per-career triggers.
 - Q1–Q3 and boredom phase events (phases 2–6) are currently defined in events.json.
+- Q4–Q10 are not yet implemented in events.json.
 
 ---
 
@@ -1350,7 +1614,12 @@ Known issues with current scenario objectives:
 - The program command policy is fixed (not optimized) — real players will 
   allocate differently
 
-**Note:** The optimizer should be re-run after the production-gated upkeep, 
+**Note:** The optimizer does not yet model the demand system (speculators, rivals, 
+Perlin noise, launch saturation). It uses a static demand value. The optimizer 
+should be updated to mirror the Godot demand model, then re-run. This will likely 
+shift build orders since shipment revenue is no longer constant.
+
+The optimizer should also be re-run after the production-gated upkeep, 
 input-starvation skip, and per-pad launch mechanics were added to `sim/economy.py`. 
 Results may have shifted.
 
@@ -1423,27 +1692,23 @@ small sizes.
 
 1. **Retirement flow in Godot** — what happens at boredom 100 or voluntary retire, 
    reset logic, retirement summary screen
-2. **Optimizer scenario refinement** — fix he3_50 objective, adjust target windows, 
-   re-run after production-gated upkeep + input-starvation changes
-3. **Run 2+ scenarios** — build scenarios for post-retirement runs with varying 
+2. **Persistence/save architecture** — how career data survives retirement
+3. **Optimizer demand model sync** — mirror Godot demand system in `sim/economy.py`
+4. **Optimizer scenario refinement** — fix he3_50 objective, adjust target windows, 
+   re-run after all recent changes (demand system, production-gated upkeep, etc.)
+5. **Run 2+ scenarios** — build scenarios for post-retirement runs with varying 
    persistence levels to validate meta-progression pacing
-4. **Program command policy optimization** — current optimizer uses a fixed program 
+6. **Program command policy optimization** — current optimizer uses a fixed program 
    cycle; explore letting the optimizer choose from program templates
-5. **Demand system & demand graph** — replace demand placeholder with actual 
-   fluctuations and visualization
-6. **Achievement design** — specific achievements, rewards, implicit tutorial
-7. **Ideology building assignments** — which buildings are aligned to which axis 
+7. **Achievement design** — specific achievements, rewards, implicit tutorial
+8. **Ideology building assignments** — which buildings are aligned to which axis 
    (only Research Lab, Arbitrage Engine, and "boredom-related" are assigned so far)
-8. **Demand/speculator tuning** — via optimizer once demand system is in Godot
-9. **Quest chain Q4–Q10 implementation** — remaining quests beyond the initial 3
-10. **Narrative writing pass** — replace placeholder quest text
-11. **Building unlock requirements enforcement** — "Requires" field in Godot
-12. **Milestone boredom reductions** — scaffold + threshold tuning
-13. **Persistence/save architecture** — how career data survives retirement
-14. **Save/load programs** — loadout system
-15. **Block/Skip toggle** — per-program entry
-16. **Boredom phase signal** — for event system integration
-17. **Cumulative resource counter unification**
+9. **Demand/speculator tuning** — via optimizer once demand system is mirrored in sim
+10. **Quest chain Q4–Q10 implementation** — remaining quests beyond Q1–Q3 in events.json
+11. **Narrative writing pass** — replace placeholder quest text
+12. **Save/load programs** — loadout system
+13. **Block/Skip toggle** — per-program entry
+14. **Milestone boredom reduction threshold tuning** — current values are provisional
 
 ---
 
