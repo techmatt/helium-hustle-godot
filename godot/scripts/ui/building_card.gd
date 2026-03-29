@@ -99,10 +99,6 @@ func refresh() -> void:
 	_controls_hbox.visible = owned > 0 and not _bdef.get("upkeep", {}).is_empty()
 	_sell_row.visible = owned > 0
 
-	if owned > 0:
-		_active_minus.disabled = (active <= 0)
-		_active_plus.disabled  = (active >= owned)
-
 	if is_locked:
 		_requires_lbl.text = GameManager.get_building_requires_text(_bdef.short_name)
 		_requires_lbl.visible = true

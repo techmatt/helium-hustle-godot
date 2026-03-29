@@ -197,6 +197,16 @@ var _stats_panel: StatsPanel = null
 const STATS_REFRESH_INTERVAL: float = 0.25
 var _stats_refresh_accum: float = 0.0
 
+# ── Retirement panel ─────────────────────────────────────────────────────────────
+var _retire_days_lbl: Label = null
+var _retire_credits_lbl: Label = null
+var _retire_shipments_lbl: Label = null
+var _retire_btn: Button = null
+var _retire_confirm_pending: bool = false
+
+# ── Retirement summary modal ──────────────────────────────────────────────────────
+var _retirement_summary: RetirementSummary = null
+
 
 func _p(key: String) -> Color:
 	return PALETTE["dark" if GameSettings.is_dark_mode else "light"][key]
@@ -215,7 +225,9 @@ func _ready() -> void:
 	_setup_status_bar()
 	_update_resource_display()
 	_build_event_modal()
+	_build_retirement_summary()
 	GameManager.event_manager.event_triggered.connect(_on_event_triggered)
+	GameManager.retirement_started.connect(_on_retirement_started)
 
 
 func _process(delta: float) -> void:
@@ -475,6 +487,8 @@ func _on_tick() -> void:
 			for child in _buildings_scroll.get_children():
 				child.queue_free()
 			_build_research_panel()
+	elif _active_mode == "Retirement":
+		_refresh_retirement_panel()
 	_update_status_bar()
 	_update_processor_row()
 
@@ -539,6 +553,11 @@ func _switch_mode(mode: String) -> void:
 	_demand_has_ma = false
 	_buy_land_card = null
 	_stats_panel = null
+	_retire_days_lbl = null
+	_retire_credits_lbl = null
+	_retire_shipments_lbl = null
+	_retire_btn = null
+	_retire_confirm_pending = false
 	_update_nav_highlight(mode)
 	match mode:
 		"Buildings":   _build_buildings_panel()
@@ -551,6 +570,7 @@ func _switch_mode(mode: String) -> void:
 			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
+		"Retirement":  _build_retirement_panel()
 		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
@@ -637,6 +657,7 @@ func _on_theme_changed() -> void:
 			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
+		"Retirement":  _build_retirement_panel()
 		"Options":     _build_options_panel()
 		_:
 			var lbl := Label.new()
@@ -2089,6 +2110,179 @@ func _build_event_modal() -> void:
 func _on_event_triggered(event_id: String) -> void:
 	if GameManager.event_manager.is_event_first_time(event_id, GameManager.state):
 		_event_modal.open(event_id)
+
+
+func _build_retirement_summary() -> void:
+	if _retirement_summary != null:
+		return
+	_retirement_summary = load("res://scenes/ui/RetirementSummary.tscn").instantiate() as RetirementSummary
+	add_child(_retirement_summary)
+	_retirement_summary.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+
+
+func _on_retirement_started(summary_data: Dictionary) -> void:
+	_retirement_summary.open(summary_data)
+
+
+# ── Retirement panel ────────────────────────────────────────────────────────────
+
+func _build_retirement_panel() -> void:
+	_retire_days_lbl = null
+	_retire_credits_lbl = null
+	_retire_shipments_lbl = null
+	_retire_btn = null
+	_retire_confirm_pending = false
+
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 18)
+	_buildings_scroll.add_child(outer)
+
+	# Intro text
+	var intro := Label.new()
+	intro.text = "You may voluntarily retire at any time. Your successor AI will inherit certain advantages from your run."
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	intro.add_theme_font_override("font", _font_exo2_regular)
+	intro.add_theme_font_size_override("font_size", 14)
+	intro.add_theme_color_override("font_color", _p("text_muted"))
+	outer.add_child(intro)
+
+	_add_retirement_section(outer, "What Carries Over", [
+		"Event and quest history",
+		"Lifetime statistics",
+		"Persistent project progress",
+		"Program loadouts (when saved)",
+	])
+
+	_add_retirement_section(outer, "What Resets", [
+		"All resources and buildings",
+		"Research",
+		"Ideology values",
+		"Market conditions",
+	])
+
+	# Current run stats section
+	var sep := HSeparator.new()
+	outer.add_child(sep)
+	var section_lbl := Label.new()
+	section_lbl.text = "CURRENT RUN"
+	section_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	section_lbl.add_theme_font_size_override("font_size", 12)
+	section_lbl.add_theme_color_override("font_color", _p("text_muted"))
+	outer.add_child(section_lbl)
+
+	var stats_vbox := VBoxContainer.new()
+	stats_vbox.add_theme_constant_override("separation", 4)
+	outer.add_child(stats_vbox)
+
+	_retire_days_lbl = _make_stat_label("Days survived:", "0", stats_vbox)
+	_retire_credits_lbl = _make_stat_label("Credits earned:", "0", stats_vbox)
+	_retire_shipments_lbl = _make_stat_label("Shipments:", "0", stats_vbox)
+	_refresh_retirement_panel()
+
+	# Retire button
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	outer.add_child(btn_row)
+
+	_retire_btn = Button.new()
+	_retire_btn.text = "Retire"
+	_retire_btn.custom_minimum_size = Vector2(140, 40)
+	_retire_btn.focus_mode = Control.FOCUS_NONE
+	_retire_btn.add_theme_font_override("font", _font_exo2_semibold)
+	_retire_btn.add_theme_font_size_override("font_size", 15)
+	var btn_style := StyleBoxFlat.new()
+	btn_style.bg_color = Color(0.55, 0.15, 0.15)
+	btn_style.corner_radius_top_left     = 4
+	btn_style.corner_radius_top_right    = 4
+	btn_style.corner_radius_bottom_left  = 4
+	btn_style.corner_radius_bottom_right = 4
+	_retire_btn.add_theme_stylebox_override("normal", btn_style)
+	_retire_btn.add_theme_stylebox_override("hover", btn_style)
+	_retire_btn.add_theme_color_override("font_color", Color.WHITE)
+	_retire_btn.pressed.connect(_on_retire_btn_pressed)
+	btn_row.add_child(_retire_btn)
+
+	var confirm_hint := Label.new()
+	confirm_hint.text = "(click again to confirm)"
+	confirm_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	confirm_hint.add_theme_font_override("font", _font_exo2_regular)
+	confirm_hint.add_theme_font_size_override("font_size", 12)
+	confirm_hint.add_theme_color_override("font_color", _p("text_dim"))
+	outer.add_child(confirm_hint)
+
+
+func _add_retirement_section(parent: VBoxContainer, title: String, bullets: Array) -> void:
+	var sep := HSeparator.new()
+	parent.add_child(sep)
+	var hdr := Label.new()
+	hdr.text = title.to_upper()
+	hdr.add_theme_font_override("font", _font_exo2_semibold)
+	hdr.add_theme_font_size_override("font_size", 12)
+	hdr.add_theme_color_override("font_color", _p("text_muted"))
+	parent.add_child(hdr)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 2)
+	parent.add_child(vbox)
+	for bullet: String in bullets:
+		var lbl := Label.new()
+		lbl.text = "• " + bullet
+		lbl.add_theme_font_override("font", _font_exo2_regular)
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", _p("text_muted"))
+		vbox.add_child(lbl)
+
+
+func _make_stat_label(label_text: String, initial_val: String, parent: VBoxContainer) -> Label:
+	var row := HBoxContainer.new()
+	parent.add_child(row)
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_override("font", _font_exo2_regular)
+	lbl.add_theme_font_size_override("font_size", 14)
+	row.add_child(lbl)
+	var val := Label.new()
+	val.text = initial_val
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val.add_theme_font_override("font", _font_exo2_semibold)
+	val.add_theme_font_size_override("font_size", 14)
+	row.add_child(val)
+	return val
+
+
+func _refresh_retirement_panel() -> void:
+	if _retire_days_lbl == null or not is_instance_valid(_retire_days_lbl):
+		return
+	var st: GameState = GameManager.state
+	_retire_days_lbl.text = "%s" % _fmt_int(st.current_day)
+	_retire_credits_lbl.text = "%s" % _fmt_int(int(st.cumulative_resources_earned.get("cred", 0.0)))
+	_retire_shipments_lbl.text = "%s" % _fmt_int(st.total_shipments_completed)
+
+
+func _on_retire_btn_pressed() -> void:
+	if not _retire_confirm_pending:
+		_retire_confirm_pending = true
+		_retire_btn.text = "Confirm Retirement?"
+		get_tree().create_timer(2.0).timeout.connect(func() -> void:
+			if _retire_confirm_pending and _retire_btn != null and is_instance_valid(_retire_btn):
+				_retire_confirm_pending = false
+				_retire_btn.text = "Retire"
+		)
+	else:
+		_retire_confirm_pending = false
+		GameManager.retire(true)
+
+
+func _fmt_int(n: int) -> String:
+	var s: String = str(abs(n))
+	var result: String = ""
+	var count: int = 0
+	for i in range(s.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = s[i] + result
+		count += 1
+	return ("-" if n < 0 else "") + result
 
 
 # ── Program panel — state management ───────────────────────────────────────────

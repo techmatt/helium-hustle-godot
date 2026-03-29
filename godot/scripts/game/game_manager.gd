@@ -18,6 +18,7 @@ var state: GameState
 var sim: GameSimulation
 var rate_tracker: ResourceRateTracker
 var event_manager: EventManager
+var career: CareerState = CareerState.new()
 var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
 
@@ -25,6 +26,7 @@ signal tick_completed
 signal program_step_executed(program_index: int, entry_index: int, success: bool)
 signal program_cycle_reset(program_index: int)
 signal milestone_triggered(milestone_id: String, label: String, boredom_reduction: float)
+signal retirement_started(summary_data: Dictionary)
 
 var _timer: Timer
 var _game_config: Dictionary
@@ -71,7 +73,13 @@ func _initialize_state() -> void:
 	for sn in _game_config.starting_resources:
 		state.amounts[sn] = float(_game_config.starting_resources[sn])
 	for sn in _game_config.starting_buildings:
-		state.buildings_owned[sn] = int(_game_config.starting_buildings[sn])
+		var count: int = int(_game_config.starting_buildings[sn])
+		state.buildings_owned[sn] = count
+		for bdef: Dictionary in _buildings_data:
+			if bdef.short_name == sn:
+				state.amounts["land"] -= float(bdef.land) * count
+				break
+	state.run_number = career.run_number
 	sim.recalculate_caps(state)
 	sim.demand_system.initialize_demand(state)
 	state.programs[0].processors_assigned = 1
@@ -194,6 +202,92 @@ func _on_tick() -> void:
 	for m in sim.pending_milestone_triggers:
 		print("[Milestone] %s — Boredom -%s" % [m.label, m.boredom_reduction])
 		milestone_triggered.emit(m.id, m.label, m.boredom_reduction)
+	tick_completed.emit()
+	if state.amounts.get("boredom", 0.0) >= 100.0:
+		retire(false)
+
+
+func retire(voluntary: bool) -> void:
+	set_speed("||")
+
+	# Snapshot run stats into career
+	var run_credits: float = state.cumulative_resources_earned.get("cred", 0.0)
+	var run_shipments: int = state.total_shipments_completed
+	var run_days: int = state.current_day
+	var run_buildings: int = 0
+	for count: int in state.buildings_owned.values():
+		run_buildings += count
+	var run_research: int = state.completed_research.size()
+
+	career.lifetime_credits_earned += run_credits
+	career.lifetime_shipments += run_shipments
+	career.lifetime_days_survived += run_days
+	career.lifetime_buildings_built += run_buildings
+	career.lifetime_research_completed += run_research
+	career.best_run_days = maxi(career.best_run_days, run_days)
+	career.best_run_credits = maxf(career.best_run_credits, run_credits)
+	career.best_run_shipments = maxi(career.best_run_shipments, run_shipments)
+
+	# Update event persistence
+	for inst: Dictionary in state.event_instances:
+		var eid: String = inst.get("id", "")
+		if eid and not career.seen_event_ids.has(eid):
+			career.seen_event_ids.append(eid)
+
+	# Build summary data for the UI
+	var summary: Dictionary = {
+		"run_number": career.run_number,
+		"voluntary": voluntary,
+		"days_survived": run_days,
+		"credits_earned": run_credits,
+		"shipments_completed": run_shipments,
+		"buildings_built": run_buildings,
+		"research_completed": state.completed_research.duplicate(),
+		"ideology_ranks": {},
+		"milestones_hit": state.triggered_milestones.duplicate(),
+		"career_retirements": career.total_retirements + 1,
+		"career_total_days": career.lifetime_days_survived,
+	}
+
+	# Increment career counters
+	career.total_retirements += 1
+	career.run_number += 1
+
+	retirement_started.emit(summary)
+
+
+func start_new_run() -> void:
+	# Fresh state
+	state = GameState.new()
+	for sn in _game_config.starting_resources:
+		state.amounts[sn] = float(_game_config.starting_resources[sn])
+	for sn in _game_config.starting_buildings:
+		var count: int = int(_game_config.starting_buildings[sn])
+		state.buildings_owned[sn] = count
+		for bdef: Dictionary in _buildings_data:
+			if bdef.short_name == sn:
+				state.amounts["land"] -= float(bdef.land) * count
+				break
+	state.run_number = career.run_number
+
+	# Transfer event history from career so prior events are marked seen
+	for eid: String in career.seen_event_ids:
+		if not state.seen_event_ids.has(eid):
+			state.seen_event_ids.append(eid)
+
+	# Future hook: apply persistent project rewards here
+	# if career.completed_projects.has("foundation_grant"): ...
+
+	# Re-initialize subsystems for the new state
+	rate_tracker = ResourceRateTracker.new()
+	sim.rate_tracker = rate_tracker
+	sim.recalculate_caps(state)
+	sim.demand_system.initialize_demand(state)
+
+	# Fire game_start events for the new run
+	event_manager.on_game_start(state)
+
+	set_speed("1x")
 	tick_completed.emit()
 
 

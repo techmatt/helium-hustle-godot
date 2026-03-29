@@ -77,7 +77,7 @@ var rival_next_dump_tick: Dictionary = {}      # rival_id → int tick
 # Event system — persistent across retirements
 var seen_event_ids: Array[String] = []
 var highest_completed_story_quest: String = ""
-var current_run: int = 1
+var run_number: int = 1
 
 var total_processors: int:
 	get: return buildings_active.get("data_center", buildings_owned.get("data_center", 0))

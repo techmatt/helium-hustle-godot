@@ -25,7 +25,7 @@ func on_game_start(state: GameState) -> void:
 		if trigger.get("type", "") != "game_start":
 			continue
 		var run_num: int = int(trigger.get("run_number", 0))
-		if run_num != 0 and run_num != state.current_run:
+		if run_num != 0 and run_num != state.run_number:
 			continue
 		if not _get_instance(state, def.id).is_empty():
 			continue

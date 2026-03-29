@@ -31,9 +31,10 @@ func refresh() -> void:
 	_cost_lbl.text = "+%d land for %d cr" % [per, cost]
 	if can:
 		_cost_lbl.remove_theme_color_override("font_color")
+		_bg_style.bg_color = Color(0.20, 0.40, 0.20, 0.35) if GameSettings.is_dark_mode else Color(0.94, 0.99, 0.94)
 	else:
 		_cost_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
-	_buy_btn.disabled = not can
+		_bg_style.bg_color = Color(0.40, 0.20, 0.20, 0.35) if GameSettings.is_dark_mode else Color(0.99, 0.94, 0.94)
 
 
 func _build_ui() -> void:
@@ -103,6 +104,7 @@ func _build_ui() -> void:
 	# Right: buy button
 	_buy_btn = Button.new()
 	_buy_btn.text = "Buy Land"
+	_buy_btn.focus_mode = Control.FOCUS_NONE
 	_buy_btn.add_theme_font_override("font", _font_e2s)
 	_buy_btn.add_theme_font_size_override("font_size", 14)
 	_buy_btn.pressed.connect(_on_buy_pressed)
@@ -119,27 +121,9 @@ func _build_ui() -> void:
 		btn_s.border_width_bottom = 1
 		btn_s.border_color = Color(0.816, 0.816, 0.816)
 		_buy_btn.add_theme_stylebox_override("normal", btn_s)
+		_buy_btn.add_theme_stylebox_override("disabled", btn_s)
 	row.add_child(_buy_btn)
 
 
 func _on_buy_pressed() -> void:
-	if GameManager.can_buy_land():
-		GameManager.buy_land()
-		_bg_style.bg_color = Color(0.82, 0.97, 0.82) if not GameSettings.is_dark_mode \
-			else Color(0.20, 0.40, 0.20, 0.35)
-		get_tree().create_timer(0.3).timeout.connect(func():
-			if is_instance_valid(self): _restore_bg()
-		)
-	else:
-		_bg_style.bg_color = Color(0.97, 0.84, 0.84) if not GameSettings.is_dark_mode \
-			else Color(0.40, 0.20, 0.20, 0.35)
-		get_tree().create_timer(0.3).timeout.connect(func():
-			if is_instance_valid(self): _restore_bg()
-		)
-
-
-func _restore_bg() -> void:
-	if GameSettings.is_dark_mode:
-		_bg_style.bg_color = Color(0.13, 0.13, 0.16)
-	else:
-		_bg_style.bg_color = Color(1.0, 1.0, 1.0)
+	GameManager.buy_land()
