@@ -219,7 +219,7 @@ func _refresh_card(resource_id: String, rate_tracker: ResourceRateTracker,
 	)
 
 	# Update net label in header
-	net_lbl.text = _fmt_rate(net) + "/tick"
+	net_lbl.text = _fmt_rate(net) + "/s"
 	net_lbl.add_theme_color_override("font_color", _rate_color(net))
 
 	# Rebuild body rows
@@ -297,11 +297,12 @@ func _get_building_display_name(short_name: String, buildings_data: Array) -> St
 
 
 func _fmt_rate(value: float) -> String:
+	if absf(value) < 0.005:
+		return "0"
+	var whole: bool = absf(value - roundf(value)) < 0.05
 	if value > 0.0:
-		return "+%.1f" % value
-	elif value < 0.0:
-		return "%.1f" % value
-	return "0.0"
+		return ("+%d" if whole else "+%.1f") % value
+	return ("%d" if whole else "%.1f") % value
 
 
 func _rate_color(value: float) -> Color:

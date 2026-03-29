@@ -365,7 +365,7 @@ func _setup_status_bar() -> void:
 	boredom_hbox.add_child(bd[3])
 
 	_boredom_rate_lbl = Label.new()
-	_boredom_rate_lbl.text = "+0.00/tick"
+	_boredom_rate_lbl.text = "0/s"
 	_boredom_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
 	_boredom_rate_lbl.add_theme_font_size_override("font_size", 12)
 	_boredom_rate_lbl.custom_minimum_size.x = 90
@@ -392,7 +392,7 @@ func _setup_status_bar() -> void:
 	energy_hbox.add_child(en[3])
 
 	_energy_rate_lbl = Label.new()
-	_energy_rate_lbl.text = "+0/tick"
+	_energy_rate_lbl.text = "0/s"
 	_energy_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
 	_energy_rate_lbl.add_theme_font_size_override("font_size", 12)
 	_energy_rate_lbl.custom_minimum_size.x = 72
@@ -423,13 +423,13 @@ func _update_status_bar() -> void:
 			total += d
 		boredom_rate = total / _boredom_history.size()
 
-	const BOREDOM_MAX: float = 100.0
-	_boredom_bar.max_value = BOREDOM_MAX
+	var boredom_max: float = st.caps.get("boredom", 1000.0)
+	_boredom_bar.max_value = boredom_max
 	_boredom_bar.value = current_boredom
-	_boredom_bar_lbl.text = "%.1f / %.0f" % [current_boredom, BOREDOM_MAX]
+	_boredom_bar_lbl.text = "%.1f / %.0f" % [current_boredom, boredom_max]
 
 	# Color ramp on boredom bar fill
-	var boredom_pct: float = current_boredom / BOREDOM_MAX * 100.0
+	var boredom_pct: float = current_boredom / boredom_max * 100.0
 	if boredom_pct < 25.0:
 		_boredom_fill.bg_color = Color(0.180, 0.490, 0.196)   # #2E7D32
 	elif boredom_pct < 50.0:
@@ -439,11 +439,10 @@ func _update_status_bar() -> void:
 	else:
 		_boredom_fill.bg_color = Color(0.718, 0.110, 0.110)   # #B71C1C
 
-	if boredom_rate <= 0.0:
-		_boredom_rate_lbl.text = "%.2f/tick" % boredom_rate
+	_boredom_rate_lbl.text = _fmt_sidebar_rate(boredom_rate)
+	if boredom_rate <= 0.005:
 		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
 	else:
-		_boredom_rate_lbl.text = "+%.2f/tick" % boredom_rate
 		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 
 	# Energy bar
@@ -454,12 +453,11 @@ func _update_status_bar() -> void:
 	_energy_bar_lbl.text = "%d / %d" % [int(energy_amount), int(energy_cap)]
 
 	var rates: Dictionary = _compute_theoretical_rates()
-	var energy_rate: int = int(rates.get("eng", 0.0))
-	if energy_rate >= 0:
-		_energy_rate_lbl.text = "+%d/tick" % energy_rate
+	var energy_rate: float = rates.get("eng", 0.0)
+	_energy_rate_lbl.text = _fmt_sidebar_rate(energy_rate)
+	if energy_rate >= 0.0:
 		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
 	else:
-		_energy_rate_lbl.text = "%d/tick" % energy_rate
 		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 
 
@@ -853,7 +851,27 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 	val_lbl.add_theme_font_size_override("font_size", 14)
 	row.add_child(val_lbl)
 
-	_resource_labels[sn] = {"val": val_lbl}
+	var rate_lbl: Label = null
+	if sn != "proc" and sn != "land":
+		rate_lbl = Label.new()
+		rate_lbl.text = "0/s"
+		rate_lbl.custom_minimum_size = Vector2(72, 0)
+		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		rate_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		rate_lbl.add_theme_font_override("font", _font_exo2_regular)
+		rate_lbl.add_theme_font_size_override("font_size", 13)
+		row.add_child(rate_lbl)
+
+	_resource_labels[sn] = {"val": val_lbl, "rate": rate_lbl}
+
+
+func _fmt_sidebar_rate(value: float) -> String:
+	if absf(value) < 0.005:
+		return "0/s"
+	var whole: bool = absf(value - roundf(value)) < 0.05
+	if value > 0.0:
+		return ("+%d/s" if whole else "+%.1f/s") % value
+	return ("%d/s" if whole else "%.1f/s") % value
 
 
 func _compute_theoretical_rates() -> Dictionary:
@@ -862,13 +880,15 @@ func _compute_theoretical_rates() -> Dictionary:
 
 func _update_resource_display() -> void:
 	var st: GameState = GameManager.state
+	var rt: ResourceRateTracker = GameManager.rate_tracker
 	for entry: Array in RESOURCES:
 		var sn: String = entry[0]
 		if not _resource_labels.has(sn):
 			continue
-		var val_lbl: Label = _resource_labels[sn].val
+		var labels: Dictionary = _resource_labels[sn]
+		var val_lbl: Label = labels.val
 
-		# Processors: show assigned / total, no coloring
+		# Processors: show assigned / total, no rate
 		if sn == "proc":
 			var assigned: int = 0
 			for p: GameState.ProgramData in st.programs:
@@ -890,6 +910,18 @@ func _update_resource_display() -> void:
 				val_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))  # #C62828
 			else:
 				val_lbl.remove_theme_color_override("font_color")
+
+		# Rate label (land has no rate label)
+		var rate_lbl: Label = labels.get("rate", null)
+		if rate_lbl != null:
+			var net: float = rt.get_net_instant(sn)
+			rate_lbl.text = _fmt_sidebar_rate(net)
+			if net > 0.005:
+				rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+			elif net < -0.005:
+				rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
+			else:
+				rate_lbl.add_theme_color_override("font_color", Color(0.400, 0.400, 0.400))
 
 
 # ── Commands panel ─────────────────────────────────────────────────────────────

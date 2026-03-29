@@ -23,7 +23,7 @@
     },
     "production": {
       "cred": 5.0,
-      "boredom": 0.04
+      "boredom": 0.4
     },
     "effects": [],
     "description": "Energy to credits. Key early income. Small boredom cost per execution."
@@ -141,7 +141,7 @@
     "effects": [
       {
         "effect": "boredom_add",
-        "value": -0.2
+        "value": -2.0
       }
     ],
     "description": "Primary boredom mitigation. Energy-expensive. Competes for processor time."

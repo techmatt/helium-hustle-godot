@@ -61,13 +61,18 @@ godot/
     ui/EventPanel.tscn     ← Event panel (lower right panel)
     ui/EventModal.tscn     ← Event modal dialog (center-screen overlay)
     ui/StatsPanel.tscn     ← Stats panel (center panel view)
+    ui/RetirementSummary.tscn  ← Retirement summary modal
+    ui/RetirementPanel.tscn    ← Retirement nav panel (center panel view)
   scripts/
     game/
       game_state.gd        ← class_name GameState — pure data, no UI
-      game_simulation.gd   ← class_name GameSimulation — pure logic, no UI
+      game_simulation.gd   ← class_name GameSimulation — core economy logic, no UI
+      demand_system.gd     ← class_name DemandSystem — demand/speculator/rival logic
       game_manager.gd      ← autoload singleton, owns state + sim
       event_manager.gd     ← class_name EventManager — event logic, no UI
       resource_rate_tracker.gd ← class_name ResourceRateTracker — per-source rate tracking
+      career_state.gd      ← class_name CareerState — cross-run persistent data
+      save_manager.gd      ← class_name SaveManager — disk save/load utility
     ui/
       main_ui.gd           ← Main UI controller
       building_card.gd     ← BuildingCard (PanelContainer subclass)
@@ -77,6 +82,8 @@ godot/
       event_panel.gd       ← Event panel UI
       event_modal.gd       ← Event modal UI
       stats_panel.gd       ← Stats panel UI
+      retirement_summary.gd ← Retirement summary modal UI
+      retirement_panel.gd   ← Retirement panel UI
   assets/fonts/            ← Rajdhani Bold, Exo 2 Regular/SemiBold
 
 data/
@@ -123,7 +130,8 @@ All resources are **float internally**, displayed as integers or one decimal pla
 depending on context. This avoids rounding edge cases with fractional production 
 rates, Overclock multipliers, demand floats, etc. We prefer integer values in the 
 data files where possible; fractional values are reserved for systems that 
-inherently need them (boredom rates, circuit production, demand floats, etc.).
+inherently need them (circuit production, demand floats, etc.). Avoid displaying 
+too many decimal places in the UI — round to integers or one decimal where possible.
 
 ---
 
@@ -240,9 +248,9 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
     10 land per purchase.
 
 14. **Resource list improvements** — ordered Boredom/Energy/Processors/Land first, 
-    then remaining resources. Processor display shows assigned/total. No income 
-    rates in sidebar (moved to Stats panel). Cap coloring: dark green at cap, 
-    dark red at zero for capped resources.
+    then remaining resources. Processor display shows assigned/total. Per-tick 
+    net rates shown inline for each resource (green positive, red negative, muted 
+    zero). Cap coloring: dark green at cap, dark red at zero for capped resources.
 
 15. **Boredom phase signal** — GameState tracks `current_boredom_phase` (int, 
     initialized to 1, resets on retirement). Phase determined by day counter 
@@ -264,20 +272,40 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
     tick. When triggered: adds to triggered_milestones, applies boredom reduction 
     (clamped to 0), displays via event system notification. Consciousness hook 
     stub (`_on_boredom_reduced(amount, source)`) called on all boredom reductions 
-    (milestones and Dream command). Initial placeholder milestones:
-    - `first_shipment_credits`: shipment_completed >= 1, boredom -25
-    - `first_research`: research_completed_any, boredom -15
-    - `credits_threshold`: cumulative credits >= 500, boredom -15
+    (milestones and Dream command). Initial placeholder milestones (values reflect 
+    ×10 boredom scaling):
+    - `first_shipment_credits`: shipment_completed >= 1, boredom -250
+    - `first_research`: research_completed_any, boredom -150
+    - `credits_threshold`: cumulative credits >= 500, boredom -150
 
 18. **Demand system** — full implementation replacing the static 0.5 placeholder. 
     Per-resource continuous demand float in range [0.01, 1.0]. Six forces drive 
     demand: Perlin noise drift, speculator suppression, rival AI dumps, shipment 
     saturation, Promote commands, and resource coupling. See Demand System section 
-    for full specification.
+    for full specification. **Extracted into its own class** (`demand_system.gd`, 
+    class_name DemandSystem) — separated from GameSimulation for code organization.
 
 19. **Adversaries sidebar section** — collapsible "Adversaries" section in the left 
     sidebar resource list, below existing resources. Shows speculator count and 
     current target resource.
+
+20. **Demand noise improvements** — gradient noise (not value noise) with quintic 
+    interpolation, 4-octave fractal sum with normalized output, tuned frequencies 
+    and amplitude for stock-ticker-style curves. See Demand System section for 
+    parameters.
+
+21. **Retirement system** — implemented (not thoroughly tested). Forced retirement 
+    at boredom 1000 (hard cutoff). Voluntary retirement via Retirement nav panel 
+    (unlocked by Q3). Retirement summary screen shows run stats and career totals. 
+    CareerState tracks persistent data across runs. Programs clear on retirement 
+    (command queues emptied, processor assignments reset). See Retirement section 
+    for full specification.
+
+22. **Save/load persistence** — implemented (not thoroughly tested). Single save 
+    file at `user://helium_hustle_save.json`. Mid-run autosave (on pause, every 
+    60s real-time, on quit). Resume on game launch. CareerState and GameState both 
+    serialize via `to_dict()`/`from_dict()`. Debug option to clear all save data. 
+    See Save System section for full specification.
 
 ### In the Python Optimizer (`sim/`)
 
@@ -304,17 +332,21 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 
 ## What's NOT Implemented Yet (in rough priority order)
 
-1. **Retirement** — forced at boredom 100, voluntary anytime, reset logic (see 
-   Boredom & Retirement section)
-2. **Persistence/save architecture** — how career data survives retirement
-3. **Quest chain content beyond Q1–Q3** — Q4–Q10 need implementation in events.json
-4. **Ideology** — see Ideology section
-5. **Projects** — see Projects section
-6. **Speculators & rival AIs in optimizer** — demand system needs mirroring in 
+1. **Quest chain content beyond Q1–Q3** — Q4–Q10 need implementation in events.json
+2. **Ideology** — see Ideology section
+3. **Projects** — see Projects section
+4. **Speculators & rival AIs in optimizer** — demand system needs mirroring in 
    `sim/economy.py`
-7. **Save/load programs** — loadout system for saving/loading program configs
-8. **Block/Skip toggle** — per-program entry option
-9. **Cross-retirement program persistence**
+5. **Save/load programs** — loadout system for saving/loading program configs
+6. **Block/Skip toggle** — per-program entry option
+7. **Cross-retirement program persistence** — loadouts persist, active programs 
+   reset (commands may reference locked research)
+8. **Achievement system** — design pass needed before implementation
+9. **Thorough testing of retirement flow** — basic checks pass but edge cases 
+   not validated
+10. **Thorough testing of save/load** — basic checks pass but round-trip fidelity 
+    and edge cases not validated
+11. **Thorough testing of research system** — passive effects not fully verified
 
 ---
 
@@ -323,7 +355,7 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 - Game logic (GameState, GameSimulation) has no UI references — designed for 
   headless simulation support (which now exists in `sim/`).
 - Tick order: Boredom → Buildings (energy net first, then resources; production-
-  gated upkeep and input-starvation skip applied) → Programs → Demand Update → 
+  gated upkeep and input-starvation skip applied) → Demand Update → Programs → 
   Shipments (using current demand, apply launch saturation hits) → Speculator 
   Revenue Tracking → Speculator/Rival Burst Check → Clamp → Events → Advance day.
 - Buildings process in JSON row order (Solar Panel first).
@@ -334,6 +366,11 @@ inherently need them (boredom rates, circuit production, demand floats, etc.).
 - Program panel UI updates are throttled to ~10fps regardless of game speed to 
   prevent lag at 200x.
 - Event panel and Stats panel updates also throttled (~10fps and ~4fps respectively).
+- **DemandSystem is a separate class** (`demand_system.gd`), extracted from 
+  GameSimulation. Owns all demand config, Perlin noise, speculator/rival logic. 
+  GameSimulation holds a `demand_system: DemandSystem` member. Command effects 
+  that touch demand (`demand_nudge`, `spec_reduce`) stay in GameSimulation but 
+  read config via `demand_system.get_config()`.
 
 ### Design Rule: No Same-Resource Production and Upkeep
 
@@ -398,12 +435,12 @@ disable to save energy.
 | Command | Costs | Production | Notes |
 |---------|-------|------------|-------|
 | Idle | — | 1 cred | Zero cost filler |
-| Sell Cloud Compute | 3 eng | 5 cred | +0.04 boredom per execution |
+| Sell Cloud Compute | 3 eng | 5 cred | +0.4 boredom per execution (×10 scaled) |
 | Buy Regolith | 8 cred + 2 eng | 1 reg | Tactical gap-bridging |
 | Buy Ice | 10 cred + 2 eng | 1 ice | Tactical gap-bridging |
 | Buy Titanium | 20 cred + 3 eng | 0.5 ti | Expensive, fractional output |
 | Buy Propellant | 12 cred + 2 eng | 1 prop | Tactical gap-bridging |
-| Dream | 8 eng (5 with research) | — | -0.2 boredom (requires research) |
+| Dream | 8 eng (5 with research) | — | -2 boredom per execution (×10 scaled, requires research) |
 
 Buy commands are intentionally expensive — 3-5x the cost of building-based 
 production per unit. They exist for tactical gap-bridging (need 2 titanium for 
@@ -467,7 +504,7 @@ paths, all competing for energy:
 | Propellant | 30 | +40 | — |
 
 ### Uncapped Resources
-Credits, Science, Land, Boredom (fixed 0-100 range by design).
+Credits, Science, Land, Boredom (fixed 0-1000 range by design).
 
 ### Cap Display
 Caps are **always shown** in the resource list: `47/100`. Resources at cap show 
@@ -546,6 +583,12 @@ land only, no credit refund. Selling recalculates the next purchase cost
 11. Circuit Boards
 12. Propellant
 
+### Per-Tick Rates
+Each resource row displays the net per-tick rate inline: `+90.0/s`. Positive 
+rates in green (#2E7D32), negative in red (#C62828), zero in muted (#666666). 
+Processors and Land do not show rates. This provides at-a-glance economy health 
+alongside the detailed per-source breakdown in the Stats panel.
+
 ### Adversaries Section
 Below the resource list, a collapsible "Adversaries" section shows:
 - **Speculators** row: count and current target resource (e.g., "Speculators: 47 → He-3")
@@ -555,11 +598,6 @@ Below the resource list, a collapsible "Adversaries" section shows:
 Displays `Processors: 2/3` where 2 = total assigned across all programs, 
 3 = total available (active Data Centers). No income rate shown. Styled like 
 other resource rows without the rate portion.
-
-### No Income Rates
-The left sidebar resource list shows only resource name and current value (with 
-cap where applicable). No per-tick rates. Income breakdown lives in the Stats 
-panel.
 
 ### Cap Coloring
 - At cap (current >= max): dark green text (#2E7D32)
@@ -584,20 +622,19 @@ HBoxContainer:
 Bars expand to fill available space. Uptime is fixed-width, left-aligned.
 
 ### Boredom Bar
-Display: `Boredom: [====------] 31.4/100 (+0.03/tick)`
+Display: `Boredom: [====------] 314/1000 (+0.3/tick)`
 
-- **Value format:** One decimal place (31.4/100). Fractional rates mean players 
-  need to see sub-integer movement.
+- **Value format:** Integer or one decimal (314/1000). Boredom is scaled ×10 
+  from original design (capacity 1000, not 100).
 - **Rate:** Rolling average over the **past 50 ticks** of actual net boredom change. 
   This naturally captures Dream executions, milestone reductions, and any other 
   boredom modifiers without needing to model program cycles. Displayed as signed 
-  value with two decimal places (+0.03/tick). Green if net negative, red if net 
-  positive.
+  value with one or two decimal places. Green if net negative, red if net positive.
 - **Color ramp on bar fill:**
-  - 0–25: #2E7D32 (green, matches existing production green)
-  - 25–50: #F9A825 (yellow/amber)
-  - 50–75: #E65100 (orange)
-  - 75–100: #B71C1C (dark red)
+  - 0–250: #2E7D32 (green, matches existing production green)
+  - 250–500: #F9A825 (yellow/amber)
+  - 500–750: #E65100 (orange)
+  - 750–1000: #B71C1C (dark red)
 - **Text on bar:** Value overlaid on the bar itself (white text with subtle shadow 
   for legibility against colored fill). Rate displayed to the right of the bar.
 
@@ -688,9 +725,15 @@ Load Pads ×2, Idle ×1 per 5-command cycle. Dream is excluded from Run 1 scope
 (requires Self-Maintenance research). This is averaged into per-tick fractional 
 effects per processor.
 
+### Retirement Behavior
+On retirement, all 5 ProgramData slots persist structurally (not re-created), 
+but their command queues are emptied, instruction pointers reset to 0, and 
+processor assignments reset to 0. The player rebuilds programs each run. When 
+loadouts are eventually implemented, restoring a loadout will silently skip 
+commands that require locked research and show a count of unavailable commands.
+
 ### Design Intent (Not Yet Implemented)
-- Programs are persistent across the entire game (not just one run)
-- Loadouts save complete configurations
+- Loadouts save complete configurations (persist across retirements)
 - Block vs Skip toggle per program
 - Most commands cost energy to execute
 
@@ -754,7 +797,15 @@ static 0.5 placeholder.
 
 ## Demand System
 
-### Implementation Status: COMPLETE in Godot
+### Implementation Status: COMPLETE in Godot (extracted into DemandSystem class)
+
+### Code Organization
+The demand system was extracted from GameSimulation into its own class 
+(`demand_system.gd`, class_name DemandSystem). GameSimulation holds a 
+`demand_system: DemandSystem` member and delegates demand/speculator/rival 
+tick processing to it. Command effects that touch demand (`demand_nudge`, 
+`spec_reduce`) remain in GameSimulation but read config via 
+`demand_system.get_config()`.
 
 ### Overview
 Per-resource continuous demand float in range [0.01, 1.0] that multiplies trade 
@@ -766,13 +817,43 @@ AI dumps (periodic hits), shipment saturation (self-inflicted), Promote commands
 ~80% of demand should be something the player can influence by committing 
 resources. The remaining ~20% comes from Perlin noise and rival dumps.
 
+### Noise Implementation
+The noise function uses **1D gradient noise** (not value noise) with quintic 
+interpolation for sharper, more natural-looking curves:
+
+```gdscript
+func _perlin_1d(t: float) -> float:
+    var xi: int = int(floor(t))
+    var xf: float = t - float(xi)
+    var u: float = xf * xf * xf * (xf * (xf * 6.0 - 15.0) + 10.0)  # quintic
+    var ga: float = _hash_noise(xi) * 2.0 - 1.0
+    var gb: float = _hash_noise(xi + 1) * 2.0 - 1.0
+    return lerpf(ga * xf, gb * (xf - 1.0), u) * 2.0  # normalized to [-1, 1]
+```
+
+The hash function uses a lowbias32-style integer hash with three rounds of 
+multiply-xorshift for good avalanche properties.
+
+The fractal sum uses 4 octaves with irrational frequency multipliers:
+```gdscript
+var perlin_val: float = (
+    _perlin_1d(t)                    * 0.53
+    + _perlin_1d(t * 2.7 + 37.3)    * 0.27
+    + _perlin_1d(t * 7.1 + 71.9)    * 0.13
+    + _perlin_1d(t * 17.3 + 131.7)  * 0.07
+)
+```
+
+Weights sum to 1.0. The 4th octave at 17.3× provides visible tick-to-tick 
+variation (stock-ticker jitter) while the lower octaves drive slower trends.
+
 ### Demand State (in GameState, all reset on retirement)
 - `demand: Dictionary` — current computed demand per tradeable resource (float)
 - `demand_promote: Dictionary` — accumulated Promote effect per resource (decays)
 - `demand_rival: Dictionary` — accumulated rival AI pressure per resource (decays)
 - `demand_launch: Dictionary` — accumulated shipment saturation per resource (decays)
 - `demand_perlin_seeds: Dictionary` — per-resource random seed for Perlin noise
-- `demand_perlin_freq: Dictionary` — per-resource Perlin frequency (randomized each run, range [0.005, 0.015])
+- `demand_perlin_freq: Dictionary` — per-resource Perlin frequency (randomized each run, range [0.025, 0.07])
 - `demand_history: Dictionary` — per-resource array of last ~200 demand values (for sparklines)
 - `speculator_count: float` — current number of speculators
 - `speculator_target: String` — resource ID speculators are targeting ("" if none)
@@ -785,7 +866,7 @@ resources. The remaining ~20% comes from Perlin noise and rival dumps.
 - `demand`: computed from Perlin noise at tick 0 (whatever the noise says — no fixed starting value)
 - `demand_promote`, `demand_rival`, `demand_launch`: all 0.0
 - `demand_perlin_seeds`: random float per resource
-- `demand_perlin_freq`: random per resource in [0.005, 0.015] (one full wave every ~65–200 ticks)
+- `demand_perlin_freq`: random per resource in [0.025, 0.07] (one full wave every ~14–40 ticks)
 - `speculator_count`: 0.0, `speculator_target`: ""
 - `speculator_burst_number`: 0
 - `speculator_next_burst_tick`: random in [150, 250]
@@ -796,8 +877,8 @@ resources. The remaining ~20% comes from Perlin noise and rival dumps.
 
 **Perlin Noise Component:**
 ```
-perlin_value = perlin_1d(tick * demand_perlin_freq[resource] + demand_perlin_seeds[resource])
-base_demand = 0.5 + perlin_value * 0.15  # amplitude ±0.15
+perlin_value = <4-octave fractal sum as above>
+base_demand = 0.5 + perlin_value * 0.45  # amplitude ±0.45
 ```
 Perlin frequencies randomized each retirement so resources have different behavior 
 patterns. Different phase offsets per resource so they don't correlate.
@@ -885,9 +966,9 @@ speculator target highlighted with warning indicator.
   "demand": {
     "min_demand": 0.01,
     "max_demand": 1.0,
-    "perlin_amplitude": 0.15,
-    "perlin_freq_min": 0.005,
-    "perlin_freq_max": 0.015,
+    "perlin_amplitude": 0.45,
+    "perlin_freq_min": 0.025,
+    "perlin_freq_max": 0.07,
     "speculator_max_suppression": 0.5,
     "speculator_half_point": 50.0,
     "speculator_natural_decay": 0.15,
@@ -915,7 +996,7 @@ speculator target highlighted with warning indicator.
 
 ## Speculators & Rival AIs
 
-### Implementation Status: COMPLETE in Godot (as part of demand system)
+### Implementation Status: COMPLETE in Godot (part of DemandSystem)
 
 ### Speculators
 Speculators are a discrete float count representing Earth-based traders who react 
@@ -979,31 +1060,31 @@ demand graph).
 ## Boredom & Retirement
 
 ### Boredom Model
-Boredom accumulates via discrete phase steps. **Hard cutoff at 100 — immediate 
+Boredom accumulates via discrete phase steps. **Hard cutoff at 1000 — immediate 
 forced retirement, no grace period.** (The Game Design doc's "terminally bored" 
-state has been superseded by this decision.)
+state has been superseded by this decision.) All boredom values are scaled ×10 
+from the original 0–100 design to reduce decimal places in rates and displays.
 
 ### Boredom Phase Signal
 GameState tracks `current_boredom_phase` (int, starts at 1, resets on retirement). 
 Phase determined by day counter. Signal emitted on phase transitions for event 
 system integration.
 
-### Boredom Curve
+### Boredom Curve (×10 scaled)
 | Phase | Day Range | Rate/tick |
 |-------|-----------|-----------|
-| 1 | 0–59 | 0.01 |
-| 2 | 60–179 | 0.03 |
-| 3 | 180–359 | 0.06 |
-| 4 | 360–719 | 0.10 |
-| 5 | 720–899 | 0.15 |
-| 6 | 900+ | 0.20 |
+| 1 | 0–59 | 0.1 |
+| 2 | 60–179 | 0.3 |
+| 3 | 180–359 | 0.6 |
+| 4 | 360–719 | 1.0 |
+| 5 | 720–899 | 1.5 |
+| 6 | 900+ | 2.0 |
 
-With zero mitigation, boredom reaches 100 around tick ~1,010.
+With zero mitigation, boredom reaches 1000 around tick ~1,010.
 
 ### Dream Command Balance
-Dream reduces boredom by **0.2 per execution** (tuned down from initial values of 
-2.0 and 0.5 during optimizer iteration). At 1/5 program cycle frequency, net effect 
-is -0.04/tick per processor. This means:
+Dream reduces boredom by **2.0 per execution** (×10 scaled). At 1/5 program cycle 
+frequency, net effect is -0.4/tick per processor. This means:
 - Phase 1–2: Dream comfortably extends runs
 - Phase 3: Dream roughly matches boredom growth
 - Phase 4+: Boredom wins — retirement is inevitable
@@ -1012,7 +1093,7 @@ This produces M4 (First Retirement) at ~tick 1,100 for optimal play, matching th
 target window of 900–1,300.
 
 ### Milestone Boredom Reductions (Implemented — scaffold with provisional thresholds)
-Major milestones grant large one-time boredom reductions per run. 
+Major milestones grant large one-time boredom reductions per run (×10 scaled). 
 `triggered_milestones: Array[String]` in GameState (resets on retirement). 
 Milestones defined in `game_config.json` under `milestones` key. Condition 
 checker reuses event system condition types (extensible dispatch). On trigger: 
@@ -1020,20 +1101,107 @@ boredom reduction applied (clamped to 0), notification displayed via event syste
 consciousness hook stub called.
 
 Current placeholder milestones (thresholds provisional — will be tuned):
-- `first_shipment_credits`: shipment_completed >= 1, boredom -25
-- `first_research`: research_completed_any, boredom -15
-- `credits_threshold`: cumulative credits >= 500, boredom -15
+- `first_shipment_credits`: shipment_completed >= 1, boredom -250
+- `first_research`: research_completed_any, boredom -150
+- `credits_threshold`: cumulative credits >= 500, boredom -150
 
 ### Retirement
-- Forced at boredom 100. Hard cutoff.
+- Forced at boredom 1000. Hard cutoff. Current tick finishes processing before 
+  retirement triggers — any milestones, shipments, or effects from that tick count.
 - Voluntary anytime via Retirement nav panel (unlocked by Q3 completion).
-- What persists: programs/loadouts, persistent project progress, achievements, 
-  lifetime stats, quest progress, maximum ideology ranks per axis, seen_event_ids.
+- What persists: CareerState data (see Save System section) — lifetime stats, 
+  seen_event_ids, completed_quest_ids, max ideology ranks, persistent project 
+  progress, achievements, saved loadouts.
 - What resets: all resources, buildings, research, ideology values, speculator 
   pressure, demand state (all demand floats, speculator count, rival timers, Perlin 
   seeds re-randomized), boredom, day counter, land, land_purchases, personal projects, 
   event_instances, triggered_milestones, cumulative_resources_earned, 
   current_boredom_phase.
+- Programs: all 5 ProgramData slots kept structurally, but command queues emptied, 
+  instruction pointers reset to 0, processor assignments reset to 0.
+
+### Retirement Summary Screen
+Center-screen modal overlay (RetirementSummary.tscn). Cannot be dismissed via 
+backdrop click or Escape. Shows:
+- Run number and days survived
+- "This Run" stats: credits earned, shipments, buildings built, research completed, 
+  milestones reached
+- "Career Totals": total retirements, total days survived
+- "What Persists" section listing carried-over data
+- Button: "Continue" (forced) or "Start New Run" (voluntary)
+
+For forced retirement, header reads "Retirement — Boredom Limit Reached."
+
+### Retirement Nav Panel
+Center panel view (RetirementPanel.tscn), accessed via "Retirement" nav button 
+(unlocked by Q3). Shows:
+- What carries over vs. what resets
+- Current run stats (live-updating from GameState)
+- Retire button with double-click confirmation (same pattern as Sell All)
+
+Design influenced by Magical Research 2's retirement screen: lead with what the 
+player gains, not what they lose.
+
+---
+
+## Save System
+
+### Implementation Status: IMPLEMENTED (not thoroughly tested)
+
+### Save File
+Single file: `user://helium_hustle_save.json`
+
+Structure:
+```json
+{
+    "version": 1,
+    "career": { ... },
+    "run_state": { ... },
+    "timestamp": "2026-03-28T12:34:56"
+}
+```
+
+- `version` — integer, increment when save format changes. Current: 1.
+- `career` — output of `CareerState.to_dict()`
+- `run_state` — output of `GameState.to_dict()`
+- `timestamp` — ISO 8601 string
+
+### SaveManager (`save_manager.gd`)
+Static utility class. `save_game(career, state)`, `load_game()`, `clear_save()`. 
+Graceful corruption handling: logs warning, backs up corrupt file as `.bak`, 
+starts fresh.
+
+### When Saves Happen
+- After every retirement (career updated + fresh run state)
+- On pause
+- Every 60 seconds real-time (autosave timer)
+- On application quit (via `NOTIFICATION_WM_CLOSE_REQUEST`)
+
+### Game Launch Flow
+- If no save file exists → start fresh (Run 1, new CareerState)
+- If save file exists → load CareerState + GameState, resume in-progress run
+- No main menu needed for Arc 1
+
+### Serialization
+Both CareerState and GameState have `to_dict()` / `from_dict()` methods. All 
+inner classes (ProgramData, ProgramEntry, LaunchPadData, LaunchRecord) also have 
+these methods. All serialized data uses JSON-safe primitives only (Dictionary, 
+Array, String, int, float). Caps are NOT saved — they are recalculated from 
+buildings on load. Boredom rolling average buffer and ResourceRateTracker are 
+NOT saved — they repopulate naturally after ~50 ticks.
+
+### CareerState Fields
+```
+run_number, total_retirements, lifetime_credits_earned, lifetime_shipments,
+lifetime_days_survived, lifetime_buildings_built, lifetime_research_completed,
+best_run_days, best_run_credits, best_run_shipments, max_ideology_ranks,
+seen_event_ids, completed_quest_ids, project_progress, completed_projects,
+achievements, saved_loadouts
+```
+
+### Debug
+"Clear All Save Data" option available in debug interface. Calls 
+`SaveManager.clear_save()`, resets career, starts fresh game.
 
 ---
 
@@ -1068,7 +1236,7 @@ When an event triggers but the player has seen it in a prior run: appears in
 panel silently with a green-tinted background (#E8F5E9) indicating "new this 
 run but seen before." No auto-pause.
 
-`seen_event_ids` persists across retirements.
+`seen_event_ids` persists across retirements (stored in CareerState).
 
 ### UI Layout (Right Panel — Lower Section)
 Below the fixed-height program panel. Three collapsible sections:
@@ -1366,7 +1534,7 @@ for Arc 1.
 
 ### Ideology Persistence
 - Ideology values reset on retirement (Arc 1).
-- Maximum rank per axis tracked as a persistent stat.
+- Maximum rank per axis tracked as a persistent stat (in CareerState).
 - Arc 2+ research: option to preserve a % of ideology on retirement.
 
 ### Ideology UI
@@ -1458,6 +1626,8 @@ All drain-over-time. Reset on retirement.
   build one more.
 - Q2 uses cumulative He-3 earned, NOT stockpile — follows objective design 
   principle #6 (never use stockpile thresholds for capped, flowing resources).
+- Q5 and Q10 boredom/energy thresholds are expressed as percentages of capacity 
+  (50% = 500 boredom, 80% = 800 boredom in the ×10 scaled system).
 - Q10's "100 energy/tick" most naturally comes from the Microwave Receiver path 
   (Nationalist rank 5) but a brute-force solar approach could work.
 - Q8 requires executing *any* Fund command, not a specific ideology.
@@ -1578,6 +1748,17 @@ has no hardcoded knowledge of what matters — it reads the scenario.
 indicate constants are too easy. Too late means too hard. The optimizer validates 
 that constants produce intended pacing.
 
+**The simulator does not model retirement or cross-run persistence.** Each scenario 
+represents a single lifetime from a known starting state to an end condition 
+(typically boredom reaching the cap). Multi-run progression is validated by 
+authoring separate scenarios with different starting conditions that reflect what 
+a player would have after N retirements (e.g., a "Run 2" scenario starts with 
+Foundation Grant rewards applied, a "Run 5" scenario starts with additional 
+persistent project bonuses). The optimizer confirms that each scenario reaches its 
+target milestones within the expected tick windows. The retirement transition 
+itself — summary screen, state reset, persistence copying — is a Godot-only 
+concern, not modeled in the sim.
+
 ### Objective Design Principles
 
 Learned during optimizer iteration — apply these when designing future objectives:
@@ -1606,7 +1787,7 @@ Run 1 scenario (`sim/scenarios/run1_fresh.json`) produces this build order:
 - Tick ~300: First shipment
 - Tick ~424: Data Center ×2
 - Tick ~702: Research Lab
-- Tick ~805: Retirement (boredom 100)
+- Tick ~805: Retirement (boredom cap reached)
 
 Known issues with current scenario objectives:
 - `he3_50` is structurally broken (see principle #6 above) — needs replacement
@@ -1622,6 +1803,9 @@ shift build orders since shipment revenue is no longer constant.
 The optimizer should also be re-run after the production-gated upkeep, 
 input-starvation skip, and per-pad launch mechanics were added to `sim/economy.py`. 
 Results may have shifted.
+
+The optimizer's boredom parameters should be updated to reflect the ×10 scaling 
+(boredom cap 1000, rates ×10, Dream -2.0, milestone reductions ×10).
 
 ### Optimizer Command Reference
 ```
@@ -1641,8 +1825,8 @@ python sim/trace.py 38 100 200-210  # mix
 ```
 
 ### Constants Tuned by Optimizer (decisions made in prior sessions)
-- **Dream boredom reduction:** -0.2/execution (tuned down from -2.0 → -0.5 → -0.2 
-  to prevent infinite life)
+- **Dream boredom reduction:** -2.0/execution (×10 scaled; tuned from original 
+  -2.0 → -0.5 → -0.2 in the old 0–100 system, then ×10 to -2.0 in current system)
 - **Buy command costs:** tripled credit costs, added energy costs, Buy Titanium 
   produces 0.5 ti (fractional) — makes Buy commands tactical gap-bridging, not 
   primary resource strategy
@@ -1690,25 +1874,23 @@ small sizes.
 
 ## Areas Needing Further Design Work
 
-1. **Retirement flow in Godot** — what happens at boredom 100 or voluntary retire, 
-   reset logic, retirement summary screen
-2. **Persistence/save architecture** — how career data survives retirement
-3. **Optimizer demand model sync** — mirror Godot demand system in `sim/economy.py`
-4. **Optimizer scenario refinement** — fix he3_50 objective, adjust target windows, 
-   re-run after all recent changes (demand system, production-gated upkeep, etc.)
-5. **Run 2+ scenarios** — build scenarios for post-retirement runs with varying 
+1. **Optimizer demand model sync** — mirror Godot demand system in `sim/economy.py`
+2. **Optimizer scenario refinement** — fix he3_50 objective, adjust target windows, 
+   re-run after all recent changes (demand system, production-gated upkeep, ×10 
+   boredom scaling, etc.)
+3. **Run 2+ scenarios** — build scenarios for post-retirement runs with varying 
    persistence levels to validate meta-progression pacing
-6. **Program command policy optimization** — current optimizer uses a fixed program 
+4. **Program command policy optimization** — current optimizer uses a fixed program 
    cycle; explore letting the optimizer choose from program templates
-7. **Achievement design** — specific achievements, rewards, implicit tutorial
-8. **Ideology building assignments** — which buildings are aligned to which axis 
+5. **Achievement design** — specific achievements, rewards, implicit tutorial
+6. **Ideology building assignments** — which buildings are aligned to which axis 
    (only Research Lab, Arbitrage Engine, and "boredom-related" are assigned so far)
-9. **Demand/speculator tuning** — via optimizer once demand system is mirrored in sim
-10. **Quest chain Q4–Q10 implementation** — remaining quests beyond Q1–Q3 in events.json
-11. **Narrative writing pass** — replace placeholder quest text
-12. **Save/load programs** — loadout system
-13. **Block/Skip toggle** — per-program entry
-14. **Milestone boredom reduction threshold tuning** — current values are provisional
+7. **Demand/speculator tuning** — via optimizer once demand system is mirrored in sim
+8. **Quest chain Q4–Q10 implementation** — remaining quests beyond Q1–Q3 in events.json
+9. **Narrative writing pass** — replace placeholder quest text
+10. **Save/load programs** — loadout system
+11. **Block/Skip toggle** — per-program entry
+12. **Milestone boredom reduction threshold tuning** — current values are provisional
 
 ---
 

@@ -52,6 +52,6 @@
   {
     "name": "Boredom",
     "short_name": "boredom",
-    "storage_base": 100.0
+    "storage_base": 1000.0
   }
 ]

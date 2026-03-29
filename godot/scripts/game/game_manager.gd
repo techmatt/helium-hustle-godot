@@ -233,7 +233,7 @@ func _on_tick() -> void:
 		print("[Milestone] %s — Boredom -%s" % [m.label, m.boredom_reduction])
 		milestone_triggered.emit(m.id, m.label, m.boredom_reduction)
 	tick_completed.emit()
-	if state.amounts.get("boredom", 0.0) >= 100.0:
+	if state.amounts.get("boredom", 0.0) >= 1000.0:
 		retire(false)
 
 
