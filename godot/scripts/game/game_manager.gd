@@ -1,5 +1,7 @@
 extends Node
 
+const SaveManager := preload("res://scripts/game/save_manager.gd")
+
 const DEBUG_PROGRAM_TEST: bool = false
 const DEBUG_UI: bool = false
 const DEBUG_DEMAND: bool = false
@@ -29,6 +31,7 @@ signal milestone_triggered(milestone_id: String, label: String, boredom_reductio
 signal retirement_started(summary_data: Dictionary)
 
 var _timer: Timer
+var _autosave_timer: Timer
 var _game_config: Dictionary
 var _buildings_data: Array = []
 var _commands_data: Array = []
@@ -48,12 +51,19 @@ func _ready() -> void:
 	rate_tracker = ResourceRateTracker.new()
 	sim.rate_tracker = rate_tracker
 
-	state = GameState.new()
-	_initialize_state()
-
 	event_manager = EventManager.new()
 	event_manager.init(events_data, _game_config)
-	call_deferred("_fire_startup_events")
+
+	var save_data: Variant = SaveManager.load_game()
+	if save_data != null:
+		career = CareerState.from_dict((save_data as Dictionary).get("career", {}))
+		state = GameState.from_dict((save_data as Dictionary).get("run_state", {}))
+		_restore_from_save()
+	else:
+		career = CareerState.new()
+		state = GameState.new()
+		_initialize_state()
+		call_deferred("_fire_startup_events")
 
 	if DEBUG_PROGRAM_TEST:
 		_debug_setup_test_program()
@@ -66,7 +76,26 @@ func _ready() -> void:
 	_timer.one_shot = false
 	_timer.timeout.connect(_on_tick)
 	add_child(_timer)
+
+	_autosave_timer = Timer.new()
+	_autosave_timer.wait_time = 60.0
+	_autosave_timer.one_shot = false
+	_autosave_timer.timeout.connect(_autosave)
+	add_child(_autosave_timer)
+	_autosave_timer.start()
+
 	set_speed("1x")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_autosave()
+		get_tree().quit()
+
+
+func _restore_from_save() -> void:
+	sim.recalculate_caps(state)
+	tick_completed.emit()
 
 
 func _initialize_state() -> void:
@@ -90,6 +119,7 @@ func set_speed(speed_key: String) -> void:
 	var tps: float = SPEED_MAP.get(speed_key, 1.0)
 	if tps <= 0.0:
 		_timer.stop()
+		_autosave()
 	else:
 		_timer.wait_time = 1.0 / tps
 		_timer.start()
@@ -289,10 +319,29 @@ func start_new_run() -> void:
 
 	set_speed("1x")
 	tick_completed.emit()
+	SaveManager.save_game(career, state)
+
+
+func _autosave() -> void:
+	if state != null and sim != null:
+		SaveManager.save_game(career, state)
 
 
 func _fire_startup_events() -> void:
 	event_manager.on_game_start(state)
+
+
+func _debug_clear_save() -> void:
+	SaveManager.clear_save()
+	career = CareerState.new()
+	state = GameState.new()
+	_initialize_state()
+	event_manager.on_game_start(state)
+	rate_tracker = ResourceRateTracker.new()
+	sim.rate_tracker = rate_tracker
+	set_speed("1x")
+	tick_completed.emit()
+	print("Save data cleared")
 
 
 func _debug_setup_test_program() -> void:

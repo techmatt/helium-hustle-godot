@@ -1854,6 +1854,41 @@ func _build_options_panel() -> void:
 	)
 	outer.add_child(debug_btn)
 
+	var clear_desc := Label.new()
+	clear_desc.text = "Deletes the save file and resets to a fresh Run 1. Cannot be undone."
+	clear_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	clear_desc.add_theme_font_override("font", _font_exo2_regular)
+	clear_desc.add_theme_font_size_override("font_size", 13)
+	clear_desc.add_theme_color_override("font_color", _p("text_muted"))
+	outer.add_child(clear_desc)
+
+	var clear_btn := Button.new()
+	clear_btn.text = "Clear Save Data"
+	clear_btn.focus_mode = Control.FOCUS_NONE
+	clear_btn.add_theme_font_override("font", _font_exo2_semibold)
+	clear_btn.add_theme_font_size_override("font_size", 14)
+	var clear_s := StyleBoxFlat.new()
+	clear_s.bg_color = Color(0.70, 0.18, 0.18)
+	clear_s.corner_radius_top_left     = 4
+	clear_s.corner_radius_top_right    = 4
+	clear_s.corner_radius_bottom_left  = 4
+	clear_s.corner_radius_bottom_right = 4
+	clear_btn.add_theme_stylebox_override("normal", clear_s)
+	clear_btn.add_theme_stylebox_override("hover", clear_s)
+	clear_btn.add_theme_color_override("font_color", Color.WHITE)
+	clear_btn.pressed.connect(func():
+		if clear_btn.text == "Sure?":
+			GameManager._debug_clear_save()
+			clear_btn.text = "Clear Save Data"
+		else:
+			clear_btn.text = "Sure?"
+			get_tree().create_timer(3.0).timeout.connect(func():
+				if is_instance_valid(clear_btn) and clear_btn.text == "Sure?":
+					clear_btn.text = "Clear Save Data"
+			)
+	)
+	outer.add_child(clear_btn)
+
 
 # ── Buildings panel ────────────────────────────────────────────────────────────
 

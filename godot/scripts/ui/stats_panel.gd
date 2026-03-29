@@ -2,8 +2,9 @@ class_name StatsPanel
 extends VBoxContainer
 
 const RESOURCE_ORDER: Array = [
+	["boredom","Boredom"],
 	["eng",    "Energy"],
-	["cred",   "Credits"],
+	["proc",   "Processors"],
 	["land",   "Land"],
 	["reg",    "Regolith"],
 	["ice",    "Ice"],
@@ -11,8 +12,8 @@ const RESOURCE_ORDER: Array = [
 	["ti",     "Titanium"],
 	["cir",    "Circuit Boards"],
 	["prop",   "Propellant"],
+	["cred",   "Credits"],
 	["sci",    "Science"],
-	["boredom","Boredom"],
 ]
 
 const RESOURCE_COLORS: Dictionary = {
@@ -22,6 +23,7 @@ const RESOURCE_COLORS: Dictionary = {
 	"he3":     Color(0.50, 0.50, 1.00),
 	"cred":    Color(0.20, 0.85, 0.20),
 	"land":    Color(0.40, 0.70, 0.30),
+	"proc":    Color(0.80, 0.20, 0.80),
 	"boredom": Color(0.55, 0.55, 0.55),
 	"ti":      Color(0.80, 0.80, 0.80),
 	"prop":    Color(0.40, 0.70, 0.95),
@@ -203,9 +205,6 @@ func _refresh_card(resource_id: String, rate_tracker: ResourceRateTracker,
 	var net: float = rate_tracker.get_net_instant(resource_id) if _instant_mode \
 		else rate_tracker.get_net_average(resource_id)
 
-	if entries.is_empty() and absf(net) < 0.005:
-		card.visible = false
-		return
 	card.visible = true
 
 	# Sort: positives first (descending), then negatives (ascending magnitude)
