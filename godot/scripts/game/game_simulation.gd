@@ -64,7 +64,7 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 	_milestones = game_config.get("milestones", [])
 
 
-func tick(state: GameState) -> void:
+func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	pending_program_events.clear()
 	pending_milestone_triggers.clear()
 	pending_rival_notifications.clear()
@@ -75,7 +75,7 @@ func tick(state: GameState) -> void:
 
 	# Boredom accumulation
 	var boredom_rate: float = 0.0
-	if not GameSettings.debug_no_boredom:
+	if not debug_no_boredom:
 		boredom_rate = _get_boredom_rate(state.current_day)
 		boredom_rate *= _get_boredom_multiplier(state)
 		state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + boredom_rate

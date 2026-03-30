@@ -25,6 +25,11 @@ var career: CareerState = CareerState.new()
 var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
 
+# When true: skip reading/writing the save file on startup and during autosave.
+# Set this before _ready() runs to prevent the initial load, or set it in _process()
+# to block the autosave timer. Tests set it to protect the player's real save file.
+var skip_save_load: bool = false
+
 signal tick_completed
 signal program_step_executed(program_index: int, entry_index: int, success: bool)
 signal program_cycle_reset(program_index: int)
@@ -61,16 +66,22 @@ func _ready() -> void:
 	project_manager = ProjectManager.new()
 	project_manager.init(_projects_data, _game_config)
 
-	var save_data: Variant = SaveManager.load_game()
-	if save_data != null:
-		career = CareerState.from_dict((save_data as Dictionary).get("career", {}))
-		state = GameState.from_dict((save_data as Dictionary).get("run_state", {}))
-		_restore_from_save()
-	else:
+	if skip_save_load:
 		career = CareerState.new()
 		state = GameState.new()
 		_initialize_state()
 		call_deferred("_fire_startup_events")
+	else:
+		var save_data: Variant = SaveManager.load_game()
+		if save_data != null:
+			career = CareerState.from_dict((save_data as Dictionary).get("career", {}))
+			state = GameState.from_dict((save_data as Dictionary).get("run_state", {}))
+			_restore_from_save()
+		else:
+			career = CareerState.new()
+			state = GameState.new()
+			_initialize_state()
+			call_deferred("_fire_startup_events")
 
 	if DEBUG_PROGRAM_TEST:
 		_debug_setup_test_program()
@@ -239,7 +250,7 @@ func purchase_research(research_id: String) -> void:
 
 
 func _on_tick() -> void:
-	sim.tick(state)
+	sim.tick(state, GameSettings.debug_no_boredom)
 	event_manager.tick(state)
 	project_manager.tick(state, career)
 	last_deltas = sim.last_gross_deltas.duplicate()
@@ -406,8 +417,29 @@ func _apply_career_flags_to_run_state() -> void:
 
 
 func _autosave() -> void:
+	if skip_save_load:
+		return
 	if state != null and sim != null:
 		SaveManager.save_game(career, state)
+
+
+func set_save_path(path: String) -> void:
+	SaveManager.save_path = path
+
+
+func save_to_dict() -> Dictionary:
+	return {
+		"version": SaveManager.SAVE_VERSION,
+		"career": career.to_dict(),
+		"run_state": state.to_dict(),
+		"timestamp": Time.get_datetime_string_from_system(),
+	}
+
+
+func load_from_dict(data: Dictionary) -> void:
+	career = CareerState.from_dict(data.get("career", {}))
+	state = GameState.from_dict(data.get("run_state", {}))
+	_restore_from_save()
 
 
 func _fire_startup_events() -> void:

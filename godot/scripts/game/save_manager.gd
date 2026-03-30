@@ -1,7 +1,7 @@
 class_name SaveManager
 extends RefCounted
 
-const SAVE_PATH := "user://helium_hustle_save.json"
+static var save_path: String = "user://helium_hustle_save.json"
 const SAVE_VERSION := 1
 
 
@@ -13,7 +13,7 @@ static func save_game(career: CareerState, state: GameState) -> void:
 		"timestamp": Time.get_datetime_string_from_system(),
 	}
 	var json_string := JSON.stringify(data, "  ")
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file:
 		file.store_string(json_string)
 		file.close()
@@ -27,9 +27,9 @@ static func save_game(career: CareerState, state: GameState) -> void:
 
 
 static func load_game() -> Variant:
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(save_path):
 		return null
-	var file := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var file := FileAccess.open(save_path, FileAccess.READ)
 	if not file:
 		return null
 	var json_string := file.get_as_text()
@@ -63,11 +63,11 @@ static func load_game() -> Variant:
 
 
 static func clear_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(SAVE_PATH)
+	if FileAccess.file_exists(save_path):
+		DirAccess.remove_absolute(save_path)
 
 
 static func _backup_corrupt_save() -> void:
-	var backup_path := SAVE_PATH + ".bak"
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.copy_absolute(SAVE_PATH, backup_path)
+	var backup_path := save_path + ".bak"
+	if FileAccess.file_exists(save_path):
+		DirAccess.copy_absolute(save_path, backup_path)

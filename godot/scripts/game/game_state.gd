@@ -402,6 +402,21 @@ static func from_dict(data: Dictionary) -> GameState:
 	return s
 
 
+static func from_config(config: Dictionary, buildings_data: Array) -> GameState:
+	var s := GameState.new()
+	for sn: String in config.get("starting_resources", {}):
+		s.amounts[sn] = float(config.starting_resources[sn])
+	for sn: String in config.get("starting_buildings", {}):
+		var count: int = int(config.starting_buildings[sn])
+		s.buildings_owned[sn] = count
+		for bdef: Dictionary in buildings_data:
+			if bdef.short_name == sn:
+				s.amounts["land"] -= float(bdef.land) * count
+				break
+	s.programs[0].processors_assigned = 1
+	return s
+
+
 func _serialize_event_instances() -> Array:
 	var result: Array = []
 	for inst: Dictionary in event_instances:
