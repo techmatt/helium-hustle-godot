@@ -73,6 +73,8 @@ var _sell1_btn: Button
 var _sell_all_btn: Button
 var _sell_all_pending: bool = false
 
+var _stall_lbl: Label
+
 
 func _c(key: String) -> Color:
 	return COLORS_DARK[key] if GameSettings.is_dark_mode else COLORS_LIGHT[key]
@@ -112,6 +114,20 @@ func refresh() -> void:
 		_bg_style.bg_color = _c("can_afford") if can_afford else _c("cant_afford")
 	else:
 		_bg_style.bg_color = Color(0.94, 0.99, 0.94) if can_afford else Color(0.99, 0.94, 0.94)
+
+	# Stall indicator
+	var stall: Dictionary = GameManager.state.building_stall_status.get(_bdef.short_name, {})
+	var stall_status: String = stall.get("status", "")
+	if active > 0 and stall_status != "" and stall_status != "running":
+		_stall_lbl.visible = true
+		if stall_status == "input_starved":
+			_stall_lbl.text = "⚠ Stalled: " + stall.get("reason", "")
+			_stall_lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.000))
+		else:
+			_stall_lbl.text = "At storage cap"
+			_stall_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+	else:
+		_stall_lbl.visible = false
 
 	var scaled: Dictionary = GameManager.get_scaled_costs(_bdef.short_name)
 	var st: GameState = GameManager.state
@@ -198,6 +214,7 @@ func _build_ui() -> void:
 	_build_production(vbox)
 	_build_upkeep(vbox)
 	_build_effects(vbox)
+	_build_stall_label(vbox)
 	vbox.add_child(HSeparator.new())
 	_build_cost_grid(vbox)
 	_build_sell_row(vbox)
@@ -297,6 +314,15 @@ func _build_effects(parent: VBoxContainer) -> void:
 			lbl.add_theme_font_size_override("font_size", 14)
 			lbl.add_theme_color_override("font_color", _c("positive"))
 			parent.add_child(lbl)
+
+
+func _build_stall_label(parent: VBoxContainer) -> void:
+	_stall_lbl = Label.new()
+	_stall_lbl.visible = false
+	_stall_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+	_stall_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_stall_lbl.add_theme_font_size_override("font_size", 14)
+	parent.add_child(_stall_lbl)
 
 
 func _build_cost_grid(parent: VBoxContainer) -> void:

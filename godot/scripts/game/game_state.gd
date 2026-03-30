@@ -113,6 +113,10 @@ var amounts: Dictionary = {}          # {short_name: float}
 var caps: Dictionary = {}             # {short_name: float}  INF = no cap
 var buildings_owned: Dictionary = {}  # {short_name: int}
 var buildings_active: Dictionary = {} # {short_name: int}  defaults to owned if absent
+var buildings_bonus: Dictionary = {}  # {short_name: int}  granted free at run start; excluded from cost scaling
+# Transient per-tick stall state — NOT saved/loaded.
+# Key: building short_name. Value: {status: "running"|"input_starved"|"output_capped", reason: String, missing_resource: String}
+var building_stall_status: Dictionary = {}
 var current_day: int = 0
 var programs: Array = []              # Array of ProgramData, always 5 slots
 var pads: Array = []                  # Array of LaunchPadData
@@ -204,6 +208,7 @@ func to_dict() -> Dictionary:
 		# Buildings
 		"buildings_owned": buildings_owned.duplicate(),
 		"buildings_active": buildings_active.duplicate(),
+		"buildings_bonus": buildings_bonus.duplicate(),
 		"unlocked_buildings": Array(unlocked_buildings),
 
 		# Programs
@@ -276,6 +281,7 @@ static func from_dict(data: Dictionary) -> GameState:
 	# Buildings
 	s.buildings_owned = data.get("buildings_owned", {})
 	s.buildings_active = data.get("buildings_active", {})
+	s.buildings_bonus = data.get("buildings_bonus", {})
 	s.unlocked_buildings.assign(data.get("unlocked_buildings", []))
 
 	# Programs

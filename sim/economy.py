@@ -375,9 +375,9 @@ def _tick_speculators(state: EconState) -> None:
     """Decay speculator count; fire a burst if the scheduled tick has arrived."""
     cfg = DEMAND_CFG
     active_arb = state.buildings.get("arbitrage_engine", 0)
-    decay = (float(cfg.get("speculator_natural_decay", 0.15))
-             + active_arb * float(cfg.get("arbitrage_decay_bonus_per_building", 0.04)))
-    state.speculator_count = max(0.0, state.speculator_count - decay)
+    proportional_decay = state.speculator_count * float(cfg.get("speculator_proportional_decay", 0.006))
+    arbitrage_decay = active_arb * float(cfg.get("arbitrage_decay_bonus_per_building", 0.04))
+    state.speculator_count = max(0.0, state.speculator_count - proportional_decay - arbitrage_decay)
     if state.tick >= state.speculator_next_burst_tick:
         _fire_speculator_burst(state)
 

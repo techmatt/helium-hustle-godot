@@ -27,11 +27,11 @@ var _font_e2s: FontFile
 
 var _resource_opt: OptionButton
 var _launch_btn: Button
-var _cargo_bar: ProgressBar
+var _cargo_fill: ColorRect
+var _cargo_fill_space: Control
 var _cargo_label: Label
 var _value_label: Label
 var _status_label: Label
-var _fill_style: StyleBoxFlat
 var _updating_ui: bool = false
 
 
@@ -130,6 +130,7 @@ func _build_ui() -> void:
 
 	# ── Cargo bar ──────────────────────────────────────────────────────────────
 	var bar_wrap := PanelContainer.new()
+	bar_wrap.custom_minimum_size = Vector2(0, 22)
 	bar_wrap.mouse_filter = Control.MOUSE_FILTER_PASS
 	var bar_bg := StyleBoxFlat.new()
 	bar_bg.bg_color = Color(0.22, 0.22, 0.26) if GameSettings.is_dark_mode else Color(0.78, 0.78, 0.78)
@@ -140,25 +141,29 @@ func _build_ui() -> void:
 	bar_wrap.add_theme_stylebox_override("panel", bar_bg)
 	vbox.add_child(bar_wrap)
 
-	_cargo_bar = ProgressBar.new()
-	_cargo_bar.custom_minimum_size = Vector2(0, 22)
-	_cargo_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_cargo_bar.min_value = 0.0
-	_cargo_bar.max_value = 100.0
-	_cargo_bar.value = 0.0
-	_cargo_bar.show_percentage = false
-	_cargo_bar.mouse_filter = Control.MOUSE_FILTER_PASS
-	_fill_style = StyleBoxFlat.new()
-	_fill_style.bg_color = RESOURCE_COLORS["he3"]
-	_fill_style.corner_radius_top_left     = 3
-	_fill_style.corner_radius_top_right    = 3
-	_fill_style.corner_radius_bottom_left  = 3
-	_fill_style.corner_radius_bottom_right = 3
-	_cargo_bar.add_theme_stylebox_override("fill", _fill_style)
-	var bg_transparent := StyleBoxFlat.new()
-	bg_transparent.bg_color = Color(0, 0, 0, 0)
-	_cargo_bar.add_theme_stylebox_override("background", bg_transparent)
-	bar_wrap.add_child(_cargo_bar)
+	# Custom proportional fill: HBoxContainer with a ColorRect (fill) and a
+	# transparent spacer. Setting their stretch ratios gives exact proportional
+	# width without relying on ProgressBar's fill clipping.
+	var bar_hbox := HBoxContainer.new()
+	bar_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar_hbox.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	bar_hbox.add_theme_constant_override("separation", 0)
+	bar_hbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	bar_wrap.add_child(bar_hbox)
+
+	_cargo_fill = ColorRect.new()
+	_cargo_fill.color = RESOURCE_COLORS["he3"]
+	_cargo_fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_cargo_fill.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_cargo_fill.size_flags_stretch_ratio = 0.0
+	_cargo_fill.mouse_filter = Control.MOUSE_FILTER_PASS
+	bar_hbox.add_child(_cargo_fill)
+
+	_cargo_fill_space = Control.new()
+	_cargo_fill_space.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_cargo_fill_space.size_flags_stretch_ratio = 1.0
+	_cargo_fill_space.mouse_filter = Control.MOUSE_FILTER_PASS
+	bar_hbox.add_child(_cargo_fill_space)
 
 	# ── Text labels ────────────────────────────────────────────────────────────
 	_cargo_label = Label.new()
@@ -197,7 +202,7 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 		_resource_opt.selected = res_idx
 
 	# Bar fill color
-	_fill_style.bg_color = RESOURCE_COLORS.get(pad_data.resource_type, Color.WHITE)
+	_cargo_fill.color = RESOURCE_COLORS.get(pad_data.resource_type, Color.WHITE)
 
 	# Mute card if disabled or in cooldown
 	var status: int = pad_data.status
@@ -212,38 +217,46 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 
 	match status:
 		GameState.PAD_EMPTY:
-			_cargo_bar.value = 0.0
+			_set_bar_fill(0.0)
 			_cargo_label.text = "0 / 100 units"
 			_value_label.text = ""
 			_status_label.text = "Empty — waiting for cargo"
 			_set_launch_btn(false, "")
 		GameState.PAD_LOADING:
-			_cargo_bar.value = cargo
+			_set_bar_fill(cargo / 100.0)
 			_cargo_label.text = "%d / 100 units" % int(cargo)
 			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * GameManager.state.demand.get(pad_data.resource_type, 0.5) * cargo)
 			_status_label.text = "Loading..."
 			_set_launch_btn(false, "")
 		GameState.PAD_FULL:
-			_cargo_bar.value = 100.0
+			_set_bar_fill(1.0)
 			_cargo_label.text = "100 / 100 units"
 			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * GameManager.state.demand.get(pad_data.resource_type, 0.5) * 100.0)
 			var can_launch: bool = is_active and GameManager.can_launch_pad(_pad_idx)
 			_set_launch_btn(can_launch, "Need 20 propellant" if not can_launch else "")
 			_status_label.text = "Full — ready to launch!" if can_launch else "Full — need 20 propellant"
 		GameState.PAD_LAUNCHING:
-			_cargo_bar.value = 100.0
+			_set_bar_fill(1.0)
 			_cargo_label.text = "Launching!"
 			_value_label.text = ""
 			_status_label.text = "Launching..."
 			_set_launch_btn(false, "")
 		GameState.PAD_COOLDOWN:
-			_cargo_bar.value = 0.0
+			_set_bar_fill(0.0)
 			_cargo_label.text = "Returning... %d ticks" % pad_data.cooldown_ticks
 			_value_label.text = ""
 			_status_label.text = "Pad on cooldown"
 			_set_launch_btn(false, "")
 
 	_updating_ui = false
+
+
+func _set_bar_fill(ratio: float) -> void:
+	ratio = clampf(ratio, 0.0, 1.0)
+	_cargo_fill.size_flags_stretch_ratio = ratio
+	_cargo_fill_space.size_flags_stretch_ratio = 1.0 - ratio
+	# When completely empty, hide the fill rect so it doesn't claim minimum space
+	_cargo_fill.visible = ratio > 0.0
 
 
 func _set_launch_btn(enabled: bool, _hint: String) -> void:

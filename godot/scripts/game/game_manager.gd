@@ -348,6 +348,7 @@ func start_new_run() -> void:
 					var count: int = int((reward.get("buildings", {}) as Dictionary).get(bsn, 0))
 					state.buildings_owned[bsn] = state.buildings_owned.get(bsn, 0) + count
 					state.buildings_active[bsn] = state.buildings_active.get(bsn, 0) + count
+					state.buildings_bonus[bsn] = state.buildings_bonus.get(bsn, 0) + count
 					for bdef: Dictionary in _buildings_data:
 						if bdef.short_name == bsn:
 							state.amounts["land"] = state.amounts.get("land", 0.0) - float(bdef.land) * count

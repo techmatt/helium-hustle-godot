@@ -121,10 +121,11 @@ func tick_demand(state: GameState) -> void:
 
 
 func tick_speculators(state: GameState) -> void:
-	# Decay speculators — base rate boosted by active Arbitrage Engines
+	# Decay speculators — proportional base rate boosted by active Arbitrage Engines (flat)
 	var active_arb: int = state.buildings_active.get("arbitrage_engine", state.buildings_owned.get("arbitrage_engine", 0))
-	var decay: float = _dcfg("speculator_natural_decay") + float(active_arb) * _dcfg("arbitrage_decay_bonus_per_building")
-	state.speculator_count = maxf(0.0, state.speculator_count - decay)
+	var proportional_decay: float = state.speculator_count * _dcfg("speculator_proportional_decay")
+	var arbitrage_decay: float = float(active_arb) * _dcfg("arbitrage_decay_bonus_per_building")
+	state.speculator_count = maxf(0.0, state.speculator_count - proportional_decay - arbitrage_decay)
 	# Check for burst arrival
 	if state.current_day >= state.speculator_next_burst_tick:
 		_fire_speculator_burst(state)

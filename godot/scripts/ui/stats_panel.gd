@@ -229,6 +229,29 @@ func _refresh_card(resource_id: String, rate_tracker: ResourceRateTracker,
 	for entry: Dictionary in entries:
 		body.add_child(_make_rate_row(entry.label, entry.avg))
 
+	# Stall indicators: buildings that produce this resource but are currently stalled
+	for bdef: Dictionary in buildings_data:
+		var sn: String = bdef.short_name
+		if not (bdef.get("production", {}) as Dictionary).has(resource_id):
+			continue
+		var active: int = state.buildings_active.get(sn, state.buildings_owned.get(sn, 0))
+		if active == 0:
+			continue
+		var stall: Dictionary = state.building_stall_status.get(sn, {})
+		if stall.get("status", "running") == "running":
+			continue
+		# Only show stall if there's no non-zero production entry already showing
+		var prod_key: String = "building:" + sn + ":prod"
+		var has_nonzero: bool = false
+		for entry: Dictionary in entries:
+			if entry.source_key == prod_key:
+				has_nonzero = true
+				break
+		if has_nonzero:
+			continue
+		body.add_child(_make_stall_row(active, _get_building_display_name(sn, buildings_data),
+				stall.get("status", ""), stall.get("reason", "")))
+
 	body.add_child(HSeparator.new())
 	body.add_child(_make_rate_row("Net", net, true))
 
@@ -253,6 +276,34 @@ func _make_rate_row(label_text: String, value: float, bold: bool = false) -> HBo
 	val_lbl.add_theme_font_size_override("font_size", 14)
 	val_lbl.add_theme_color_override("font_color", _rate_color(value))
 	row.add_child(val_lbl)
+
+	return row
+
+
+func _make_stall_row(count: int, building_name: String, status: String, reason: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	var name_lbl := Label.new()
+	name_lbl.text = "%d× %s" % [count, building_name]
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.clip_text = true
+	name_lbl.add_theme_font_override("font", _font_e2r)
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
+	row.add_child(name_lbl)
+
+	var status_lbl := Label.new()
+	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	status_lbl.add_theme_font_override("font", _font_e2r)
+	status_lbl.add_theme_font_size_override("font_size", 14)
+	if status == "input_starved":
+		status_lbl.text = "stalled: " + reason
+		status_lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.000))  # #E65100
+	else:
+		status_lbl.text = "at cap"
+		status_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
+	row.add_child(status_lbl)
 
 	return row
 

@@ -94,6 +94,7 @@ func tick(state: GameState) -> void:
 	#   already drew down shared resources, and runs when it should.
 
 	var will_produce: Array = []  # each entry: [bdef, count]
+	state.building_stall_status.clear()
 
 	for bdef in _buildings_data:
 		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
@@ -103,8 +104,11 @@ func tick(state: GameState) -> void:
 		if count == 0:
 			continue
 
+		var has_prod: bool = not (bdef.get("production", {}) as Dictionary).is_empty()
+
 		if (bdef.upkeep as Dictionary).is_empty():
 			# Free producer — no upkeep decision needed; always eligible.
+			# Stall status recorded in Pass 2.
 			will_produce.append([bdef, count])
 		else:
 			# Skip if every output is already at cap (don't waste upkeep).
@@ -117,8 +121,20 @@ func tick(state: GameState) -> void:
 						all_at_cap = false
 						break
 				if all_at_cap:
+					state.building_stall_status[bdef.short_name] = {
+						"status": "output_capped",
+						"reason": "all outputs at cap",
+						"missing_resource": ""
+					}
 					continue
 			if not _can_pay_upkeep(state, bdef, count):
+				if has_prod:
+					var missing_res: String = _get_missing_upkeep_resource(state, bdef, count)
+					state.building_stall_status[bdef.short_name] = {
+						"status": "input_starved",
+						"reason": "insufficient " + _get_resource_name(missing_res),
+						"missing_resource": missing_res
+					}
 				continue
 			var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
 			for res in bdef.upkeep:
@@ -144,7 +160,17 @@ func tick(state: GameState) -> void:
 					all_at_cap = false
 					break
 			if all_at_cap:
+				state.building_stall_status[bdef.short_name] = {
+					"status": "output_capped",
+					"reason": "all outputs at cap",
+					"missing_resource": ""
+				}
 				continue
+		state.building_stall_status[bdef.short_name] = {
+			"status": "running",
+			"reason": "",
+			"missing_resource": ""
+		}
 		var prod_mult: float = 1.0
 		match bdef.short_name:
 			"panel":
@@ -303,7 +329,8 @@ func can_buy_building(state: GameState, short_name: String) -> bool:
 		return false
 	if state.amounts.get("land", 0.0) < float(bdef.land):
 		return false
-	var scale: float = pow(float(bdef.cost_scaling), state.buildings_owned.get(short_name, 0))
+	var purchased: int = maxi(0, state.buildings_owned.get(short_name, 0) - state.buildings_bonus.get(short_name, 0))
+	var scale: float = pow(float(bdef.cost_scaling), purchased)
 	for res in bdef.costs:
 		if state.amounts.get(res, 0.0) < float(bdef.costs[res]) * scale:
 			return false
@@ -317,7 +344,8 @@ func buy_building(state: GameState, short_name: String) -> void:
 	if not _check_requires(state, bdef):
 		return
 	var old_owned: int = state.buildings_owned.get(short_name, 0)
-	var scale: float = pow(float(bdef.cost_scaling), old_owned)
+	var purchased: int = maxi(0, old_owned - state.buildings_bonus.get(short_name, 0))
+	var scale: float = pow(float(bdef.cost_scaling), purchased)
 	for res in bdef.costs:
 		state.amounts[res] -= float(bdef.costs[res]) * scale
 	state.amounts["land"] -= float(bdef.land)
@@ -335,7 +363,8 @@ func get_scaled_costs(state: GameState, short_name: String) -> Dictionary:
 	var bdef = _get_bdef(short_name)
 	if bdef == null:
 		return {}
-	var scale: float = pow(float(bdef.cost_scaling), state.buildings_owned.get(short_name, 0))
+	var purchased: int = maxi(0, state.buildings_owned.get(short_name, 0) - state.buildings_bonus.get(short_name, 0))
+	var scale: float = pow(float(bdef.cost_scaling), purchased)
 	var result: Dictionary = {}
 	for res in bdef.costs:
 		result[res] = float(bdef.costs[res]) * scale
@@ -556,6 +585,21 @@ func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:
 		if state.amounts.get(res, 0.0) < float(bdef.upkeep[res]) * count * upkeep_mult:
 			return false
 	return true
+
+
+func _get_missing_upkeep_resource(state: GameState, bdef: Dictionary, count: int) -> String:
+	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
+	for res in bdef.upkeep:
+		if state.amounts.get(res, 0.0) < float(bdef.upkeep[res]) * count * upkeep_mult:
+			return res
+	return ""
+
+
+func _get_resource_name(short_name: String) -> String:
+	for rdef in _resources_data:
+		if rdef.short_name == short_name:
+			return rdef.get("name", short_name)
+	return short_name
 
 
 func can_purchase_research(state: GameState, research_id: String) -> bool:

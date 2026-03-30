@@ -158,6 +158,7 @@ var _commands_buildings_snapshot: Dictionary = {}
 var _research_completed_snapshot: Array = []
 var _research_sci_snapshot: float = -1.0
 var _research_seen_events_snapshot: Array = []
+var _research_show_completed: bool = true
 # adversaries sidebar
 var _spec_count_lbl: Label = null
 var _spec_name_lbl: Label = null
@@ -1622,6 +1623,21 @@ func _build_research_panel() -> void:
 	outer.add_theme_constant_override("separation", 6)
 	_buildings_scroll.add_child(outer)
 
+	# Toggle: show/hide completed research
+	var toggle_cb := CheckBox.new()
+	toggle_cb.text = "Show completed research"
+	toggle_cb.button_pressed = _research_show_completed
+	toggle_cb.focus_mode = Control.FOCUS_NONE
+	toggle_cb.add_theme_font_override("font", _font_exo2_regular)
+	toggle_cb.add_theme_font_size_override("font_size", 13)
+	toggle_cb.toggled.connect(func(pressed: bool):
+		_research_show_completed = pressed
+		for child in _buildings_scroll.get_children():
+			child.queue_free()
+		_build_research_panel()
+	)
+	outer.add_child(toggle_cb)
+
 	if research_data.is_empty():
 		var lbl := Label.new()
 		lbl.text = "No research data loaded."
@@ -1687,8 +1703,14 @@ func _add_research_category_section(parent: VBoxContainer, category: String, ite
 		_apply_category_header_style(header)
 	)
 
-	for item: Dictionary in items:
+	var completed_ids: Array = GameManager.state.completed_research
+	var uncompleted: Array = items.filter(func(i: Dictionary) -> bool: return not completed_ids.has(i.get("id", "")))
+	var completed: Array = items.filter(func(i: Dictionary) -> bool: return completed_ids.has(i.get("id", "")))
+	for item: Dictionary in uncompleted:
 		flow.add_child(_build_research_card(item))
+	if _research_show_completed:
+		for item: Dictionary in completed:
+			flow.add_child(_build_research_card(item))
 
 
 func _build_research_card(item: Dictionary) -> PanelContainer:

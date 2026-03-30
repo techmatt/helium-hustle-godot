@@ -55,7 +55,7 @@
     "perlin_freq_max": 0.05,
     "speculator_max_suppression": 0.5,
     "speculator_half_point": 50.0,
-    "speculator_natural_decay": 0.15,
+    "speculator_proportional_decay": 0.006,
     "speculator_burst_interval_min": 150,
     "speculator_burst_interval_max": 250,
     "speculator_burst_size_min": 20,
