@@ -172,7 +172,8 @@ func _fire_speculator_burst(state: GameState) -> void:
 		state.speculator_revenue_tracking[res] = 0.0
 	var int_min: int = int(_dcfg("speculator_burst_interval_min"))
 	var int_max: int = int(_dcfg("speculator_burst_interval_max"))
-	state.speculator_next_burst_tick = state.current_day + randi_range(int_min, int_max)
+	var interval_mult: float = state.get_modifier("speculator_burst_interval_mult")
+	state.speculator_next_burst_tick = state.current_day + int(randi_range(int_min, int_max) * interval_mult)
 	state.speculator_burst_number += 1
 
 

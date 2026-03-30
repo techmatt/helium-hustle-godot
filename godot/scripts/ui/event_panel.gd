@@ -38,6 +38,7 @@ func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
 	_build_structure()
 	GameManager.event_manager.event_triggered.connect(func(_id: String) -> void: _rebuild_items())
 	GameManager.event_manager.event_completed.connect(func(_id: String) -> void: _rebuild_items())
+	GameManager.event_manager.notification_added.connect(func() -> void: _rebuild_items())
 	_rebuild_items()
 
 
@@ -140,8 +141,8 @@ func _rebuild_items() -> void:
 
 	_fill_items(_story_container, _story_header, _story_items,
 		"Story", story, false, _story_expanded, st, em)
-	_fill_items(_ongoing_container, _ongoing_header, _ongoing_items,
-		"Ongoing", ongoing, false, _ongoing_expanded, st, em)
+	_fill_items_with_notifications(_ongoing_container, _ongoing_header, _ongoing_items,
+		"Ongoing", ongoing, em.notifications, _ongoing_expanded, st, em)
 	_fill_items(_completed_container, _completed_header, _completed_items,
 		"Completed", completed, true, _completed_expanded, st, em)
 
@@ -163,6 +164,28 @@ func _fill_items(
 		child.free()
 	for inst in instances:
 		items.add_child(_build_event_row(inst, is_completed, st, em))
+
+
+func _fill_items_with_notifications(
+	container: VBoxContainer,
+	header: Button,
+	items: VBoxContainer,
+	title: String,
+	instances: Array,
+	notifications: Array,
+	expanded: bool,
+	st: GameState,
+	em: EventManager,
+) -> void:
+	var total_count: int = instances.size() + notifications.size()
+	container.visible = total_count > 0
+	_set_header_text(header, title, total_count, expanded)
+	for child in items.get_children():
+		child.free()
+	for inst in instances:
+		items.add_child(_build_event_row(inst, false, st, em))
+	for notif in notifications:
+		items.add_child(_build_notification_row(notif.title))
 
 
 func _set_header_text(btn: Button, title: String, count: int, expanded: bool) -> void:
@@ -217,3 +240,22 @@ func _build_event_row(inst: Dictionary, is_completed: bool, st: GameState, em: E
 
 	btn.pressed.connect(func() -> void: event_row_clicked.emit(event_id))
 	return btn
+
+
+func _build_notification_row(title: String) -> Label:
+	var lbl := Label.new()
+	lbl.text = title
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_override("font", _font_exo2_regular)
+	lbl.add_theme_font_size_override("font_size", 13)
+	var dark: bool = GameSettings.is_dark_mode
+	lbl.add_theme_color_override("font_color",
+		Color(0.60, 0.85, 0.60) if dark else Color(0.18, 0.49, 0.20))
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.10, 0.20, 0.10) if dark else Color(0.91, 0.96, 0.91)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 3
+	style.content_margin_bottom = 3
+	lbl.add_theme_stylebox_override("normal", style)
+	return lbl

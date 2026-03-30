@@ -20,6 +20,7 @@ var state: GameState
 var sim: GameSimulation
 var rate_tracker: ResourceRateTracker
 var event_manager: EventManager
+var project_manager: ProjectManager
 var career: CareerState = CareerState.new()
 var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
@@ -29,6 +30,7 @@ signal program_step_executed(program_index: int, entry_index: int, success: bool
 signal program_cycle_reset(program_index: int)
 signal milestone_triggered(milestone_id: String, label: String, boredom_reduction: float)
 signal retirement_started(summary_data: Dictionary)
+signal project_completed_notification(project_name: String)
 
 var _timer: Timer
 var _autosave_timer: Timer
@@ -36,6 +38,7 @@ var _game_config: Dictionary
 var _buildings_data: Array = []
 var _commands_data: Array = []
 var _research_data: Array = []
+var _projects_data: Array = []
 
 
 func _ready() -> void:
@@ -45,6 +48,7 @@ func _ready() -> void:
 	_commands_data = _load_json("res://data/commands.json")
 	_research_data = _load_json("res://data/research.json")
 	var events_data: Array = _load_json("res://data/events.json")
+	_projects_data = _load_json("res://data/projects.json")
 
 	sim = GameSimulation.new()
 	sim.init(resources_data, _buildings_data, _commands_data, _game_config, _research_data)
@@ -53,6 +57,9 @@ func _ready() -> void:
 
 	event_manager = EventManager.new()
 	event_manager.init(events_data, _game_config)
+
+	project_manager = ProjectManager.new()
+	project_manager.init(_projects_data, _game_config)
 
 	var save_data: Variant = SaveManager.load_game()
 	if save_data != null:
@@ -206,6 +213,11 @@ func buy_land() -> void:
 		tick_completed.emit()
 
 
+func set_project_rate(project_id: String, resource_id: String, rate: float) -> void:
+	project_manager.set_project_rate(state, project_id, resource_id, rate)
+	tick_completed.emit()
+
+
 func get_commands_data() -> Array:
 	return _commands_data
 
@@ -223,6 +235,7 @@ func purchase_research(research_id: String) -> void:
 func _on_tick() -> void:
 	sim.tick(state)
 	event_manager.tick(state)
+	project_manager.tick(state, career)
 	last_deltas = sim.last_gross_deltas.duplicate()
 	for event in sim.pending_program_events:
 		if event.type == "step":
@@ -232,6 +245,9 @@ func _on_tick() -> void:
 	for m in sim.pending_milestone_triggers:
 		print("[Milestone] %s — Boredom -%s" % [m.label, m.boredom_reduction])
 		milestone_triggered.emit(m.id, m.label, m.boredom_reduction)
+	for notif in project_manager.pending_completion_notifications:
+		event_manager.push_notification("Project Complete: " + notif.name, state.current_day)
+		project_completed_notification.emit(notif.name)
 	tick_completed.emit()
 	if state.amounts.get("boredom", 0.0) >= 1000.0:
 		retire(false)
@@ -263,6 +279,12 @@ func retire(voluntary: bool) -> void:
 		var eid: String = inst.get("id", "")
 		if eid and not career.seen_event_ids.has(eid):
 			career.seen_event_ids.append(eid)
+
+	# Save persistent project progress to career
+	for pid: String in state.project_invested:
+		var pdef: Dictionary = project_manager.get_project_def(pid)
+		if pdef.get("tier", "") == "persistent" and not career.completed_projects.has(pid):
+			career.project_progress[pid] = (state.project_invested[pid] as Dictionary).duplicate()
 
 	# Build summary data for the UI
 	var summary: Dictionary = {
@@ -305,8 +327,32 @@ func start_new_run() -> void:
 		if not state.seen_event_ids.has(eid):
 			state.seen_event_ids.append(eid)
 
-	# Future hook: apply persistent project rewards here
-	# if career.completed_projects.has("foundation_grant"): ...
+	# Apply persistent project rewards from prior runs
+	for pid: String in career.completed_projects:
+		var pdef: Dictionary = project_manager.get_project_def(pid)
+		if pdef.is_empty():
+			continue
+		var reward: Dictionary = pdef.get("reward", {})
+		match reward.get("type", ""):
+			"modifier":
+				state.set_modifier(reward.get("modifier_key", ""), float(reward.get("modifier_value", 1.0)))
+			"starting_buildings":
+				for bsn: String in reward.get("buildings", {}):
+					var count: int = int((reward.get("buildings", {}) as Dictionary).get(bsn, 0))
+					state.buildings_owned[bsn] = state.buildings_owned.get(bsn, 0) + count
+					state.buildings_active[bsn] = state.buildings_active.get(bsn, 0) + count
+					for bdef: Dictionary in _buildings_data:
+						if bdef.short_name == bsn:
+							state.amounts["land"] = state.amounts.get("land", 0.0) - float(bdef.land) * count
+							break
+		state.completed_projects_this_run.append(pid)
+
+	# Load persistent project progress from career
+	for pid: String in career.project_progress:
+		state.project_invested[pid] = (career.project_progress[pid] as Dictionary).duplicate()
+
+	# First processor always starts assigned to program slot 0
+	state.programs[0].processors_assigned = 1
 
 	# Re-initialize subsystems for the new state
 	rate_tracker = ResourceRateTracker.new()

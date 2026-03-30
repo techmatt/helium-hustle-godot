@@ -18,7 +18,8 @@
       "Bash(grep:*)",
       "Bash(cd sim && python*)",
       "WebSearch",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(find C:Codehelium-hustle-godot -name convert.py -o -name json_to_xlsx.py -o -name *.py)"
     ]
   }
 }

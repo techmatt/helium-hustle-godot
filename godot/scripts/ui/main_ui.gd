@@ -197,6 +197,9 @@ var _stats_panel: StatsPanel = null
 const STATS_REFRESH_INTERVAL: float = 0.25
 var _stats_refresh_accum: float = 0.0
 
+# ── Projects panel ───────────────────────────────────────────────────────────────
+var _project_panel: ProjectPanel = null
+
 # ── Retirement panel ─────────────────────────────────────────────────────────────
 var _retire_days_lbl: Label = null
 var _retire_credits_lbl: Label = null
@@ -551,6 +554,7 @@ func _switch_mode(mode: String) -> void:
 	_demand_has_ma = false
 	_buy_land_card = null
 	_stats_panel = null
+	_project_panel = null
 	_retire_days_lbl = null
 	_retire_credits_lbl = null
 	_retire_shipments_lbl = null
@@ -568,6 +572,7 @@ func _switch_mode(mode: String) -> void:
 			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
+		"Projects":    _build_projects_panel()
 		"Retirement":  _build_retirement_panel()
 		"Options":     _build_options_panel()
 		_:
@@ -634,6 +639,7 @@ func _on_theme_changed() -> void:
 	_demand_value_labels.clear()
 	_demand_tier_labels.clear()
 	_demand_has_ma = false
+	_project_panel = null
 	_boredom_bar = null
 	_boredom_bar_lbl = null
 	_boredom_fill = null
@@ -655,6 +661,7 @@ func _on_theme_changed() -> void:
 			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
+		"Projects":    _build_projects_panel()
 		"Retirement":  _build_retirement_panel()
 		"Options":     _build_options_panel()
 		_:
@@ -1790,6 +1797,17 @@ func _build_stats_panel() -> void:
 	_buildings_scroll.add_child(panel)
 	_stats_panel = panel
 	_stats_panel.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)
+
+
+# ── Projects panel ─────────────────────────────────────────────────────────────
+
+func _build_projects_panel() -> void:
+	_project_panel = null
+	var panel := ProjectPanel.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+	_buildings_scroll.add_child(panel)
+	_project_panel = panel
 
 
 # ── Options panel ──────────────────────────────────────────────────────────────

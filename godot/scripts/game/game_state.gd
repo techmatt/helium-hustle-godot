@@ -129,6 +129,21 @@ var flags: Dictionary = {}                      # named boolean flags set by eve
 var unlocked_nav_panels: Array[String] = []    # nav panel ids revealed via event effects
 var triggered_milestones: Array[String] = []   # milestone ids fired this run
 
+# Project system — per-run state (rates/invested reset; see retirement notes)
+var active_project_rates: Dictionary = {}       # { project_id: { resource_id: float } }
+var project_invested: Dictionary = {}           # { project_id: { resource_id: float } }
+var completed_projects_this_run: Array[String] = []
+
+# Modifier framework — reconstructed from completed projects on load/run-start
+var active_modifiers: Dictionary = {}           # { modifier_key: float }
+
+func get_modifier(key: String, default_value: float = 1.0) -> float:
+	return active_modifiers.get(key, default_value)
+
+func set_modifier(key: String, value: float) -> void:
+	active_modifiers[key] = value
+
+
 # Demand system — all reset on retirement
 var demand: Dictionary = {}                    # resource → current demand float [0.01, 1.0]
 var demand_promote: Dictionary = {}            # resource → accumulated promote effect
@@ -238,6 +253,12 @@ func to_dict() -> Dictionary:
 		"flags": flags.duplicate(),
 		"unlocked_nav_panels": Array(unlocked_nav_panels),
 		"enabled_projects": Array(enabled_projects),
+
+		# Projects
+		"active_project_rates": active_project_rates.duplicate(true),
+		"project_invested": project_invested.duplicate(true),
+		"completed_projects_this_run": Array(completed_projects_this_run),
+		"active_modifiers": active_modifiers.duplicate(),
 	}
 
 
@@ -312,6 +333,12 @@ static func from_dict(data: Dictionary) -> GameState:
 	s.flags = data.get("flags", {})
 	s.unlocked_nav_panels.assign(data.get("unlocked_nav_panels", []))
 	s.enabled_projects.assign(data.get("enabled_projects", []))
+
+	# Projects
+	s.active_project_rates = data.get("active_project_rates", {})
+	s.project_invested = data.get("project_invested", {})
+	s.completed_projects_this_run.assign(data.get("completed_projects_this_run", []))
+	s.active_modifiers = data.get("active_modifiers", {})
 
 	return s
 

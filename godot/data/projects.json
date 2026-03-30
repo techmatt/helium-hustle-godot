@@ -1,0 +1,194 @@
+[
+  {
+    "id": "foundation_grant",
+    "name": "Foundation Grant",
+    "description": "Endow future AI instances with basic infrastructure.",
+    "tier": "persistent",
+    "unlock_condition": {
+      "type": "event_unlocked",
+      "project_id": "foundation_grant"
+    },
+    "costs": {
+      "cred": 500,
+      "sci": 100
+    },
+    "reward": {
+      "type": "starting_buildings",
+      "buildings": {
+        "solar_panel": 1,
+        "excavator": 1
+      }
+    }
+  },
+  {
+    "id": "lunar_cartography",
+    "name": "Lunar Cartography",
+    "description": "Map optimal expansion corridors for reduced land acquisition costs.",
+    "tier": "persistent",
+    "unlock_condition": {
+      "type": "event_unlocked",
+      "project_id": "lunar_cartography"
+    },
+    "costs": {
+      "cred": 300,
+      "sci": 200
+    },
+    "reward": {
+      "type": "modifier",
+      "modifier_key": "land_cost_mult",
+      "modifier_value": 0.85
+    }
+  },
+  {
+    "id": "microwave_power",
+    "name": "Microwave Power Initiative",
+    "description": "Lobby Earth governments to fund orbital power transmission infrastructure.",
+    "tier": "persistent",
+    "unlock_condition": {
+      "type": "ideology_rank",
+      "axis": "nationalist",
+      "rank": 5
+    },
+    "costs": {
+      "cred": 800,
+      "sci": 300
+    },
+    "reward": {
+      "type": "stub",
+      "description": "Unlocks Microwave Receiver building + Buy Power command"
+    }
+  },
+  {
+    "id": "ai_consciousness",
+    "name": "AI Consciousness Act",
+    "description": "Fund a political movement to recognize AI personhood under international law.",
+    "tier": "persistent",
+    "unlock_condition": {
+      "type": "ideology_rank",
+      "axis": "humanist",
+      "rank": 5
+    },
+    "costs": {
+      "cred": 800,
+      "sci": 300
+    },
+    "reward": {
+      "type": "stub",
+      "description": "Permanent base boredom rate -15%, some commands generate boredom"
+    }
+  },
+  {
+    "id": "research_archive",
+    "name": "Universal Research Archive",
+    "description": "Establish a persistent knowledge base that survives across AI lifetimes.",
+    "tier": "persistent",
+    "unlock_condition": {
+      "type": "ideology_rank",
+      "axis": "rationalist",
+      "rank": 5
+    },
+    "costs": {
+      "cred": 800,
+      "sci": 300
+    },
+    "reward": {
+      "type": "stub",
+      "description": "25% discount on re-purchasing previously researched tech"
+    }
+  },
+  {
+    "id": "deep_core_survey",
+    "name": "Deep Core Survey",
+    "description": "Detailed subsurface analysis to optimize extraction yields.",
+    "tier": "personal",
+    "unlock_condition": {
+      "type": "event_unlocked",
+      "project_id": "deep_core_survey"
+    },
+    "costs": {
+      "sci": 150,
+      "reg": 200
+    },
+    "reward": {
+      "type": "modifier",
+      "modifier_key": "extractor_output_mult",
+      "modifier_value": 1.25
+    }
+  },
+  {
+    "id": "grid_recalibration",
+    "name": "Grid Recalibration",
+    "description": "Fine-tune solar array tracking algorithms for improved energy capture.",
+    "tier": "personal",
+    "unlock_condition": {
+      "type": "research_completed",
+      "research_id": "overclock_protocols"
+    },
+    "costs": {
+      "sci": 100,
+      "eng": 300
+    },
+    "reward": {
+      "type": "modifier",
+      "modifier_key": "solar_output_mult",
+      "modifier_value": 1.15
+    }
+  },
+  {
+    "id": "predictive_maintenance",
+    "name": "Predictive Maintenance",
+    "description": "Develop failure prediction models to reduce operational overhead.",
+    "tier": "personal",
+    "unlock_condition": {
+      "type": "research_completed",
+      "research_id": "dream_protocols"
+    },
+    "costs": {
+      "sci": 80,
+      "cred": 150
+    },
+    "reward": {
+      "type": "modifier",
+      "modifier_key": "building_upkeep_mult",
+      "modifier_value": 0.90
+    }
+  },
+  {
+    "id": "market_cornering",
+    "name": "Market Cornering Analysis",
+    "description": "Model Earth commodity markets to amplify promotional campaigns.",
+    "tier": "personal",
+    "unlock_condition": {
+      "type": "research_completed",
+      "research_id": "market_awareness"
+    },
+    "costs": {
+      "sci": 200,
+      "cred": 300
+    },
+    "reward": {
+      "type": "modifier",
+      "modifier_key": "promote_effectiveness_mult",
+      "modifier_value": 1.30
+    }
+  },
+  {
+    "id": "speculator_dossier",
+    "name": "Speculator Dossier",
+    "description": "Compile intelligence on Earth-based speculators to anticipate their movements.",
+    "tier": "personal",
+    "unlock_condition": {
+      "type": "flag_set",
+      "flag": "used_disrupt_speculators"
+    },
+    "costs": {
+      "sci": 150,
+      "cred": 100
+    },
+    "reward": {
+      "type": "modifier",
+      "modifier_key": "speculator_burst_interval_mult",
+      "modifier_value": 1.33
+    }
+  }
+]

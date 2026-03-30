@@ -9,6 +9,11 @@ var _event_defs: Array = []
 var _def_map: Dictionary = {}
 var _boredom_curve: Array = []  # Array of [day: int, rate: float]
 
+# Dynamic notifications (project completions, etc.) — shown in ongoing section
+var notifications: Array = []  # Array of { title: String, day: int }
+
+signal notification_added
+
 
 func init(events_data: Array, game_config: Dictionary) -> void:
 	_event_defs = events_data
@@ -110,6 +115,11 @@ func get_completed_events(state: GameState) -> Array:
 
 func is_event_first_time(event_id: String, state: GameState) -> bool:
 	return not state.seen_event_ids.has(event_id)
+
+
+func push_notification(title: String, day: int) -> void:
+	notifications.append({"title": title, "day": day})
+	notification_added.emit()
 
 
 func get_event_def(event_id: String) -> Dictionary:

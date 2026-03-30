@@ -118,8 +118,9 @@ func tick(state: GameState) -> void:
 					continue
 			if not _can_pay_upkeep(state, bdef, count):
 				continue
+			var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
 			for res in bdef.upkeep:
-				var cost: float = float(bdef.upkeep[res]) * count
+				var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
 				state.amounts[res] = state.amounts.get(res, 0.0) - cost
 				last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
 				if rate_tracker != null:
@@ -142,8 +143,14 @@ func tick(state: GameState) -> void:
 					break
 			if all_at_cap:
 				continue
+		var prod_mult: float = 1.0
+		match bdef.short_name:
+			"panel":
+				prod_mult = state.get_modifier("solar_output_mult")
+			"excavator", "ice_extractor":
+				prod_mult = state.get_modifier("extractor_output_mult")
 		for res in bdef.production:
-			var delta: float = float(bdef.production[res]) * count
+			var delta: float = float(bdef.production[res]) * count * prod_mult
 			state.amounts[res] = state.amounts.get(res, 0.0) + delta
 			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
 			if rate_tracker != null:
@@ -521,15 +528,19 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 						var damp: float = demand_system.get_config("promote_speculator_dampening")
 						effectiveness = 1.0 - damp * (state.speculator_count / (state.speculator_count + half_pt))
 					var base_eff: float = float(effect.get("value", demand_system.get_config("promote_base_effect")))
+					base_eff *= state.get_modifier("promote_effectiveness_mult")
 					state.demand_promote[res] = state.demand_promote.get(res, 0.0) + base_eff * effectiveness
 			"spec_reduce":
 				var reduce: float = randf_range(demand_system.get_config("disrupt_speculators_min"), demand_system.get_config("disrupt_speculators_max"))
 				state.speculator_count = maxf(0.0, state.speculator_count - reduce)
+				if not state.flags.get("used_disrupt_speculators", false):
+					state.flags["used_disrupt_speculators"] = true
 
 
 func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:
+	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
 	for res in bdef.upkeep:
-		if state.amounts.get(res, 0.0) < float(bdef.upkeep[res]) * count:
+		if state.amounts.get(res, 0.0) < float(bdef.upkeep[res]) * count * upkeep_mult:
 			return false
 	return true
 
@@ -599,7 +610,8 @@ func _clamp(state: GameState) -> void:
 
 
 func get_land_purchase_cost(state: GameState) -> int:
-	return int(floorf(_land_base_cost * pow(_land_cost_scaling, float(state.land_purchases))))
+	var base: float = _land_base_cost * pow(_land_cost_scaling, float(state.land_purchases))
+	return int(floorf(base * state.get_modifier("land_cost_mult")))
 
 
 func get_total_land(state: GameState) -> int:
