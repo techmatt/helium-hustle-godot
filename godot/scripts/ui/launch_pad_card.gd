@@ -225,13 +225,17 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 		GameState.PAD_LOADING:
 			_set_bar_fill(cargo / 100.0)
 			_cargo_label.text = "%d / 100 units" % int(cargo)
-			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * GameManager.state.demand.get(pad_data.resource_type, 0.5) * cargo)
+			var demand_l: float = GameManager.state.demand.get(pad_data.resource_type, 0.5)
+			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * demand_l * cargo)
+			_set_value_label_color(demand_l)
 			_status_label.text = "Loading..."
 			_set_launch_btn(false, "")
 		GameState.PAD_FULL:
 			_set_bar_fill(1.0)
 			_cargo_label.text = "100 / 100 units"
-			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * GameManager.state.demand.get(pad_data.resource_type, 0.5) * 100.0)
+			var demand_f: float = GameManager.state.demand.get(pad_data.resource_type, 0.5)
+			_value_label.text = "Estimated value: %d credits" % int(BASE_VALUES.get(pad_data.resource_type, 0.0) * demand_f * 100.0)
+			_set_value_label_color(demand_f)
 			var can_launch: bool = is_active and GameManager.can_launch_pad(_pad_idx)
 			_set_launch_btn(can_launch, "Need 20 propellant" if not can_launch else "")
 			_status_label.text = "Full — ready to launch!" if can_launch else "Full — need 20 propellant"
@@ -249,6 +253,17 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 			_set_launch_btn(false, "")
 
 	_updating_ui = false
+
+
+func _set_value_label_color(demand: float) -> void:
+	if demand >= 0.85:
+		_value_label.add_theme_color_override("font_color", Color(0.10, 0.80, 0.30))
+	elif demand >= 0.55:
+		_value_label.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+	elif demand >= 0.25:
+		_value_label.remove_theme_color_override("font_color")
+	else:
+		_value_label.add_theme_color_override("font_color", Color(0.78, 0.16, 0.16))
 
 
 func _set_bar_fill(ratio: float) -> void:

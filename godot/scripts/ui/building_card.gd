@@ -214,6 +214,7 @@ func _build_ui() -> void:
 	_build_production(vbox)
 	_build_upkeep(vbox)
 	_build_effects(vbox)
+	_build_ideology_pill(vbox)
 	_build_stall_label(vbox)
 	vbox.add_child(HSeparator.new())
 	_build_cost_grid(vbox)
@@ -314,6 +315,42 @@ func _build_effects(parent: VBoxContainer) -> void:
 			lbl.add_theme_font_size_override("font_size", 14)
 			lbl.add_theme_color_override("font_color", _c("positive"))
 			parent.add_child(lbl)
+
+
+func _build_ideology_pill(parent: VBoxContainer) -> void:
+	var alignment: String = _bdef.get("ideology", "")
+	if alignment.is_empty():
+		return
+	const IDEOLOGY_COLORS: Dictionary = {
+		"nationalist": Color(0.776, 0.157, 0.157),
+		"humanist":    Color(0.180, 0.490, 0.196),
+		"rationalist": Color(0.082, 0.396, 0.753),
+	}
+	var pill := PanelContainer.new()
+	var pill_style := StyleBoxFlat.new()
+	pill_style.bg_color = IDEOLOGY_COLORS.get(alignment, Color.GRAY)
+	pill_style.corner_radius_top_left     = 3
+	pill_style.corner_radius_top_right    = 3
+	pill_style.corner_radius_bottom_left  = 3
+	pill_style.corner_radius_bottom_right = 3
+	pill.add_theme_stylebox_override("panel", pill_style)
+	pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	pill.mouse_filter = Control.MOUSE_FILTER_PASS
+	var margin := MarginContainer.new()
+	margin.mouse_filter = Control.MOUSE_FILTER_PASS
+	margin.add_theme_constant_override("margin_left", 6)
+	margin.add_theme_constant_override("margin_right", 6)
+	margin.add_theme_constant_override("margin_top", 2)
+	margin.add_theme_constant_override("margin_bottom", 2)
+	pill.add_child(margin)
+	var lbl := Label.new()
+	lbl.text = alignment.capitalize()
+	lbl.mouse_filter = Control.MOUSE_FILTER_PASS
+	lbl.add_theme_font_override("font", _font_exo2_semibold)
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	margin.add_child(lbl)
+	parent.add_child(pill)
 
 
 func _build_stall_label(parent: VBoxContainer) -> void:

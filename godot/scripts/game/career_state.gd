@@ -18,7 +18,13 @@ var best_run_credits: float = 0.0
 var best_run_shipments: int = 0
 
 # Ideology persistence
-var max_ideology_ranks: Dictionary = {}  # axis_id → highest rank ever reached
+var max_ideology_ranks: Dictionary = {"nationalist": 0, "humanist": 0, "rationalist": 0}
+
+# Persistent flags set by completed persistent projects (survive retirements)
+var career_flags: Dictionary = {}
+
+# All research IDs ever purchased across all runs (for Universal Research Archive)
+var lifetime_researched_ids: Array[String] = []
 
 # Event persistence
 var seen_event_ids: Array[String] = []   # events seen in any prior run
@@ -50,6 +56,8 @@ func to_dict() -> Dictionary:
 		"best_run_credits": best_run_credits,
 		"best_run_shipments": best_run_shipments,
 		"max_ideology_ranks": max_ideology_ranks.duplicate(),
+		"career_flags": career_flags.duplicate(),
+		"lifetime_researched_ids": lifetime_researched_ids.duplicate(),
 		"seen_event_ids": seen_event_ids.duplicate(),
 		"completed_quest_ids": completed_quest_ids.duplicate(),
 		"project_progress": project_progress.duplicate(),
@@ -71,7 +79,9 @@ static func from_dict(data: Dictionary) -> CareerState:
 	cs.best_run_days = int(data.get("best_run_days", 0))
 	cs.best_run_credits = float(data.get("best_run_credits", 0.0))
 	cs.best_run_shipments = int(data.get("best_run_shipments", 0))
-	cs.max_ideology_ranks = data.get("max_ideology_ranks", {})
+	cs.max_ideology_ranks = data.get("max_ideology_ranks", {"nationalist": 0, "humanist": 0, "rationalist": 0})
+	cs.career_flags = data.get("career_flags", {})
+	cs.lifetime_researched_ids.assign(data.get("lifetime_researched_ids", []))
 	cs.seen_event_ids.assign(data.get("seen_event_ids", []))
 	cs.completed_quest_ids.assign(data.get("completed_quest_ids", []))
 	cs.project_progress = data.get("project_progress", {})

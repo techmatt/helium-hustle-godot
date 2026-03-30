@@ -79,7 +79,8 @@ class LaunchRecord:
 	var quantity: float = 0.0
 	var credits_earned: float = 0.0
 	var tick: int = 0
-	var notification_message: String = ""  # non-empty = rival dump notification, not a launch
+	var notification_message: String = ""  # non-empty = notification, not a player launch
+	var source_type: String = ""  # "player", "speculator", "rival" — empty means "player" for compat
 
 	func to_dict() -> Dictionary:
 		return {
@@ -88,6 +89,7 @@ class LaunchRecord:
 			"credits_earned": credits_earned,
 			"tick": tick,
 			"notification_message": notification_message,
+			"source_type": source_type,
 		}
 
 	static func from_dict(data: Dictionary) -> LaunchRecord:
@@ -97,10 +99,14 @@ class LaunchRecord:
 		r.credits_earned = float(data.get("credits_earned", 0.0))
 		r.tick = int(data.get("tick", 0))
 		r.notification_message = data.get("notification_message", "")
+		r.source_type = data.get("source_type", "")
 		return r
 
 
 const TRADEABLE_RESOURCES: Array = ["he3", "ti", "cir", "prop"]
+
+# Ideology rank thresholds (cumulative ideology value to reach each rank)
+const RANK_THRESHOLDS: Array = [70, 175, 333, 570, 925]
 
 # Pad status constants
 const PAD_EMPTY     = 0
@@ -151,6 +157,28 @@ func set_modifier(key: String, value: float) -> void:
 	active_modifiers[key] = value
 
 
+# Returns the current ideology rank for the given axis (can be negative).
+func get_ideology_rank(axis: String) -> int:
+	var value: float = ideology_values.get(axis, 0.0)
+	var sign: int = 1 if value >= 0.0 else -1
+	var abs_value: float = abs(value)
+	var rank: int = 0
+	for threshold: int in RANK_THRESHOLDS:
+		if abs_value >= float(threshold):
+			rank += 1
+		else:
+			break
+	return rank * sign
+
+
+# Returns the multiplicative bonus for the given axis and per-rank multiplier.
+# At rank 0 returns 1.0. At rank 3 with per_rank_mult=1.05 returns ~1.157.
+# Negative ranks invert cleanly (rank -3 with 1.05 → ~0.864).
+func get_ideology_bonus(_axis: String, _base: float, per_rank_mult: float) -> float:
+	var rank: int = get_ideology_rank(_axis)
+	return pow(per_rank_mult, float(rank))
+
+
 # Demand system — all reset on retirement
 var demand: Dictionary = {}                    # resource → current demand float [0.01, 1.0]
 var demand_promote: Dictionary = {}            # resource → accumulated promote effect
@@ -164,9 +192,21 @@ var speculator_count: float = 0.0
 var speculator_target: String = ""
 var speculator_burst_number: int = 0
 var speculator_next_burst_tick: int = 200
-var speculator_revenue_tracking: Dictionary = {}  # resource → cumulative base-value shipped
+var speculator_target_scores: Dictionary = {}   # resource → float score (higher = more likely target)
+var speculator_revenue_tracking: Dictionary = {}  # kept for save/load compatibility only
 
 var rival_next_dump_tick: Dictionary = {}      # rival_id → int tick
+
+# Ideology values (float, can go negative). Reset on retirement.
+var ideology_values: Dictionary = {
+	"nationalist": 0.0,
+	"humanist": 0.0,
+	"rationalist": 0.0
+}
+
+# Active overclock states — [{target:String, bonus:float, ticks:int}]
+# Decremented each tick; removed when ticks reach 0.
+var overclock_states: Array = []
 
 # Event system — persistent across retirements
 var seen_event_ids: Array[String] = []
@@ -244,11 +284,16 @@ func to_dict() -> Dictionary:
 		"demand_perlin_freq": demand_perlin_freq.duplicate(),
 		"demand_history": demand_history.duplicate(true),
 
+		# Ideology
+		"ideology_values": ideology_values.duplicate(),
+		"overclock_states": overclock_states.duplicate(true),
+
 		# Speculators
 		"speculator_count": speculator_count,
 		"speculator_target": speculator_target,
 		"speculator_burst_number": speculator_burst_number,
 		"speculator_next_burst_tick": speculator_next_burst_tick,
+		"speculator_target_scores": speculator_target_scores.duplicate(),
 		"speculator_revenue_tracking": speculator_revenue_tracking.duplicate(),
 
 		# Rivals
@@ -325,11 +370,16 @@ static func from_dict(data: Dictionary) -> GameState:
 	s.demand_perlin_freq = data.get("demand_perlin_freq", {})
 	s.demand_history = data.get("demand_history", {})
 
+	# Ideology
+	s.ideology_values = data.get("ideology_values", {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0})
+	s.overclock_states = data.get("overclock_states", [])
+
 	# Speculators
 	s.speculator_count = float(data.get("speculator_count", 0.0))
 	s.speculator_target = data.get("speculator_target", "")
 	s.speculator_burst_number = int(data.get("speculator_burst_number", 0))
 	s.speculator_next_burst_tick = int(data.get("speculator_next_burst_tick", 200))
+	s.speculator_target_scores = data.get("speculator_target_scores", {})
 	s.speculator_revenue_tracking = data.get("speculator_revenue_tracking", {})
 
 	# Rivals

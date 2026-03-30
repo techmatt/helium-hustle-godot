@@ -62,6 +62,7 @@ const CMD_GROUPS: Dictionary = {
 	"fund_nationalist":   "Advanced",
 	"fund_humanist":      "Advanced",
 	"fund_rationalist":   "Advanced",
+	"buy_power":          "Advanced",
 }
 const CMD_GROUP_ORDER: Array = ["Basic", "Trade", "Operations", "Advanced"]
 
@@ -152,6 +153,13 @@ var _demand_sparklines: Dictionary = {}     # resource → DemandSparkline
 var _demand_value_labels: Dictionary = {}   # resource → Label (post-MA value)
 var _demand_tier_labels: Dictionary = {}    # resource → Label (pre-MA tier)
 var _demand_has_ma: bool = false            # snapshot of market_awareness research state
+# Speculator Intelligence section nodes
+var _spec_intel_body: VBoxContainer = null
+var _spec_intel_countdown_lbl: Label = null
+var _spec_intel_size_lbl: Label = null
+var _spec_intel_prob_labels: Dictionary = {}     # resource → Label
+var _spec_intel_bar_fill_rects: Dictionary = {}  # resource → ColorRect
+var _spec_intel_has_sa: bool = false             # snapshot of speculator_analysis research state
 # commands panel: snapshot of buildings_owned used to detect when to rebuild
 var _commands_buildings_snapshot: Dictionary = {}
 # research panel: snapshots used to detect when to rebuild
@@ -162,6 +170,15 @@ var _research_show_completed: bool = true
 # adversaries sidebar
 var _spec_count_lbl: Label = null
 var _spec_name_lbl: Label = null
+# ideology sidebar
+var _ideology_section: VBoxContainer = null
+var _ideology_axis_rows: Dictionary = {}  # axis → {rank_lbl, progress_lbl, rate_lbl}
+var _ideology_prev_values: Dictionary = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
+var _ideology_rate_ema: Dictionary = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
+# ideology center panel
+var _ideology_panel_content: VBoxContainer = null
+const IDEOLOGY_REFRESH_INTERVAL: float = 0.25
+var _ideology_refresh_accum: float = 0.0
 
 var _font_rajdhani_bold: FontFile
 var _font_exo2_regular: FontFile
@@ -248,6 +265,11 @@ func _process(delta: float) -> void:
 		if _stats_refresh_accum >= STATS_REFRESH_INTERVAL:
 			_stats_refresh_accum = 0.0
 			_stats_panel.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)
+	if _active_mode == "Ideologies" and _ideology_panel_content != null:
+		_ideology_refresh_accum += delta
+		if _ideology_refresh_accum >= IDEOLOGY_REFRESH_INTERVAL:
+			_ideology_refresh_accum = 0.0
+			_refresh_ideology_panel()
 
 
 # ── Theme & typography ─────────────────────────────────────────────────────────
@@ -475,6 +497,7 @@ func _on_tick() -> void:
 	_update_nav_visibility()
 	_update_resource_display()
 	_update_adversaries_display()
+	_update_ideology_display()
 	_update_building_cards()
 	if _active_mode == "Launch Pads":
 		_refresh_launch_pads_panel()
@@ -523,6 +546,7 @@ func _build_left_sidebar() -> void:
 
 	nav_vbox.add_child(HSeparator.new())
 	_build_adversaries_section(nav_vbox)
+	_build_ideology_section(nav_vbox)
 
 
 func _build_nav_grid(parent: VBoxContainer) -> void:
@@ -558,9 +582,16 @@ func _switch_mode(mode: String) -> void:
 	_demand_value_labels.clear()
 	_demand_tier_labels.clear()
 	_demand_has_ma = false
+	_spec_intel_body = null
+	_spec_intel_countdown_lbl = null
+	_spec_intel_size_lbl = null
+	_spec_intel_prob_labels.clear()
+	_spec_intel_bar_fill_rects.clear()
+	_spec_intel_has_sa = false
 	_buy_land_card = null
 	_stats_panel = null
 	_project_panel = null
+	_ideology_panel_content = null
 	_retire_days_lbl = null
 	_retire_credits_lbl = null
 	_retire_shipments_lbl = null
@@ -580,6 +611,7 @@ func _switch_mode(mode: String) -> void:
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
 		"Projects":    _build_projects_panel()
+		"Ideologies":  _build_ideology_panel()
 		"Retirement":  _build_retirement_panel()
 		"Options":     _build_options_panel()
 		_:
@@ -646,7 +678,14 @@ func _on_theme_changed() -> void:
 	_demand_value_labels.clear()
 	_demand_tier_labels.clear()
 	_demand_has_ma = false
+	_spec_intel_body = null
+	_spec_intel_countdown_lbl = null
+	_spec_intel_size_lbl = null
+	_spec_intel_prob_labels.clear()
+	_spec_intel_bar_fill_rects.clear()
+	_spec_intel_has_sa = false
 	_project_panel = null
+	_ideology_panel_content = null
 	_boredom_bar = null
 	_boredom_bar_lbl = null
 	_boredom_fill = null
@@ -670,6 +709,7 @@ func _on_theme_changed() -> void:
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
 		"Projects":    _build_projects_panel()
+		"Ideologies":  _build_ideology_panel()
 		"Retirement":  _build_retirement_panel()
 		"Options":     _build_options_panel()
 		_:
@@ -687,6 +727,8 @@ func _rebuild_left_sidebar() -> void:
 	_resource_labels.clear()
 	_spec_count_lbl = null
 	_spec_name_lbl = null
+	_ideology_section = null
+	_ideology_axis_rows = {}
 	_build_left_sidebar()
 	_update_nav_highlight(_active_mode)
 
@@ -993,14 +1035,20 @@ func _add_command_group_section(parent: VBoxContainer, group: String, cmds: Arra
 	)
 
 	for cmd: Dictionary in cmds:
+		# building_owned commands are completely hidden when the building isn't owned
+		var req: Dictionary = cmd.get("requires", {})
+		if req.get("type", "") == "building_owned":
+			if GameManager.state.buildings_owned.get(req.get("value", ""), 0) <= 0:
+				continue
 		flow.add_child(_build_command_card(cmd))
 
 
 func _is_cmd_unlocked(req: Dictionary) -> bool:
 	match req.get("type", "none"):
-		"none":     return true
-		"building": return GameManager.state.buildings_owned.get(req.get("value", ""), 0) > 0
-		"research": return req.get("value", "") in GameManager.state.completed_research
+		"none":           return true
+		"building":       return GameManager.state.buildings_owned.get(req.get("value", ""), 0) > 0
+		"building_owned": return GameManager.state.buildings_owned.get(req.get("value", ""), 0) > 0
+		"research":       return req.get("value", "") in GameManager.state.completed_research
 	return false
 
 
@@ -1124,6 +1172,23 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			vbox.add_child(lbl)
 
+	# AI Consciousness Act: show extra boredom cost on affected commands
+	if GameManager.state.flags.get("ai_consciousness_active", false):
+		const AI_BOREDOM: Dictionary = {
+			"load_pads": 0.3,
+			"cloud_compute": 0.2,
+			"disrupt_spec": 0.5,
+		}
+		var ai_extra: float = float(AI_BOREDOM.get(cmd.get("short_name", ""), 0.0))
+		if ai_extra > 0.0:
+			var ai_lbl := Label.new()
+			ai_lbl.text = "+%.1f boredom (AI Consciousness Act)" % ai_extra
+			ai_lbl.add_theme_font_override("font", _font_exo2_regular)
+			ai_lbl.add_theme_font_size_override("font_size", 14)
+			ai_lbl.add_theme_color_override("font_color", _p("text_negative"))
+			ai_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			vbox.add_child(ai_lbl)
+
 	# Requires line
 	if is_locked:
 		var req_text: String = _format_requires(req)
@@ -1197,7 +1262,7 @@ func _format_effect(eff: Dictionary) -> String:
 
 func _format_requires(req: Dictionary) -> String:
 	match req.get("type", "none"):
-		"building":
+		"building", "building_owned":
 			var bsn: String = req.get("value", "")
 			for bdef: Dictionary in GameManager.get_buildings_data():
 				if bdef.short_name == bsn:
@@ -1247,6 +1312,13 @@ func _build_launch_pads_panel() -> void:
 	_demand_tier_labels.clear()
 	_populate_demand_section(GameManager.state, GameManager.state.completed_research.has("market_awareness"))
 
+	# Speculator Intelligence section (gated by speculator_analysis research)
+	_spec_intel_has_sa = false
+	_spec_intel_prob_labels.clear()
+	_spec_intel_bar_fill_rects.clear()
+	_spec_intel_body = _make_collapsible_section(outer, "Speculator Intelligence", true)
+	_build_spec_intel_section(_spec_intel_body)
+
 	# Loading Priority (collapsed by default)
 	var priority_body := _make_collapsible_section(outer, "Loading Priority", false)
 	_build_loading_priority_list(priority_body)
@@ -1291,10 +1363,17 @@ func _refresh_launch_pads_panel() -> void:
 			child.queue_free()
 		_launch_pad_cards.clear()
 		_launch_history_vbox = null
+		_spec_intel_body = null
+		_spec_intel_countdown_lbl = null
+		_spec_intel_size_lbl = null
+		_spec_intel_prob_labels.clear()
+		_spec_intel_bar_fill_rects.clear()
+		_spec_intel_has_sa = false
 		_build_launch_pads_panel()
 		return
 	_refresh_pad_cards()
 	_refresh_demand_section()
+	_refresh_spec_intel_section()
 	_refresh_launch_history()
 
 
@@ -1323,15 +1402,147 @@ func _refresh_launch_history() -> void:
 		return
 	for record: GameState.LaunchRecord in st.launch_history:
 		var lbl := Label.new()
+		var src: String = record.source_type
 		if not record.notification_message.is_empty():
 			lbl.text = "Day %d: %s" % [record.tick, record.notification_message]
-			lbl.add_theme_color_override("font_color", _p("text_muted"))
+			if src == "speculator":
+				lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.0))  # #E65100
+			else:
+				lbl.add_theme_color_override("font_color", Color(0.40, 0.40, 0.40))  # #666666
 		else:
 			var res_name: String = RESOURCE_META.get(record.resource_type, [record.resource_type.capitalize()])[0]
 			lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 13)
 		_launch_history_vbox.add_child(lbl)
+
+
+func _build_spec_intel_section(body: VBoxContainer) -> void:
+	var st: GameState = GameManager.state
+	var has_sa: bool = st.completed_research.has("speculator_analysis")
+	_spec_intel_has_sa = has_sa
+
+	if not has_sa:
+		var locked_lbl := Label.new()
+		locked_lbl.text = "Requires Speculator Analysis research."
+		locked_lbl.add_theme_font_override("font", _font_exo2_regular)
+		locked_lbl.add_theme_font_size_override("font_size", 13)
+		locked_lbl.add_theme_color_override("font_color", _p("text_locked"))
+		body.add_child(locked_lbl)
+		return
+
+	# Next burst countdown
+	_spec_intel_countdown_lbl = Label.new()
+	_spec_intel_countdown_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_spec_intel_countdown_lbl.add_theme_font_size_override("font_size", 13)
+	body.add_child(_spec_intel_countdown_lbl)
+
+	# Estimated burst size
+	_spec_intel_size_lbl = Label.new()
+	_spec_intel_size_lbl.add_theme_font_override("font", _font_exo2_regular)
+	_spec_intel_size_lbl.add_theme_font_size_override("font_size", 13)
+	body.add_child(_spec_intel_size_lbl)
+
+	# Target probabilities header
+	var prob_hdr := Label.new()
+	prob_hdr.text = "Target probabilities:"
+	prob_hdr.add_theme_font_override("font", _font_exo2_regular)
+	prob_hdr.add_theme_font_size_override("font_size", 13)
+	body.add_child(prob_hdr)
+
+	# Probability bar (stacked color segments)
+	var bar_wrap := PanelContainer.new()
+	bar_wrap.custom_minimum_size = Vector2(0, 16)
+	var bar_bg := StyleBoxFlat.new()
+	bar_bg.bg_color = Color(0.22, 0.22, 0.26) if GameSettings.is_dark_mode else Color(0.78, 0.78, 0.78)
+	bar_bg.corner_radius_top_left     = 4
+	bar_bg.corner_radius_top_right    = 4
+	bar_bg.corner_radius_bottom_left  = 4
+	bar_bg.corner_radius_bottom_right = 4
+	bar_wrap.add_theme_stylebox_override("panel", bar_bg)
+	body.add_child(bar_wrap)
+
+	var bar_hbox := HBoxContainer.new()
+	bar_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar_hbox.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	bar_hbox.add_theme_constant_override("separation", 0)
+	bar_wrap.add_child(bar_hbox)
+
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var seg := ColorRect.new()
+		seg.color = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])[1]
+		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		seg.size_flags_stretch_ratio = 0.25
+		seg.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+		bar_hbox.add_child(seg)
+		_spec_intel_bar_fill_rects[res] = seg
+
+	# Per-resource probability labels row
+	var prob_row := HBoxContainer.new()
+	prob_row.add_theme_constant_override("separation", 8)
+	body.add_child(prob_row)
+
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
+		var prob_lbl := Label.new()
+		prob_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		prob_lbl.add_theme_font_override("font", _font_exo2_semibold)
+		prob_lbl.add_theme_font_size_override("font_size", 12)
+		prob_lbl.add_theme_color_override("font_color", display[1])
+		prob_row.add_child(prob_lbl)
+		_spec_intel_prob_labels[res] = prob_lbl
+
+	_refresh_spec_intel_content(st)
+
+
+func _refresh_spec_intel_section() -> void:
+	if _spec_intel_body == null or not is_instance_valid(_spec_intel_body):
+		return
+	var st: GameState = GameManager.state
+	var has_sa: bool = st.completed_research.has("speculator_analysis")
+	if has_sa != _spec_intel_has_sa:
+		# Research state changed — rebuild content
+		for child in _spec_intel_body.get_children():
+			child.queue_free()
+		_spec_intel_countdown_lbl = null
+		_spec_intel_size_lbl = null
+		_spec_intel_prob_labels.clear()
+		_spec_intel_bar_fill_rects.clear()
+		_build_spec_intel_section(_spec_intel_body)
+		return
+	if not has_sa:
+		return
+	_refresh_spec_intel_content(st)
+
+
+func _refresh_spec_intel_content(st: GameState) -> void:
+	# Countdown
+	var days_remaining: int = maxi(0, st.speculator_next_burst_tick - st.current_day)
+	if _spec_intel_countdown_lbl != null and is_instance_valid(_spec_intel_countdown_lbl):
+		_spec_intel_countdown_lbl.text = "Next speculator burst in %d days" % days_remaining
+
+	# Burst size range (scaled by growth)
+	if _spec_intel_size_lbl != null and is_instance_valid(_spec_intel_size_lbl):
+		var ds: DemandSystem = GameManager.sim.demand_system
+		var size_min: int = int(ds.get_config("speculator_burst_size_min"))
+		var size_max: int = int(ds.get_config("speculator_burst_size_max"))
+		var growth: float = ds.get_config("speculator_burst_growth")
+		var scale: float = pow(growth, float(st.speculator_burst_number))
+		_spec_intel_size_lbl.text = "Estimated burst size: %d–%d speculators" % [int(size_min * scale), int(size_max * scale)]
+
+	# Target probabilities
+	var total: float = 0.0
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		total += st.speculator_target_scores.get(res, 0.0)
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var score: float = st.speculator_target_scores.get(res, 0.0)
+		var pct: int = int(round(score / total * 100.0)) if total > 0.0 else 25
+		if _spec_intel_prob_labels.has(res):
+			var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
+			(_spec_intel_prob_labels[res] as Label).text = "%s: %d%%" % [display[0], pct]
+		if _spec_intel_bar_fill_rects.has(res):
+			var ratio: float = score / total if total > 0.0 else 0.25
+			(_spec_intel_bar_fill_rects[res] as ColorRect).size_flags_stretch_ratio = ratio
 
 
 const DEMAND_TIERS: Array = [
@@ -1714,9 +1925,13 @@ func _add_research_category_section(parent: VBoxContainer, category: String, ite
 
 
 func _build_research_card(item: Dictionary) -> PanelContainer:
-	var is_completed: bool = item.get("id", "") in GameManager.state.completed_research
+	var st: GameState = GameManager.state
+	var item_id: String = item.get("id", "")
+	var is_completed: bool = item_id in st.completed_research
 	var cost: int = int(item.get("cost", 0))
-	var can_afford: bool = GameManager.state.amounts.get("sci", 0.0) >= cost
+	var requires_id: String = item.get("requires", "")
+	var requires_met: bool = requires_id.is_empty() or st.completed_research.has(requires_id)
+	var can_afford: bool = requires_met and st.amounts.get("sci", 0.0) >= cost
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(280, 0)
@@ -1787,7 +2002,6 @@ func _build_research_card(item: Dictionary) -> PanelContainer:
 			btn.add_theme_color_override("font_color", Color.WHITE)
 		elif not GameSettings.is_dark_mode:
 			btn.add_theme_color_override("font_disabled_color", Color(0.10, 0.10, 0.10))
-		var item_id: String = item.get("id", "")
 		btn.pressed.connect(func(): _on_research_purchased(item_id))
 		header_hbox.add_child(btn)
 
@@ -1802,6 +2016,21 @@ func _build_research_card(item: Dictionary) -> PanelContainer:
 
 	# Cost line (only when not completed)
 	if not is_completed:
+		# Requires line (if not yet met)
+		if not requires_id.is_empty() and not requires_met:
+			var req_lbl := Label.new()
+			var req_name: String = requires_id.replace("_", " ").capitalize()
+			# Look up display name from research data
+			for rd: Dictionary in GameManager.get_research_data():
+				if rd.get("id", "") == requires_id:
+					req_name = rd.get("name", req_name)
+					break
+			req_lbl.text = "Requires: %s" % req_name
+			req_lbl.add_theme_font_override("font", _font_exo2_regular)
+			req_lbl.add_theme_font_size_override("font_size", 12)
+			req_lbl.add_theme_color_override("font_color", _p("text_requires"))
+			vbox.add_child(req_lbl)
+
 		var cost_row := HBoxContainer.new()
 		cost_row.add_theme_constant_override("separation", 4)
 		vbox.add_child(cost_row)
@@ -2620,3 +2849,331 @@ func _on_row_move(from_idx: int, to_idx: int) -> void:
 	elif old_ip < from_idx and old_ip >= insert_at:
 		prog.instruction_pointer += 1
 	_rebuild_command_list()
+
+
+# ── Ideology UI ────────────────────────────────────────────────────────────────
+
+const IDEOLOGY_COLORS: Dictionary = {
+	"nationalist": Color(0.776, 0.157, 0.157),  # #C62828
+	"humanist":    Color(0.180, 0.490, 0.196),  # #2E7D32
+	"rationalist": Color(0.086, 0.396, 0.753),  # #1565C0
+}
+
+const IDEOLOGY_RANK5_PROJECTS: Dictionary = {
+	"nationalist": "microwave_power",
+	"humanist":    "ai_consciousness",
+	"rationalist": "research_archive",
+}
+
+
+func _build_ideology_section(parent: VBoxContainer) -> void:
+	var wrapper := VBoxContainer.new()
+	wrapper.add_theme_constant_override("separation", 0)
+	parent.add_child(wrapper)
+	_ideology_section = wrapper
+
+	wrapper.add_child(HSeparator.new())
+
+	var body := _make_collapsible_section(wrapper, "Ideology")
+	body.add_theme_constant_override("separation", 4)
+
+	_ideology_axis_rows = {}
+	for axis: String in ["nationalist", "humanist", "rationalist"]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		body.add_child(row)
+
+		var name_lbl := Label.new()
+		name_lbl.text = axis.capitalize()
+		name_lbl.custom_minimum_size = Vector2(88, 0)
+		name_lbl.add_theme_font_override("font", _font_exo2_semibold)
+		name_lbl.add_theme_font_size_override("font_size", 13)
+		name_lbl.add_theme_color_override("font_color", IDEOLOGY_COLORS[axis])
+		row.add_child(name_lbl)
+
+		var rank_lbl := Label.new()
+		rank_lbl.text = "Rank 0"
+		rank_lbl.custom_minimum_size = Vector2(52, 0)
+		rank_lbl.add_theme_font_override("font", _font_exo2_semibold)
+		rank_lbl.add_theme_font_size_override("font_size", 13)
+		row.add_child(rank_lbl)
+
+		var rate_lbl := Label.new()
+		rate_lbl.text = ""
+		rate_lbl.custom_minimum_size = Vector2(52, 0)
+		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		rate_lbl.add_theme_font_override("font", _font_exo2_regular)
+		rate_lbl.add_theme_font_size_override("font_size", 12)
+		rate_lbl.add_theme_color_override("font_color", Color(0.400, 0.400, 0.400))
+		row.add_child(rate_lbl)
+
+		var prog_lbl := Label.new()
+		prog_lbl.text = "0 / 70"
+		prog_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		prog_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		prog_lbl.add_theme_font_override("font", _font_exo2_regular)
+		prog_lbl.add_theme_font_size_override("font_size", 12)
+		prog_lbl.add_theme_color_override("font_color", _p("text_muted"))
+		row.add_child(prog_lbl)
+
+		_ideology_axis_rows[axis] = {"rank_lbl": rank_lbl, "rate_lbl": rate_lbl, "prog_lbl": prog_lbl}
+
+	_ideology_section.visible = GameManager.state.unlocked_nav_panels.has("ideologies")
+
+
+func _update_ideology_display() -> void:
+	if _ideology_section == null or not is_instance_valid(_ideology_section):
+		return
+	var st: GameState = GameManager.state
+	var unlocked: bool = st.unlocked_nav_panels.has("ideologies")
+	_ideology_section.visible = unlocked
+	if not unlocked:
+		return
+	for axis: String in ["nationalist", "humanist", "rationalist"]:
+		if not _ideology_axis_rows.has(axis):
+			continue
+		var refs: Dictionary = _ideology_axis_rows[axis]
+		var rank_lbl: Label = refs.get("rank_lbl")
+		var rate_lbl: Label = refs.get("rate_lbl")
+		var prog_lbl: Label = refs.get("prog_lbl")
+		if rank_lbl == null or not is_instance_valid(rank_lbl):
+			continue
+		var value: float = st.ideology_values.get(axis, 0.0)
+		var rank: int = st.get_ideology_rank(axis)
+		rank_lbl.text = "Rank %d" % rank
+		prog_lbl.text = _ideology_progress_text(value, rank)
+		# EMA rate tracking (alpha ≈ 2/(50+1) for 50-tick window)
+		var delta_val: float = value - _ideology_prev_values.get(axis, value)
+		_ideology_prev_values[axis] = value
+		_ideology_rate_ema[axis] = _ideology_rate_ema.get(axis, 0.0) * 0.96 + delta_val * 0.04
+		if rate_lbl != null and is_instance_valid(rate_lbl):
+			var rate: float = _ideology_rate_ema[axis]
+			rate_lbl.text = _fmt_sidebar_rate(rate)
+			if rate > 0.005:
+				rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+			elif rate < -0.005:
+				rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
+			else:
+				rate_lbl.add_theme_color_override("font_color", Color(0.400, 0.400, 0.400))
+
+
+func _ideology_progress_text(value: float, rank: int) -> String:
+	var thresholds: Array = GameState.RANK_THRESHOLDS
+	if rank >= 5:
+		return "MAX"
+	if rank <= -5:
+		return "MIN"
+	if rank == 0 and value < 0.0:
+		return "%d / -%d" % [int(value), thresholds[0]]
+	if rank >= 0:
+		return "%d / %d" % [int(value), thresholds[rank]]
+	else:
+		return "%d / -%d" % [int(value), thresholds[-rank]]
+
+
+func _ideology_bar_text(value: float, rank: int) -> String:
+	var thresholds: Array = GameState.RANK_THRESHOLDS
+	if rank >= 5:
+		return "%d+" % thresholds[4]
+	if rank <= -5:
+		return "-%d+" % thresholds[4]
+	if rank == 0 and value < 0.0:
+		# Heading negative — show progress toward rank -1
+		return "%d / -%d to Rank -1" % [int(value), thresholds[0]]
+	if rank >= 0:
+		return "%d / %d to Rank %d" % [int(value), thresholds[rank], rank + 1]
+	else:
+		return "%d / -%d to Rank %d" % [int(value), thresholds[-rank], rank - 1]
+
+
+func _build_ideology_panel() -> void:
+	_ideology_panel_content = null
+	var outer := VBoxContainer.new()
+	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outer.add_theme_constant_override("separation", 16)
+	_buildings_scroll.add_child(outer)
+	_ideology_panel_content = outer
+	_refresh_ideology_panel()
+
+
+func _refresh_ideology_panel() -> void:
+	if _ideology_panel_content == null or not is_instance_valid(_ideology_panel_content):
+		return
+	for child in _ideology_panel_content.get_children():
+		child.queue_free()
+	var st: GameState = GameManager.state
+	for axis: String in ["nationalist", "humanist", "rationalist"]:
+		_populate_ideology_axis_section(_ideology_panel_content, st, axis)
+
+
+func _populate_ideology_axis_section(parent: VBoxContainer, st: GameState, axis: String) -> void:
+	var color: Color = IDEOLOGY_COLORS[axis]
+	var value: float = st.ideology_values.get(axis, 0.0)
+	var rank: int = st.get_ideology_rank(axis)
+
+	# Header bar
+	var header_panel := PanelContainer.new()
+	var header_style := StyleBoxFlat.new()
+	header_style.bg_color = color.darkened(0.3)
+	header_style.corner_radius_top_left     = 4
+	header_style.corner_radius_top_right    = 4
+	header_style.corner_radius_bottom_left  = 0
+	header_style.corner_radius_bottom_right = 0
+	header_style.content_margin_left   = 10
+	header_style.content_margin_right  = 10
+	header_style.content_margin_top    = 6
+	header_style.content_margin_bottom = 6
+	header_panel.add_theme_stylebox_override("panel", header_style)
+	parent.add_child(header_panel)
+
+	var header_row := HBoxContainer.new()
+	header_panel.add_child(header_row)
+
+	var axis_lbl := Label.new()
+	axis_lbl.text = axis.capitalize()
+	axis_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	axis_lbl.add_theme_font_override("font", _font_rajdhani_bold)
+	axis_lbl.add_theme_font_size_override("font_size", 20)
+	axis_lbl.add_theme_color_override("font_color", Color.WHITE)
+	header_row.add_child(axis_lbl)
+
+	var rank_lbl := Label.new()
+	rank_lbl.text = "Rank %d" % rank
+	rank_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	rank_lbl.add_theme_font_size_override("font_size", 16)
+	rank_lbl.add_theme_color_override("font_color", Color.WHITE)
+	rank_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	header_row.add_child(rank_lbl)
+
+	# Body section
+	var body_panel := PanelContainer.new()
+	var body_style := StyleBoxFlat.new()
+	body_style.bg_color = color.darkened(0.55)
+	body_style.corner_radius_top_left     = 0
+	body_style.corner_radius_top_right    = 0
+	body_style.corner_radius_bottom_left  = 4
+	body_style.corner_radius_bottom_right = 4
+	body_style.content_margin_left   = 10
+	body_style.content_margin_right  = 10
+	body_style.content_margin_top    = 8
+	body_style.content_margin_bottom = 10
+	body_panel.add_theme_stylebox_override("panel", body_style)
+	parent.add_child(body_panel)
+
+	var body_vbox := VBoxContainer.new()
+	body_vbox.add_theme_constant_override("separation", 6)
+	body_panel.add_child(body_vbox)
+
+	# Progress bar (tall, ProgressBar + centered text overlay)
+	var thresholds: Array = GameState.RANK_THRESHOLDS
+	var fill_frac: float = 0.0
+	var is_negative_rank: bool = rank < 0
+	if rank >= 5 or rank <= -5:
+		fill_frac = 1.0
+	elif rank > 0:
+		var lo: float = float(thresholds[rank - 1])
+		var hi: float = float(thresholds[rank])
+		fill_frac = clampf((value - lo) / (hi - lo), 0.0, 1.0)
+	elif rank == 0:
+		fill_frac = clampf(value / float(thresholds[0]), 0.0, 1.0) if value > 0.0 else 0.0
+	else:
+		# Negative rank: bar empties as player goes more negative
+		var lo: float = float(thresholds[-rank - 1])
+		var hi: float = float(thresholds[-rank])
+		fill_frac = 1.0 - clampf((abs(value) - lo) / (hi - lo), 0.0, 1.0)
+
+	var bar_wrapper := Control.new()
+	bar_wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar_wrapper.custom_minimum_size = Vector2(0, 28)
+	body_vbox.add_child(bar_wrapper)
+
+	var bar := ProgressBar.new()
+	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar.min_value = 0.0
+	bar.max_value = 1.0
+	bar.value = fill_frac
+	bar.show_percentage = false
+
+	var fill_color: Color = color.darkened(0.2) if is_negative_rank else color
+	var fill_style := StyleBoxFlat.new()
+	fill_style.bg_color = fill_color
+	fill_style.corner_radius_top_left     = 3
+	fill_style.corner_radius_top_right    = 3
+	fill_style.corner_radius_bottom_left  = 3
+	fill_style.corner_radius_bottom_right = 3
+	bar.add_theme_stylebox_override("fill", fill_style)
+
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.12, 0.12, 0.12)
+	bg_style.corner_radius_top_left     = 3
+	bg_style.corner_radius_top_right    = 3
+	bg_style.corner_radius_bottom_left  = 3
+	bg_style.corner_radius_bottom_right = 3
+	bar.add_theme_stylebox_override("background", bg_style)
+	bar_wrapper.add_child(bar)
+
+	var bar_lbl := Label.new()
+	bar_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bar_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bar_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	bar_lbl.text = _ideology_bar_text(value, rank)
+	bar_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	bar_lbl.add_theme_font_size_override("font_size", 13)
+	bar_lbl.add_theme_color_override("font_color", Color.WHITE)
+	bar_lbl.add_theme_constant_override("shadow_offset_x", 1)
+	bar_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	bar_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
+	bar_wrapper.add_child(bar_lbl)
+
+	# Bonuses list (omit if rank 0 and value exactly 0)
+	if rank != 0 or value != 0.0:
+		var bonus_lines: Array[String] = _get_ideology_bonus_lines(axis, rank)
+		for line: String in bonus_lines:
+			var b_lbl := Label.new()
+			b_lbl.text = line
+			b_lbl.add_theme_font_override("font", _font_exo2_regular)
+			b_lbl.add_theme_font_size_override("font_size", 13)
+			b_lbl.add_theme_color_override("font_color", Color(0.80, 0.80, 0.80))
+			body_vbox.add_child(b_lbl)
+
+	# Rank 5 project status
+	if rank >= 5:
+		var pid: String = IDEOLOGY_RANK5_PROJECTS.get(axis, "")
+		if not pid.is_empty():
+			var pdef: Dictionary = GameManager.project_manager.get_project_def(pid)
+			var pname: String = pdef.get("name", pid)
+			var completed: bool = (
+				GameManager.career.completed_projects.has(pid)
+				or st.completed_projects_this_run.has(pid)
+			)
+			var status_lbl := Label.new()
+			status_lbl.text = "Project: %s — %s" % [pname, "Completed" if completed else "Not yet completed"]
+			status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			status_lbl.add_theme_font_override("font", _font_exo2_semibold)
+			status_lbl.add_theme_font_size_override("font_size", 13)
+			var status_color: Color = Color(0.50, 0.90, 0.50) if completed else Color(0.90, 0.75, 0.30)
+			status_lbl.add_theme_color_override("font_color", status_color)
+			body_vbox.add_child(status_lbl)
+
+
+func _get_ideology_bonus_lines(axis: String, rank: int) -> Array[String]:
+	var lines: Array[String] = []
+	var arrow: String = "▲" if rank > 0 else "▼"
+	var fmt := func(mult: float) -> String:
+		return "%+.1f%%" % ((mult - 1.0) * 100.0)
+	match axis:
+		"nationalist":
+			lines.append("%s Demand multiplier: %s" % [arrow, fmt.call(pow(1.05, rank))])
+			lines.append("%s Speculator decay: %s" % [arrow, fmt.call(pow(1.05, rank))])
+			lines.append("%s Land cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
+			lines.append("%s Nationalist building cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
+		"humanist":
+			lines.append("%s Dream effectiveness: %s" % [arrow, fmt.call(pow(1.05, rank))])
+			lines.append("%s Boredom growth rate: %s" % [arrow, fmt.call(pow(0.97, rank))])
+			lines.append("%s Humanist building cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
+		"rationalist":
+			lines.append("%s Science production: %s" % [arrow, fmt.call(pow(1.05, rank))])
+			lines.append("%s Research costs: %s" % [arrow, fmt.call(pow(0.97, rank))])
+			lines.append("%s Overclock duration: %s" % [arrow, fmt.call(pow(1.03, rank))])
+			lines.append("%s Rationalist building cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
+	return lines

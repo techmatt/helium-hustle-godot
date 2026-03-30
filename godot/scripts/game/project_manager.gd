@@ -125,6 +125,21 @@ func _complete_project(state: GameState, career: CareerState, pid: String, pdef:
 			pass  # Applied on run start from CareerState
 		"stub":
 			pass  # Placeholder — no gameplay effect yet
+		"unlock":
+			# Set a persistent career flag to unlock content in future runs
+			var flag: String = reward.get("flag", "")
+			if not flag.is_empty():
+				career.career_flags[flag] = true
+				state.flags[flag] = true  # apply immediately this run too
+		"boredom_modifiers":
+			# AI Consciousness Act — permanent boredom rate reduction
+			career.career_flags["ai_consciousness_completed"] = true
+			state.flags["ai_consciousness_active"] = true
+		"research_discount":
+			# Universal Research Archive — discount on re-purchased research
+			career.career_flags["research_archive_completed"] = true
+			state.flags["research_archive_active"] = true
+			state.flags["archive_eligible_research"] = career.lifetime_researched_ids.duplicate()
 
 	# Track completion
 	state.completed_projects_this_run.append(pid)
@@ -153,7 +168,8 @@ func _check_condition(cond: Dictionary, state: GameState, career: CareerState) -
 		"ideology_rank":
 			var axis: String = cond.get("axis", "")
 			var required_rank: int = int(cond.get("rank", 0))
-			# Ideology not yet implemented; check career max ranks for persistent unlock
+			# Check current run rank OR career max (so persistent projects unlock after prior-run achievement)
+			var current_rank: int = state.get_ideology_rank(axis)
 			var career_max: int = int(career.max_ideology_ranks.get(axis, 0))
-			return career_max >= required_rank
+			return current_rank >= required_rank or career_max >= required_rank
 	return false

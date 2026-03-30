@@ -103,6 +103,7 @@ func _notification(what: int) -> void:
 func _restore_from_save() -> void:
 	event_manager.reapply_career_unlocks(state, career)
 	event_manager.on_game_start(state, career)  # sets _career reference; won't re-trigger fired events
+	_apply_career_flags_to_run_state()
 	sim.recalculate_caps(state)
 	tick_completed.emit()
 
@@ -231,6 +232,9 @@ func get_research_data() -> Array:
 func purchase_research(research_id: String) -> void:
 	if sim.can_purchase_research(state, research_id):
 		sim.purchase_research(state, research_id)
+		# Track in lifetime researched for Universal Research Archive
+		if not career.lifetime_researched_ids.has(research_id):
+			career.lifetime_researched_ids.append(research_id)
 		tick_completed.emit()
 
 
@@ -250,6 +254,11 @@ func _on_tick() -> void:
 	for notif in project_manager.pending_completion_notifications:
 		event_manager.push_notification("Project Complete: " + notif.name, state.current_day)
 		project_completed_notification.emit(notif.name)
+	# Update career max ideology ranks
+	for axis: String in ["nationalist", "humanist", "rationalist"]:
+		var current_rank: int = state.get_ideology_rank(axis)
+		if current_rank > int(career.max_ideology_ranks.get(axis, 0)):
+			career.max_ideology_ranks[axis] = current_rank
 	tick_completed.emit()
 	if state.amounts.get("boredom", 0.0) >= 1000.0:
 		retire(false)
@@ -302,7 +311,11 @@ func retire(voluntary: bool) -> void:
 		"shipments_completed": run_shipments,
 		"buildings_built": run_buildings,
 		"research_completed": state.completed_research.duplicate(),
-		"ideology_ranks": {},
+		"ideology_ranks": {
+			"nationalist": state.get_ideology_rank("nationalist"),
+			"humanist": state.get_ideology_rank("humanist"),
+			"rationalist": state.get_ideology_rank("rationalist"),
+		},
 		"milestones_hit": state.triggered_milestones.duplicate(),
 		"career_retirements": career.total_retirements + 1,
 		"career_total_days": career.lifetime_days_survived,
@@ -374,9 +387,22 @@ func start_new_run() -> void:
 	# Fire game_start events for the new run
 	event_manager.on_game_start(state, career)
 
+	_apply_career_flags_to_run_state()
+
 	set_speed("1x")
 	tick_completed.emit()
 	SaveManager.save_game(career, state)
+
+
+func _apply_career_flags_to_run_state() -> void:
+	if career.career_flags.get("ai_consciousness_completed", false):
+		state.flags["ai_consciousness_active"] = true
+	if career.career_flags.get("microwave_power_completed", false):
+		state.flags["microwave_power_active"] = true
+	if career.career_flags.get("research_archive_completed", false):
+		state.flags["research_archive_active"] = true
+		# Copy eligible research IDs for cost discount lookup in simulation
+		state.flags["archive_eligible_research"] = career.lifetime_researched_ids.duplicate()
 
 
 func _autosave() -> void:

@@ -356,5 +356,21 @@
       }
     ],
     "description": "+1 Rationalist, -0.5 Nationalist, -0.5 Humanist per execution."
+  },
+  {
+    "name": "Buy Power",
+    "short_name": "buy_power",
+    "requires": {
+      "type": "building_owned",
+      "value": "microwave_receiver"
+    },
+    "costs": {
+      "cred": 40.0
+    },
+    "production": {
+      "eng": 20.0
+    },
+    "effects": [],
+    "description": "Purchase beamed energy from Earth's orbital power grid. Requires Microwave Receiver."
   }
 ]

@@ -245,10 +245,14 @@ func _check_condition(state: GameState, def: Dictionary) -> bool:
 			return false
 		"ideology_rank_any":
 			var target_rank: int = int(cond.get("rank", 0))
-			# Check career max ideology ranks (ideology system not yet implemented in GameState)
+			# Check current run ranks
+			for axis: String in ["nationalist", "humanist", "rationalist"]:
+				if state.get_ideology_rank(axis) >= target_rank:
+					return true
+			# Also check career max ranks (condition can complete on run where ideology wasn't re-invested)
 			if _career != null:
 				for axis: String in ["nationalist", "humanist", "rationalist"]:
-					if _career.max_ideology_ranks.get(axis, 0) >= target_rank:
+					if int(_career.max_ideology_ranks.get(axis, 0)) >= target_rank:
 						return true
 			return false
 	return false

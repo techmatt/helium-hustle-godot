@@ -3,6 +3,7 @@
     "name": "Solar Panel",
     "short_name": "panel",
     "category": "Power",
+    "ideology": "",
     "requires": {
       "type": "none"
     },
@@ -22,6 +23,7 @@
     "name": "Regolith Excavator",
     "short_name": "excavator",
     "category": "Extraction",
+    "ideology": "",
     "requires": {
       "type": "none"
     },
@@ -43,6 +45,7 @@
     "name": "Ice Extractor",
     "short_name": "ice_extractor",
     "category": "Extraction",
+    "ideology": "",
     "requires": {
       "type": "none"
     },
@@ -65,6 +68,7 @@
     "name": "Smelter",
     "short_name": "smelter",
     "category": "Processing",
+    "ideology": "",
     "requires": {
       "type": "building",
       "value": "excavator"
@@ -89,6 +93,7 @@
     "name": "Refinery",
     "short_name": "refinery",
     "category": "Processing",
+    "ideology": "",
     "requires": {
       "type": "building",
       "value": "excavator"
@@ -114,6 +119,7 @@
     "name": "Fabricator",
     "short_name": "fabricator",
     "category": "Processing",
+    "ideology": "rationalist",
     "requires": {
       "type": "building",
       "value": "smelter"
@@ -139,6 +145,7 @@
     "name": "Electrolysis Plant",
     "short_name": "electrolysis",
     "category": "Processing",
+    "ideology": "",
     "requires": {
       "type": "research",
       "value": "propellant_synthesis"
@@ -163,6 +170,7 @@
     "name": "Launch Pad",
     "short_name": "launch_pad",
     "category": "Trade",
+    "ideology": "nationalist",
     "requires": {
       "type": "quest",
       "value": "Q2",
@@ -185,6 +193,7 @@
     "name": "Research Lab",
     "short_name": "research_lab",
     "category": "Science",
+    "ideology": "rationalist",
     "requires": {
       "type": "building",
       "value": "fabricator"
@@ -209,6 +218,7 @@
     "name": "Data Center",
     "short_name": "data_center",
     "category": "Processors",
+    "ideology": "humanist",
     "requires": {
       "type": "building",
       "value": "fabricator"
@@ -238,6 +248,7 @@
     "name": "Battery",
     "short_name": "battery",
     "category": "Storage",
+    "ideology": "humanist",
     "requires": {
       "type": "none"
     },
@@ -263,6 +274,7 @@
     "name": "Storage Depot",
     "short_name": "storage_depot",
     "category": "Storage",
+    "ideology": "",
     "requires": {
       "type": "none"
     },
@@ -318,6 +330,7 @@
     "name": "Arbitrage Engine",
     "short_name": "arbitrage_engine",
     "category": "Trade",
+    "ideology": "nationalist",
     "requires": {
       "type": "research",
       "value": "market_analysis"
@@ -342,5 +355,28 @@
       }
     ],
     "description": "Multiplies speculator pressure decay. Nationalist-aligned."
+  },
+  {
+    "name": "Microwave Receiver",
+    "short_name": "microwave_receiver",
+    "category": "Power",
+    "ideology": "nationalist",
+    "requires": {
+      "type": "flag",
+      "value": "microwave_power_active",
+      "label": "Microwave Power Initiative (persistent project)"
+    },
+    "land": 30,
+    "cost_scaling": 1.0,
+    "max_count": 1,
+    "costs": {
+      "cred": 500.0,
+      "ti": 100.0,
+      "reg": 50.0
+    },
+    "production": {},
+    "upkeep": {},
+    "effects": [],
+    "description": "Orbital power reception array. Enables purchasing energy from Earth via Buy Power command."
   }
 ]

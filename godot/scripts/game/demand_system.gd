@@ -27,7 +27,6 @@ func initialize_demand(state: GameState) -> void:
 		state.demand_rival[res]    = 0.0
 		state.demand_launch[res]   = 0.0
 		state.demand_history[res]  = []
-		state.speculator_revenue_tracking[res] = 0.0
 	for rival in _rivals:
 		var rid: String = rival.get("id", "")
 		if rid:
@@ -35,6 +34,7 @@ func initialize_demand(state: GameState) -> void:
 	var burst_min: int = int(_dcfg("speculator_burst_interval_min"))
 	var burst_max: int = int(_dcfg("speculator_burst_interval_max"))
 	state.speculator_next_burst_tick = randi_range(burst_min, burst_max)
+	_reset_target_scores(state)
 	# Compute initial demand values at day 0
 	tick_demand(state)
 
@@ -100,9 +100,8 @@ func tick_demand(state: GameState) -> void:
 		if spec_target != "" and spec_target != res:
 			coupling_bonus = spec_sup_on_target * coupling / 3.0
 
-		# Nationalist ideology bonus (stub — rank 0 until ideology system)
-		var nationalist_rank: int = 0
-		var nationalist_mult: float = pow(1.05, nationalist_rank)
+		# Nationalist ideology bonus — multiplies final demand
+		var nationalist_mult: float = state.get_ideology_bonus("nationalist", 1.0, 1.05)
 
 		var raw: float = (base_demand
 			- spec_sup
@@ -121,9 +120,10 @@ func tick_demand(state: GameState) -> void:
 
 
 func tick_speculators(state: GameState) -> void:
-	# Decay speculators — proportional base rate boosted by active Arbitrage Engines (flat)
+	# Decay speculators — proportional base rate (boosted by Nationalist ideology + Arbitrage Engines)
 	var active_arb: int = state.buildings_active.get("arbitrage_engine", state.buildings_owned.get("arbitrage_engine", 0))
-	var proportional_decay: float = state.speculator_count * _dcfg("speculator_proportional_decay")
+	var nationalist_decay_mult: float = state.get_ideology_bonus("nationalist", 1.0, 1.05)
+	var proportional_decay: float = state.speculator_count * _dcfg("speculator_proportional_decay") * nationalist_decay_mult
 	var arbitrage_decay: float = float(active_arb) * _dcfg("arbitrage_decay_bonus_per_building")
 	state.speculator_count = maxf(0.0, state.speculator_count - proportional_decay - arbitrage_decay)
 	# Check for burst arrival
@@ -150,6 +150,7 @@ func tick_rivals(state: GameState) -> Array:
 			var note := GameState.LaunchRecord.new()
 			note.tick = state.current_day
 			note.notification_message = msg
+			note.source_type = "rival"
 			state.launch_history.push_front(note)
 			if state.launch_history.size() > 5:
 				state.launch_history.pop_back()
@@ -163,34 +164,55 @@ func tick_rivals(state: GameState) -> Array:
 
 
 func _fire_speculator_burst(state: GameState) -> void:
-	state.speculator_target = _pick_speculator_target(state)
+	state.speculator_target = _choose_speculator_target(state)
 	var size_min: int = int(_dcfg("speculator_burst_size_min"))
 	var size_max: int = int(_dcfg("speculator_burst_size_max"))
 	var growth: float = _dcfg("speculator_burst_growth")
 	var burst: float = float(randi_range(size_min, size_max)) * pow(growth, float(state.speculator_burst_number))
 	state.speculator_count += burst
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		state.speculator_revenue_tracking[res] = 0.0
 	var int_min: int = int(_dcfg("speculator_burst_interval_min"))
 	var int_max: int = int(_dcfg("speculator_burst_interval_max"))
 	var interval_mult: float = state.get_modifier("speculator_burst_interval_mult")
 	state.speculator_next_burst_tick = state.current_day + int(randi_range(int_min, int_max) * interval_mult)
 	state.speculator_burst_number += 1
+	# Push speculator burst notification to launch history
+	var res_display: String = _get_resource_display_name(state.speculator_target)
+	var msg: String = "Speculator surge — %d speculators target %s" % [int(burst), res_display]
+	var note := GameState.LaunchRecord.new()
+	note.tick = state.current_day
+	note.notification_message = msg
+	note.source_type = "speculator"
+	state.launch_history.push_front(note)
+	if state.launch_history.size() > 5:
+		state.launch_history.pop_back()
+	# Roll fresh random bases for the next cycle
+	_reset_target_scores(state)
 
 
-func _pick_speculator_target(state: GameState) -> String:
+func _reset_target_scores(state: GameState) -> void:
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		state.speculator_target_scores[res] = randf_range(0.0, 0.25)
+
+
+func on_shipment_launched(state: GameState, resource: String, cargo_loaded: float, cargo_capacity: float) -> void:
+	var demand: float = state.demand.get(resource, 0.5)
+	var increment: float = maxf(0.25, demand) * (cargo_loaded / cargo_capacity)
+	state.speculator_target_scores[resource] = state.speculator_target_scores.get(resource, 0.0) + increment
+
+
+func _choose_speculator_target(state: GameState) -> String:
 	var total: float = 0.0
 	for res: String in GameState.TRADEABLE_RESOURCES:
-		total += state.speculator_revenue_tracking.get(res, 0.0)
+		total += state.speculator_target_scores.get(res, 0.0)
 	if total <= 0.0:
 		return GameState.TRADEABLE_RESOURCES[randi() % GameState.TRADEABLE_RESOURCES.size()] as String
 	var roll: float = randf() * total
 	var cumulative: float = 0.0
 	for res: String in GameState.TRADEABLE_RESOURCES:
-		cumulative += state.speculator_revenue_tracking.get(res, 0.0)
+		cumulative += state.speculator_target_scores.get(res, 0.0)
 		if roll <= cumulative:
 			return res
-	return GameState.TRADEABLE_RESOURCES[0] as String
+	return GameState.TRADEABLE_RESOURCES[-1] as String
 
 
 func _get_resource_display_name(short_name: String) -> String:

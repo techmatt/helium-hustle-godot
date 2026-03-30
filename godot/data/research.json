@@ -76,6 +76,15 @@
     ]
   },
   {
+    "id": "speculator_analysis",
+    "name": "Speculator Analysis",
+    "category": "Market Analysis",
+    "cost": 180,
+    "description": "Reveals speculator burst timing, target probabilities, and burst size range on Launch Pads panel.",
+    "effects": [],
+    "requires": "market_awareness"
+  },
+  {
     "id": "trade_promotion",
     "name": "Trade Promotion",
     "category": "Market Analysis",

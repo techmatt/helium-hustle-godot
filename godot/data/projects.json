@@ -54,8 +54,9 @@
       "sci": 300
     },
     "reward": {
-      "type": "stub",
-      "description": "Unlocks Microwave Receiver building + Buy Power command"
+      "type": "unlock",
+      "flag": "microwave_power_completed",
+      "description": "Unlocks Microwave Receiver building and Buy Power command"
     }
   },
   {
@@ -73,8 +74,14 @@
       "sci": 300
     },
     "reward": {
-      "type": "stub",
-      "description": "Permanent base boredom rate -15%, some commands generate boredom"
+      "type": "boredom_modifiers",
+      "base_boredom_rate_mult": 0.85,
+      "command_boredom": {
+        "load_pads": 0.3,
+        "cloud_compute": 0.2,
+        "disrupt_spec": 0.5
+      },
+      "description": "Permanent -15% base boredom rate. Some commands now generate boredom."
     }
   },
   {
@@ -92,8 +99,10 @@
       "sci": 300
     },
     "reward": {
-      "type": "stub",
-      "description": "25% discount on re-purchasing previously researched tech"
+      "type": "research_discount",
+      "discount_mult": 0.75,
+      "condition": "previously_researched",
+      "description": "Previously-researched tech costs 25% less to re-purchase"
     }
   },
   {
