@@ -101,6 +101,7 @@ func _notification(what: int) -> void:
 
 
 func _restore_from_save() -> void:
+	event_manager.reapply_career_unlocks(state, career)
 	event_manager.on_game_start(state, career)  # sets _career reference; won't re-trigger fired events
 	sim.recalculate_caps(state)
 	tick_completed.emit()
@@ -365,6 +366,9 @@ func start_new_run() -> void:
 	sim.rate_tracker = rate_tracker
 	sim.recalculate_caps(state)
 	sim.demand_system.initialize_demand(state)
+
+	# Re-apply unlock effects from all previously completed events
+	event_manager.reapply_career_unlocks(state, career)
 
 	# Fire game_start events for the new run
 	event_manager.on_game_start(state, career)

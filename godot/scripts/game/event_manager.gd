@@ -147,6 +147,17 @@ func get_event_def(event_id: String) -> Dictionary:
 	return _def_map.get(event_id, {})
 
 
+func reapply_career_unlocks(state: GameState, career: CareerState) -> void:
+	for def in _event_defs:
+		var eid: String = def.get("id", "")
+		if eid.is_empty():
+			continue
+		if not (career.seen_event_ids.has(eid) or career.completed_quest_ids.has(eid)):
+			continue
+		for effect in def.get("unlocks", []):
+			_apply_unlock(state, effect)
+
+
 func get_condition_display(event_id: String, state: GameState) -> String:
 	var def: Dictionary = _def_map.get(event_id, {})
 	if def.is_empty():

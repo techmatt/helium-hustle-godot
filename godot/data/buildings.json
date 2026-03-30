@@ -241,7 +241,7 @@
     "requires": {
       "type": "none"
     },
-    "land": 0,
+    "land": 1,
     "cost_scaling": 1.35,
     "costs": {
       "cred": 30.0,
@@ -257,7 +257,7 @@
         "value": 50.0
       }
     ],
-    "description": "Passive energy storage. No land, no upkeep, fast scaling cost."
+    "description": "Passive energy storage. No upkeep, fast scaling cost."
   },
   {
     "name": "Storage Depot",
@@ -291,7 +291,7 @@
         "prefix": "store",
         "resource": "he3",
         "operator": "+",
-        "value": 25.0
+        "value": 30.0
       }
     ],
     "description": "Bulk physical storage. Expands reg, ice, he3, ti, and circuit capacity."
