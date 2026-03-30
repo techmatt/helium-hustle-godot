@@ -15,6 +15,9 @@ func _bg_active() -> Color:
 func _bg_failed() -> Color:
 	return Color(0.30, 0.10, 0.10, 0.90) if GameSettings.is_dark_mode else Color(0.86, 0.50, 0.50, 0.70)
 
+func _bg_partial() -> Color:
+	return Color(0.28, 0.22, 0.04, 0.90) if GameSettings.is_dark_mode else Color(0.86, 0.78, 0.40, 0.70)
+
 func _fill_color_normal() -> Color:
 	return _fill_color_active()
 
@@ -23,6 +26,9 @@ func _fill_color_active() -> Color:
 
 func _fill_color_failed() -> Color:
 	return Color(0.70, 0.20, 0.20) if GameSettings.is_dark_mode else Color(0.72, 0.12, 0.12)
+
+func _fill_color_partial() -> Color:
+	return Color(0.75, 0.62, 0.10) if GameSettings.is_dark_mode else Color(0.72, 0.58, 0.08)
 
 func _grip_color() -> Color:
 	return Color(0.50, 0.50, 0.50) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.50)
@@ -37,6 +43,7 @@ var _progress_bar: ProgressBar
 var _fill_normal: StyleBoxFlat
 var _fill_active: StyleBoxFlat
 var _fill_failed: StyleBoxFlat
+var _fill_partial: StyleBoxFlat
 var _minus_btn: Button
 var _plus_btn: Button
 var _remove_btn: Button
@@ -62,15 +69,20 @@ func refresh(
 	failed: bool,
 	_can_up: bool,
 	_can_down: bool,
+	partial_failed: bool = false,
+	processors: int = 1,
 ) -> void:
 	_repeat_count = repeat_count
 	_name_lbl.text = _cmd_name + " (x%d)" % repeat_count
-	_progress_bar.max_value = max(repeat_count, 1)
+	_progress_bar.max_value = max(repeat_count * processors, 1)
 	_progress_bar.value = current_progress
 
 	if failed:
 		_bg_style.bg_color = _bg_failed()
 		_progress_bar.add_theme_stylebox_override("fill", _fill_failed)
+	elif partial_failed:
+		_bg_style.bg_color = _bg_partial()
+		_progress_bar.add_theme_stylebox_override("fill", _fill_partial)
 	elif is_active:
 		_bg_style.bg_color = _bg_active()
 		_progress_bar.add_theme_stylebox_override("fill", _fill_active)
@@ -131,9 +143,10 @@ func _build_ui(font_r: FontFile, font_s: FontFile) -> void:
 		_bg_style.border_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
 	add_theme_stylebox_override("panel", _bg_style)
 
-	_fill_normal = _make_fill(_fill_color_normal())
-	_fill_active = _make_fill(_fill_color_active())
-	_fill_failed = _make_fill(_fill_color_failed())
+	_fill_normal  = _make_fill(_fill_color_normal())
+	_fill_active  = _make_fill(_fill_color_active())
+	_fill_failed  = _make_fill(_fill_color_failed())
+	_fill_partial = _make_fill(_fill_color_partial())
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left",   5)

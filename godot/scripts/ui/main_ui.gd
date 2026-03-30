@@ -18,8 +18,8 @@ const RESOURCES: Array = [
 
 # [label, icon_color]
 const NAV_ITEMS: Array = [
-	["Commands",    Color(0.90, 0.60, 0.10)],
 	["Buildings",   Color(0.30, 0.65, 0.90)],
+	["Commands",    Color(0.90, 0.60, 0.10)],
 	["Launch Pads", Color(0.95, 0.55, 0.10)],
 	["Research",    Color(0.55, 0.35, 0.90)],
 	["Projects",    Color(0.20, 0.75, 0.50)],
@@ -1923,6 +1923,25 @@ func _build_options_panel() -> void:
 	)
 	outer.add_child(debug_btn)
 
+	var no_boredom_row := HBoxContainer.new()
+	no_boredom_row.add_theme_constant_override("separation", 10)
+	outer.add_child(no_boredom_row)
+
+	var no_boredom_lbl := Label.new()
+	no_boredom_lbl.text = "Disable boredom gain"
+	no_boredom_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	no_boredom_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	no_boredom_lbl.add_theme_font_override("font", _font_exo2_regular)
+	no_boredom_lbl.add_theme_font_size_override("font_size", 14)
+	no_boredom_lbl.add_theme_color_override("font_color", _p("text_muted"))
+	no_boredom_row.add_child(no_boredom_lbl)
+
+	var no_boredom_btn := CheckButton.new()
+	no_boredom_btn.button_pressed = GameSettings.debug_no_boredom
+	no_boredom_btn.focus_mode = Control.FOCUS_NONE
+	no_boredom_btn.toggled.connect(func(on: bool): GameSettings.debug_no_boredom = on)
+	no_boredom_row.add_child(no_boredom_btn)
+
 	var clear_desc := Label.new()
 	clear_desc.text = "Deletes the save file and resets to a fresh Run 1. Cannot be undone."
 	clear_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2468,6 +2487,8 @@ func _rebuild_command_list() -> void:
 			entry.failed_this_cycle,
 			i > 0,
 			i < prog.commands.size() - 1,
+			entry.partial_failed_this_cycle,
+			prog.processors_assigned,
 		)
 		row.repeat_delta_requested.connect(_on_row_repeat_delta)
 		row.remove_requested.connect(_on_row_remove)
@@ -2491,6 +2512,8 @@ func _refresh_command_rows() -> void:
 			entry.failed_this_cycle,
 			i > 0,
 			i < prog.commands.size() - 1,
+			entry.partial_failed_this_cycle,
+			prog.processors_assigned,
 		)
 
 

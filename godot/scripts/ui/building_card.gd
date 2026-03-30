@@ -295,7 +295,7 @@ func _build_effects(parent: VBoxContainer) -> void:
 			lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 			lbl.add_theme_font_override("font", _font_exo2_regular)
 			lbl.add_theme_font_size_override("font_size", 14)
-			lbl.add_theme_color_override("font_color", Color(0.80, 0.80, 0.50))
+			lbl.add_theme_color_override("font_color", _c("positive"))
 			parent.add_child(lbl)
 
 

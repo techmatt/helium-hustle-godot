@@ -6,6 +6,7 @@ class ProgramEntry:
 	var repeat_count: int = 1
 	var current_progress: int = 0
 	var failed_this_cycle: bool = false
+	var partial_failed_this_cycle: bool = false
 
 	func to_dict() -> Dictionary:
 		return {
@@ -13,6 +14,7 @@ class ProgramEntry:
 			"repeat_count": repeat_count,
 			"current_progress": current_progress,
 			"failed_this_cycle": failed_this_cycle,
+			"partial_failed_this_cycle": partial_failed_this_cycle,
 		}
 
 	static func from_dict(data: Dictionary) -> ProgramEntry:
@@ -21,6 +23,7 @@ class ProgramEntry:
 		e.repeat_count = int(data.get("repeat_count", 1))
 		e.current_progress = int(data.get("current_progress", 0))
 		e.failed_this_cycle = bool(data.get("failed_this_cycle", false))
+		e.partial_failed_this_cycle = bool(data.get("partial_failed_this_cycle", false))
 		return e
 
 

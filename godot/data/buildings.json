@@ -292,6 +292,24 @@
         "resource": "he3",
         "operator": "+",
         "value": 30.0
+      },
+      {
+        "prefix": "store",
+        "resource": "ti",
+        "operator": "+",
+        "value": 25.0
+      },
+      {
+        "prefix": "store",
+        "resource": "cir",
+        "operator": "+",
+        "value": 10.0
+      },
+      {
+        "prefix": "store",
+        "resource": "prop",
+        "operator": "+",
+        "value": 40.0
       }
     ],
     "description": "Bulk physical storage. Expands reg, ice, he3, ti, and circuit capacity."

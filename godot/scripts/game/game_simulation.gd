@@ -74,9 +74,11 @@ func tick(state: GameState) -> void:
 	recalculate_caps(state)
 
 	# Boredom accumulation
-	var boredom_rate: float = _get_boredom_rate(state.current_day)
-	boredom_rate *= _get_boredom_multiplier(state)
-	state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + boredom_rate
+	var boredom_rate: float = 0.0
+	if not GameSettings.debug_no_boredom:
+		boredom_rate = _get_boredom_rate(state.current_day)
+		boredom_rate *= _get_boredom_multiplier(state)
+		state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + boredom_rate
 	last_gross_deltas["boredom"] = boredom_rate
 
 	# Two-pass building tick so producers see post-consumption resource levels.
@@ -189,34 +191,42 @@ func execute_programs(state: GameState) -> void:
 		if prog.processors_assigned <= 0 or prog.commands.is_empty():
 			continue
 		var prog_delta: Dictionary = {}
+		var ip: int = prog.instruction_pointer
+		var entry: GameState.ProgramEntry = prog.commands[ip]
+
+		# Each processor executes the current instruction once — IP advances at most once per tick
+		var had_success: bool = false
+		var had_failure: bool = false
 		for _proc in range(prog.processors_assigned):
-			if prog.commands.is_empty():
-				break
-			var ip: int = prog.instruction_pointer
-			var entry: GameState.ProgramEntry = prog.commands[ip]
 			var success: bool = _can_afford_command(state, entry.command_shortname)
 			if success:
 				_apply_command(state, entry.command_shortname, prog_delta)
-				entry.failed_this_cycle = false
+				had_success = true
 			else:
-				entry.failed_this_cycle = true
-			entry.current_progress += 1
-			pending_program_events.append({
-				"type": "step",
-				"program_index": prog_idx,
-				"entry_index": ip,
-				"success": success,
-			})
-			if entry.current_progress >= entry.repeat_count:
-				prog.instruction_pointer = ip + 1
-				if prog.instruction_pointer >= prog.commands.size():
-					prog.instruction_pointer = 0
-					for e: GameState.ProgramEntry in prog.commands:
-						e.current_progress = 0
-					pending_program_events.append({
-						"type": "cycle_reset",
-						"program_index": prog_idx,
-					})
+				had_failure = true
+
+		entry.failed_this_cycle = had_failure and not had_success
+		entry.partial_failed_this_cycle = had_success and had_failure
+
+		entry.current_progress += prog.processors_assigned
+		pending_program_events.append({
+			"type": "step",
+			"program_index": prog_idx,
+			"entry_index": ip,
+			"success": had_success,
+		})
+
+		if entry.current_progress >= entry.repeat_count * prog.processors_assigned:
+			prog.instruction_pointer = ip + 1
+			if prog.instruction_pointer >= prog.commands.size():
+				prog.instruction_pointer = 0
+				for e: GameState.ProgramEntry in prog.commands:
+					e.current_progress = 0
+				pending_program_events.append({
+					"type": "cycle_reset",
+					"program_index": prog_idx,
+				})
+
 		if rate_tracker != null:
 			for res: String in prog_delta:
 				rate_tracker.record("program:" + str(prog_idx), res, prog_delta[res])
@@ -404,8 +414,11 @@ func set_pad_resource(state: GameState, pad_idx: int, resource_type: String) -> 
 
 func _effect_load_pads(state: GameState, load_amount: int) -> void:
 	var effective_load: int = _get_load_per_execution(state, load_amount)
+	var remaining: float = float(effective_load)
 	var active_count: int = state.buildings_active.get("launch_pad", state.buildings_owned.get("launch_pad", 0))
 	for res: String in state.loading_priority:
+		if remaining <= 0.0:
+			break
 		for i in range(mini(state.pads.size(), active_count)):
 			var pad: GameState.LaunchPadData = state.pads[i]
 			if pad.resource_type != res:
@@ -414,16 +427,16 @@ func _effect_load_pads(state: GameState, load_amount: int) -> void:
 				continue
 			var available: float = state.amounts.get(res, 0.0)
 			var space: float = _pad_cargo_capacity - pad.cargo_loaded
-			var to_load: float = minf(float(effective_load), minf(available, space))
+			var to_load: float = minf(remaining, minf(available, space))
 			if to_load > 0.0:
 				state.amounts[res] -= to_load
 				pad.cargo_loaded += to_load
+				remaining -= to_load
 				if pad.cargo_loaded >= _pad_cargo_capacity:
 					pad.cargo_loaded = _pad_cargo_capacity
 					pad.status = GameState.PAD_FULL
 				else:
 					pad.status = GameState.PAD_LOADING
-			return  # one execution = one pad
 
 
 func _effect_launch_pads(state: GameState) -> void:
