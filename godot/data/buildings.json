@@ -140,8 +140,8 @@
     "short_name": "electrolysis",
     "category": "Processing",
     "requires": {
-      "type": "building",
-      "value": "ice_extractor"
+      "type": "research",
+      "value": "propellant_synthesis"
     },
     "land": 1,
     "cost_scaling": 1.25,

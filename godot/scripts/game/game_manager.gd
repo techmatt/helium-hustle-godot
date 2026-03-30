@@ -101,6 +101,7 @@ func _notification(what: int) -> void:
 
 
 func _restore_from_save() -> void:
+	event_manager.on_game_start(state, career)  # sets _career reference; won't re-trigger fired events
 	sim.recalculate_caps(state)
 	tick_completed.emit()
 
@@ -279,6 +280,11 @@ func retire(voluntary: bool) -> void:
 		var eid: String = inst.get("id", "")
 		if eid and not career.seen_event_ids.has(eid):
 			career.seen_event_ids.append(eid)
+		# Track completed story quests for repeat-run resumption
+		if inst.get("state", "") == "completed":
+			var edef: Dictionary = event_manager.get_event_def(eid)
+			if edef.get("category", "") == "story" and not career.completed_quest_ids.has(eid):
+				career.completed_quest_ids.append(eid)
 
 	# Save persistent project progress to career
 	for pid: String in state.project_invested:
@@ -361,7 +367,7 @@ func start_new_run() -> void:
 	sim.demand_system.initialize_demand(state)
 
 	# Fire game_start events for the new run
-	event_manager.on_game_start(state)
+	event_manager.on_game_start(state, career)
 
 	set_speed("1x")
 	tick_completed.emit()
@@ -374,7 +380,7 @@ func _autosave() -> void:
 
 
 func _fire_startup_events() -> void:
-	event_manager.on_game_start(state)
+	event_manager.on_game_start(state, career)
 
 
 func _debug_clear_save() -> void:
@@ -382,7 +388,7 @@ func _debug_clear_save() -> void:
 	career = CareerState.new()
 	state = GameState.new()
 	_initialize_state()
-	event_manager.on_game_start(state)
+	event_manager.on_game_start(state, career)
 	rate_tracker = ResourceRateTracker.new()
 	sim.rate_tracker = rate_tracker
 	set_speed("1x")

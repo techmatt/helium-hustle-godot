@@ -8,6 +8,7 @@ signal boredom_phase_changed(old_phase: int, new_phase: int)
 var _event_defs: Array = []
 var _def_map: Dictionary = {}
 var _boredom_curve: Array = []  # Array of [day: int, rate: float]
+var _career: CareerState = null
 
 # Dynamic notifications (project completions, etc.) — shown in ongoing section
 var notifications: Array = []  # Array of { title: String, day: int }
@@ -24,7 +25,11 @@ func init(events_data: Array, game_config: Dictionary) -> void:
 		_boredom_curve.append([int(entry.get("day", 0)), float(entry.get("rate", 0.0))])
 
 
-func on_game_start(state: GameState) -> void:
+func on_game_start(state: GameState, career: CareerState = null) -> void:
+	if career != null:
+		_career = career
+
+	# Fire game_start triggers
 	for def in _event_defs:
 		var trigger: Dictionary = def.get("trigger", {})
 		if trigger.get("type", "") != "game_start":
@@ -35,6 +40,22 @@ func on_game_start(state: GameState) -> void:
 		if not _get_instance(state, def.id).is_empty():
 			continue
 		_trigger_event(state, def)
+
+	# On repeat runs: resume quest chain at the first incomplete quest
+	if state.run_number > 1 and _career != null:
+		for def in _event_defs:
+			if def.get("category", "") != "story":
+				continue
+			if _career.completed_quest_ids.has(def.id):
+				continue
+			if not _get_instance(state, def.id).is_empty():
+				continue
+			var trigger: Dictionary = def.get("trigger", {})
+			if trigger.get("type", "") == "quest_complete":
+				var req_quest: String = trigger.get("quest_id", "")
+				if _career.completed_quest_ids.has(req_quest):
+					_trigger_event(state, def)
+					break  # Only activate one quest — the first incomplete one
 
 
 func tick(state: GameState) -> void:
@@ -133,12 +154,12 @@ func get_condition_display(event_id: String, state: GameState) -> String:
 	var cond: Dictionary = def.get("condition", {})
 	match cond.get("type", ""):
 		"resource_cumulative":
-			var res: String = cond.get("resource", "")
+			var res: String = cond.get("resource_id", "")
 			var amount: float = float(cond.get("amount", 0))
 			var current: float = state.cumulative_resources_earned.get(res, 0.0)
 			return "%d/%d" % [int(current), int(amount)]
 		"building_owned":
-			var bname: String = cond.get("building", "")
+			var bname: String = cond.get("building_id", "")
 			var count: int = int(cond.get("count", 1))
 			return "%d/%d" % [state.buildings_owned.get(bname, 0), count]
 		"shipment_completed":
@@ -187,12 +208,14 @@ func _check_condition(state: GameState, def: Dictionary) -> bool:
 	match cond.get("type", ""):
 		"immediate":
 			return true
+		"never":
+			return false
 		"building_owned":
-			var bname: String = cond.get("building", "")
+			var bname: String = cond.get("building_id", "")
 			var count: int = int(cond.get("count", 1))
 			return state.buildings_owned.get(bname, 0) >= count
 		"resource_cumulative":
-			var res: String = cond.get("resource", "")
+			var res: String = cond.get("resource_id", "")
 			var amount: float = float(cond.get("amount", 0))
 			return state.cumulative_resources_earned.get(res, 0.0) >= amount
 		"shipment_completed":
@@ -203,6 +226,20 @@ func _check_condition(state: GameState, def: Dictionary) -> bool:
 			return state.amounts.get("boredom", 0.0) >= value
 		"research_completed_any":
 			return not state.completed_research.is_empty()
+		"research_completed":
+			return state.completed_research.has(cond.get("research_id", ""))
+		"persistent_project_completed_any":
+			if _career != null:
+				return _career.completed_projects.size() > 0
+			return false
+		"ideology_rank_any":
+			var target_rank: int = int(cond.get("rank", 0))
+			# Check career max ideology ranks (ideology system not yet implemented in GameState)
+			if _career != null:
+				for axis: String in ["nationalist", "humanist", "rationalist"]:
+					if _career.max_ideology_ranks.get(axis, 0) >= target_rank:
+						return true
+			return false
 	return false
 
 
@@ -213,6 +250,11 @@ func _complete_event(state: GameState, inst: Dictionary, choice_id: String) -> v
 	var def: Dictionary = _def_map.get(inst.id, {})
 	if def.get("category", "") == "story":
 		state.highest_completed_story_quest = inst.id
+	# Auto-completing events (no choices) are immediately marked seen so
+	# systems that gate on seen_event_ids (e.g. research visible_when) activate at once.
+	if (def.get("choices", []) as Array).is_empty():
+		if not state.seen_event_ids.has(inst.id):
+			state.seen_event_ids.append(inst.id)
 	for effect in def.get("unlocks", []):
 		_apply_unlock(state, effect)
 	event_completed.emit(inst.id)
@@ -221,7 +263,7 @@ func _complete_event(state: GameState, inst: Dictionary, choice_id: String) -> v
 func _apply_unlock(state: GameState, effect: Dictionary) -> void:
 	match effect.get("type", ""):
 		"enable_building":
-			var bname: String = effect.get("building", "")
+			var bname: String = effect.get("building_id", "")
 			if bname and not state.unlocked_buildings.has(bname):
 				state.unlocked_buildings.append(bname)
 		"enable_nav_panel":
@@ -229,7 +271,7 @@ func _apply_unlock(state: GameState, effect: Dictionary) -> void:
 			if panel and not state.unlocked_nav_panels.has(panel):
 				state.unlocked_nav_panels.append(panel)
 		"enable_project":
-			var proj: String = effect.get("project", "")
+			var proj: String = effect.get("project_id", "")
 			print("[EventManager] Unlock: enable_project " + proj)
 			if proj and not state.enabled_projects.has(proj):
 				state.enabled_projects.append(proj)

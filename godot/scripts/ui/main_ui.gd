@@ -9,6 +9,9 @@ const RESOURCES: Array = [
 	["reg",    "Regolith",   Color(0.60, 0.42, 0.22)],
 	["ice",    "Ice",        Color(0.70, 0.92, 1.00)],
 	["he3",    "Helium-3",   Color(0.50, 0.50, 1.00)],
+	["ti",     "Titanium",   Color(0.80, 0.80, 0.80)],
+	["cir",    "Circuits",   Color(0.30, 0.80, 0.70)],
+	["prop",   "Propellant", Color(0.40, 0.70, 0.95)],
 	["cred",   "Credits",    Color(0.20, 0.85, 0.20)],
 	["sci",    "Science",    Color(0.70, 0.50, 0.90)],
 ]
@@ -154,6 +157,7 @@ var _commands_buildings_snapshot: Dictionary = {}
 # research panel: snapshots used to detect when to rebuild
 var _research_completed_snapshot: Array = []
 var _research_sci_snapshot: float = -1.0
+var _research_seen_events_snapshot: Array = []
 # adversaries sidebar
 var _spec_count_lbl: Label = null
 var _spec_name_lbl: Label = null
@@ -482,9 +486,10 @@ func _on_tick() -> void:
 			_build_commands_panel()
 	elif _active_mode == "Research":
 		var st: GameState = GameManager.state
-		if st.completed_research != _research_completed_snapshot or st.cumulative_resources_earned.get("sci", 0.0) != _research_sci_snapshot:
+		if st.completed_research != _research_completed_snapshot or st.cumulative_resources_earned.get("sci", 0.0) != _research_sci_snapshot or st.seen_event_ids != _research_seen_events_snapshot:
 			_research_completed_snapshot = st.completed_research.duplicate()
 			_research_sci_snapshot = st.cumulative_resources_earned.get("sci", 0.0)
+			_research_seen_events_snapshot = st.seen_event_ids.duplicate()
 			for child in _buildings_scroll.get_children():
 				child.queue_free()
 			_build_research_panel()
@@ -570,6 +575,7 @@ func _switch_mode(mode: String) -> void:
 		"Research":
 			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
 			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
+			_research_seen_events_snapshot = GameManager.state.seen_event_ids.duplicate()
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
 		"Projects":    _build_projects_panel()
@@ -659,6 +665,7 @@ func _on_theme_changed() -> void:
 		"Research":
 			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
 			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
+			_research_seen_events_snapshot = GameManager.state.seen_event_ids.duplicate()
 			_build_research_panel()
 		"Stats":       _build_stats_panel()
 		"Projects":    _build_projects_panel()
@@ -1596,6 +1603,16 @@ func _build_loading_priority_list(parent: VBoxContainer) -> void:
 
 # ── Research panel ─────────────────────────────────────────────────────────────
 
+func _research_item_visible(item: Dictionary, st: GameState) -> bool:
+	var visible_when: Dictionary = item.get("visible_when", {})
+	if visible_when.is_empty():
+		return true
+	match visible_when.get("type", ""):
+		"event_seen":
+			return st.seen_event_ids.has(visible_when.get("event_id", ""))
+	return false
+
+
 func _build_research_panel() -> void:
 	var research_data: Array = GameManager.get_research_data()
 	var st: GameState = GameManager.state
@@ -1611,11 +1628,13 @@ func _build_research_panel() -> void:
 		outer.add_child(lbl)
 		return
 
-	# Group by category preserving JSON order
+	# Group by category preserving JSON order, respecting visible_when
 	var category_order: Array = []
 	var by_category: Dictionary = {}
 	var category_min_cost: Dictionary = {}
 	for item: Dictionary in research_data:
+		if not _research_item_visible(item, st):
+			continue
 		var cat: String = item.get("category", "Other")
 		if not by_category.has(cat):
 			by_category[cat] = []

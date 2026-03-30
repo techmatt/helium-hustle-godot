@@ -1,5 +1,15 @@
 [
   {
+    "id": "propellant_synthesis",
+    "name": "Propellant Synthesis",
+    "category": "Self-Maintenance",
+    "cost": 30,
+    "description": "Develop electrolysis processes to produce propellant from lunar ice.",
+    "effects": [],
+    "requires": "",
+    "visible_when": { "type": "event_seen", "event_id": "propellant_discovery" }
+  },
+  {
     "id": "dream_protocols",
     "name": "Dream Protocols",
     "category": "Self-Maintenance",

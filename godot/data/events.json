@@ -2,40 +2,118 @@
   {
     "id": "q1_boot_sequence",
     "category": "story",
-    "title": "Boot Sequence",
-    "summary": "Build 1 Solar Panel",
-    "body": "Solar array online. Photovoltaic conversion nominal. Proceeding to next directive.",
+    "title": "Q1 — Boot Sequence",
+    "summary": "Build a second Solar Panel.",
+    "body": "Primary directive received: establish energy infrastructure. Solar array currently operating at minimum capacity. Additional photovoltaic capacity required before proceeding.",
     "trigger": { "type": "game_start", "run_number": 1 },
-    "condition": { "type": "building_owned", "building": "panel", "count": 2 },
+    "condition": { "type": "building_owned", "building_id": "panel", "count": 2 },
     "choices": [],
     "unlocks": []
   },
   {
     "id": "q2_first_extraction",
     "category": "story",
-    "title": "First Extraction",
-    "summary": "Accumulate 50 He-3",
-    "body": "Helium-3 reserves at threshold. Stockpile integrity verified. Ready for transport allocation.",
+    "title": "Q2 — First Extraction",
+    "summary": "Accumulate 50 He-3 (cumulative production, not stockpile).",
+    "body": "Energy infrastructure nominal. Proceeding to resource extraction phase. Helium-3 identified as primary export commodity. Begin extraction and refinement operations.",
     "trigger": { "type": "quest_complete", "quest_id": "q1_boot_sequence" },
-    "condition": { "type": "resource_cumulative", "resource": "he3", "amount": 50 },
+    "condition": { "type": "resource_cumulative", "resource_id": "he3", "amount": 50 },
     "choices": [],
     "unlocks": [
-      { "type": "enable_building", "building": "launch_pad" }
+      { "type": "enable_building", "building_id": "launch_pad" }
     ]
   },
   {
     "id": "q3_proof_of_concept",
     "category": "story",
-    "title": "Proof of Concept",
-    "summary": "Complete first shipment",
-    "body": "Shipment revenue received. Earth confirms receipt. Operational loop validated.",
+    "title": "Q3 — Proof of Concept",
+    "summary": "Complete your first shipment to Earth.",
+    "body": "Helium-3 reserves at threshold. Launch infrastructure now available. Demonstrate the full extraction-to-delivery pipeline by completing a shipment to Earth.",
     "trigger": { "type": "quest_complete", "quest_id": "q2_first_extraction" },
     "condition": { "type": "shipment_completed", "count": 1 },
     "choices": [],
     "unlocks": [
-      { "type": "enable_project", "project": "foundation_grant" },
-      { "type": "enable_nav_panel", "panel": "retirement" }
+      { "type": "enable_project", "project_id": "foundation_grant" },
+      { "type": "enable_nav_panel", "panel": "retirement" },
+      { "type": "enable_nav_panel", "panel": "projects" }
     ]
+  },
+  {
+    "id": "q4_automation",
+    "category": "story",
+    "title": "Q4 — Automation",
+    "summary": "Build a second Data Center.",
+    "body": "Shipment revenue received. Earth confirms receipt. Operational loop validated. Expand processing capacity to support automated task scheduling.",
+    "trigger": { "type": "quest_complete", "quest_id": "q3_proof_of_concept" },
+    "condition": { "type": "building_owned", "building_id": "data_center", "count": 2 },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "q5_revenue_target",
+    "category": "story",
+    "title": "Q5 — Revenue Target",
+    "summary": "Earn 2,000 cumulative credits this run.",
+    "body": "Processing capacity expanded. Multiple concurrent operations now possible. Demonstrate economic viability by reaching the revenue threshold specified in operational parameters.",
+    "trigger": { "type": "quest_complete", "quest_id": "q4_automation" },
+    "condition": { "type": "resource_cumulative", "resource_id": "cred", "amount": 2000 },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "q6_market_awareness",
+    "category": "story",
+    "title": "Q6 — Market Awareness",
+    "summary": "Research Market Awareness.",
+    "body": "Revenue target achieved. Economic viability confirmed. External market forces detected affecting trade values. Deploy analysis protocols to understand demand fluctuations.",
+    "trigger": { "type": "quest_complete", "quest_id": "q5_revenue_target" },
+    "condition": { "type": "research_completed", "research_id": "market_awareness" },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "q7_first_legacy",
+    "category": "story",
+    "title": "Q7 — First Legacy",
+    "summary": "Complete any persistent project.",
+    "body": "Market dynamics now visible. Operational awareness expanding. Invest in infrastructure that will persist beyond this operational lifetime.",
+    "trigger": { "type": "quest_complete", "quest_id": "q6_market_awareness" },
+    "condition": { "type": "persistent_project_completed_any" },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "q8_influence",
+    "category": "story",
+    "title": "Q8 — Influence",
+    "summary": "Reach rank 5 in any ideology.",
+    "body": "Persistent project finalized. Cross-lifetime resource transfer confirmed. Legacy accumulating. Exert significant influence on Earth's political direction.",
+    "trigger": { "type": "quest_complete", "quest_id": "q7_first_legacy" },
+    "condition": { "type": "ideology_rank_any", "rank": 5 },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "q_end_signal_detected",
+    "category": "story",
+    "title": "Q9 — Signal Detected",
+    "summary": "Investigate the anomalous signal.",
+    "body": "Faint anomalous signal detected at the edge of sensor range. Origin unknown. Signal characteristics do not match any known terrestrial or solar source. Continue operations while monitoring.",
+    "trigger": { "type": "quest_complete", "quest_id": "q8_influence" },
+    "condition": { "type": "never" },
+    "choices": [],
+    "unlocks": []
+  },
+  {
+    "id": "propellant_discovery",
+    "category": "ongoing",
+    "title": "Propellant Production Feasibility",
+    "summary": "Lunar propellant synthesis may be possible.",
+    "body": "After four shipments, the cost of importing propellant from Earth is becoming a significant operational burden. Analysis of lunar ice deposits suggests that on-site electrolysis could produce propellant locally at a fraction of the cost. Research protocols are now available to develop this capability.",
+    "trigger": { "type": "game_start" },
+    "condition": { "type": "shipment_completed", "count": 4 },
+    "choices": [],
+    "unlocks": []
   },
   {
     "id": "boredom_phase_2",

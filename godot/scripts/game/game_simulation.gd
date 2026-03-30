@@ -197,6 +197,7 @@ func execute_programs(state: GameState) -> void:
 			var success: bool = _can_afford_command(state, entry.command_shortname)
 			if success:
 				_apply_command(state, entry.command_shortname, prog_delta)
+				entry.failed_this_cycle = false
 			else:
 				entry.failed_this_cycle = true
 			entry.current_progress += 1
@@ -212,7 +213,6 @@ func execute_programs(state: GameState) -> void:
 					prog.instruction_pointer = 0
 					for e: GameState.ProgramEntry in prog.commands:
 						e.current_progress = 0
-						e.failed_this_cycle = false
 					pending_program_events.append({
 						"type": "cycle_reset",
 						"program_index": prog_idx,

@@ -37,8 +37,14 @@ func refresh() -> void:
 		_bg_style.bg_color = Color(0.40, 0.20, 0.20, 0.35) if GameSettings.is_dark_mode else Color(0.99, 0.94, 0.94)
 
 
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_on_buy_pressed()
+
+
 func _build_ui() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	_bg_style = StyleBoxFlat.new()
 	_bg_style.corner_radius_top_left     = 4
