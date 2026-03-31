@@ -550,13 +550,20 @@ func _can_afford_command(state: GameState, short_name: String) -> bool:
 	if not _commands_data.has(short_name):
 		return false
 	var cmd = _commands_data[short_name]
-	# building_owned requires: fails if building exists but is disabled (active == 0)
 	var req: Dictionary = cmd.get("requires", {})
-	if req.get("type", "") == "building_owned":
-		var bname: String = req.get("value", "")
-		var active: int = state.buildings_active.get(bname, state.buildings_owned.get(bname, 0))
-		if active <= 0:
-			return false
+	match req.get("type", ""):
+		"building_owned":
+			# Fails if building exists but is disabled (buildings_active == 0)
+			var bname: String = req.get("value", "")
+			var active: int = state.buildings_active.get(bname, state.buildings_owned.get(bname, 0))
+			if active <= 0:
+				return false
+		"building":
+			if state.buildings_owned.get(req.get("value", ""), 0) <= 0:
+				return false
+		"research":
+			if not state.completed_research.has(req.get("value", "")):
+				return false
 	var costs: Dictionary = _get_effective_costs(state, cmd)
 	for res in costs:
 		if state.amounts.get(res, 0.0) < float(costs[res]):
@@ -822,7 +829,11 @@ func _get_overclock_mult(state: GameState, target: String) -> float:
 	for oc: Dictionary in state.overclock_states:
 		if oc.get("target", "") == target:
 			mult *= 1.0 + float(oc.get("bonus", 0.0))
-	return minf(mult, 3.0)  # cap at 3x (+200%)
+	return minf(mult, 3.0)  # hard cap at 3x (+200%)
+	# Note: research.json defines an "overclock_cap" effect type (used by overclock_boost)
+	# that would raise this cap to 2.0 (200%). That effect is not yet consumed here —
+	# the cap is hardcoded. Any test for overclock_boost will vacuously pass until this
+	# is implemented.
 
 
 func _get_bdef(short_name: String) -> Variant:

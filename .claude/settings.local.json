@@ -23,7 +23,9 @@
       "Bash(godot --headless --path godot/ --script tests/step2_autoload.gd)",
       "Bash(godot --headless --path godot/ --script tests/step3_direct.gd)",
       "Bash(godot --headless --path godot/ --script tests/run_tests.gd)",
-      "Bash(godot --headless --path godot/)"
+      "Bash(godot --headless --path godot/)",
+      "Bash(godot --headless --path godot/ --script tests/_trace_boredom.gd)",
+      "Bash(godot --headless --path godot/ --script tests/_debug_research.gd)"
     ]
   }
 }
