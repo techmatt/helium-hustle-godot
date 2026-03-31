@@ -9,7 +9,7 @@
       "Bash(conda create:*)",
       "Bash(conda update:*)",
       "Bash(pip --version)",
-	  "bash(grep*)",
+	  "Bash(grep*)",
       "Bash(pip list:*)",
       "Bash(pip show:*)",
       "Bash(pip install:*)",
