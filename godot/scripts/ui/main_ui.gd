@@ -1,190 +1,27 @@
 extends Control
 
-# [short_name, display_name, icon_color]
-const RESOURCES: Array = [
-	["boredom","Boredom",    Color(0.55, 0.55, 0.55)],
-	["eng",    "Energy",     Color(1.00, 0.85, 0.00)],
-	["proc",   "Processors", Color(0.80, 0.20, 0.80)],
-	["land",   "Land",       Color(0.40, 0.70, 0.30)],
-	["reg",    "Regolith",   Color(0.60, 0.42, 0.22)],
-	["ice",    "Ice",        Color(0.70, 0.92, 1.00)],
-	["he3",    "Helium-3",   Color(0.50, 0.50, 1.00)],
-	["ti",     "Titanium",   Color(0.80, 0.80, 0.80)],
-	["cir",    "Circuits",   Color(0.30, 0.80, 0.70)],
-	["prop",   "Propellant", Color(0.40, 0.70, 0.95)],
-	["cred",   "Credits",    Color(0.20, 0.85, 0.20)],
-	["sci",    "Science",    Color(0.70, 0.50, 0.90)],
-]
-
-# [label, icon_color]
-const NAV_ITEMS: Array = [
-	["Buildings",   Color(0.30, 0.65, 0.90)],
-	["Commands",    Color(0.90, 0.60, 0.10)],
-	["Launch Pads", Color(0.95, 0.55, 0.10)],
-	["Research",    Color(0.55, 0.35, 0.90)],
-	["Projects",    Color(0.20, 0.75, 0.50)],
-	["Ideologies",  Color(0.90, 0.30, 0.30)],
-	["Adversaries", Color(0.80, 0.20, 0.20)],
-	["Stats",       Color(0.40, 0.80, 0.80)],
-	["Achievements",Color(0.95, 0.80, 0.10)],
-	["Retire",      Color(0.60, 0.30, 0.80)],
-	["Options",     Color(0.60, 0.60, 0.65)],
-	["Exit",        Color(0.50, 0.15, 0.15)],
-]
-
-# Maps event unlock panel id → nav button label; these buttons start hidden
-const HIDDEN_NAV_PANELS: Dictionary = {
-	"retirement":  "Retire",
-	"projects":    "Projects",
-	"ideologies":  "Ideologies",
-}
-
-const SPEEDS: Array = ["||", "1x", "3x", "10x", "50x", "200x"]
-const CATEGORY_ORDER: Array = ["Mining", "Power", "Storage", "Processors"]
-
-const CMD_GROUPS: Dictionary = {
-	"idle":               "Basic",
-	"cloud_compute":      "Basic",
-	"buy_regolith":       "Trade",
-	"buy_ice":            "Trade",
-	"buy_titanium":       "Trade",
-	"buy_propellant":     "Trade",
-	"load_pads":          "Operations",
-	"launch_pads":        "Operations",
-	"dream":              "Operations",
-	"overclock_mining":   "Advanced",
-	"overclock_factories":"Advanced",
-	"promote_he3":        "Advanced",
-	"promote_ti":         "Advanced",
-	"promote_cir":        "Advanced",
-	"promote_prop":       "Advanced",
-	"disrupt_spec":       "Advanced",
-	"fund_nationalist":   "Advanced",
-	"fund_humanist":      "Advanced",
-	"fund_rationalist":   "Advanced",
-	"buy_power":          "Advanced",
-}
-const CMD_GROUP_ORDER: Array = ["Basic", "Trade", "Operations", "Advanced"]
-
-const RESOURCE_META: Dictionary = {
-	"eng":    ["Energy",     Color(1.00, 0.85, 0.00)],
-	"reg":    ["Regolith",   Color(0.60, 0.42, 0.22)],
-	"ice":    ["Ice",        Color(0.70, 0.92, 1.00)],
-	"he3":    ["Helium-3",   Color(0.50, 0.50, 1.00)],
-	"cred":   ["Credits",    Color(0.20, 0.85, 0.20)],
-	"ti":     ["Titanium",   Color(0.80, 0.80, 0.80)],
-	"prop":   ["Propellant", Color(0.40, 0.70, 0.95)],
-	"sci":    ["Science",    Color(0.70, 0.50, 0.90)],
-	"cir":    ["Circuits",   Color(0.30, 0.80, 0.70)],
-	"boredom":["Boredom",    Color(0.55, 0.55, 0.55)],
-	"land":   ["Land",       Color(0.40, 0.70, 0.30)],
-}
-
-const PALETTE: Dictionary = {
-	"dark": {
-		"text_positive":   Color(0.498, 0.749, 0.498),
-		"text_negative":   Color(0.749, 0.498, 0.498),
-		"text_zero":       Color(0.502, 0.502, 0.502),
-		"text_muted":      Color(0.60,  0.60,  0.60 ),
-		"text_dim":        Color(0.50,  0.50,  0.50 ),
-		"text_locked":     Color(0.45,  0.45,  0.45 ),
-		"text_count":      Color(0.75,  0.75,  0.75 ),
-		"text_requires":   Color(0.65,  0.45,  0.45 ),
-		"bg_nav_active":   Color(0.08,  0.22,  0.08 ),
-		"bg_tab_selected": Color(0.05,  0.30,  0.05 ),
-		"bg_tab_has_cmds": Color(0.08,  0.16,  0.08 ),
-		"bg_tab_empty":    Color(0.10,  0.10,  0.10 ),
-		"bg_card_locked":  Color(0.07,  0.07,  0.09 ),
-		"bg_can_afford":   Color(0.20,  0.40,  0.20,  0.35),
-		"bg_cant_afford":  Color(0.40,  0.20,  0.20,  0.35),
-		"bg_cmd_active":   Color(0.10,  0.30,  0.10,  0.90),
-		"bg_cmd_failed":   Color(0.30,  0.10,  0.10,  0.90),
-		"fill_normal":     Color(0.25,  0.55,  0.25 ),
-		"fill_active":     Color(0.20,  0.75,  0.20 ),
-		"fill_failed":     Color(0.70,  0.20,  0.20 ),
-		"bg_drag_preview": Color(0.05,  0.28,  0.05,  0.92),
-		"grip":            Color(0.50,  0.50,  0.50 ),
-	},
-	"light": {
-		"text_positive":   Color(0.180, 0.490, 0.196),  # #2E7D32
-		"text_negative":   Color(0.776, 0.157, 0.157),  # #C62828
-		"text_zero":       Color(0.400, 0.400, 0.400),  # #666666
-		"text_muted":      Color(0.400, 0.400, 0.400),  # #666666
-		"text_dim":        Color(0.400, 0.400, 0.400),  # #666666
-		"text_locked":     Color(0.620, 0.620, 0.620),  # #9E9E9E
-		"text_count":      Color(0.400, 0.400, 0.400),  # #666666
-		"text_requires":   Color(0.580, 0.290, 0.000),  # muted orange
-		"bg_nav_active":   Color(0.298, 0.686, 0.314),  # #4CAF50
-		"bg_tab_selected": Color(0.298, 0.686, 0.314),  # #4CAF50
-		"bg_tab_has_cmds": Color(0.878, 0.961, 0.886),  # light green tint
-		"bg_tab_empty":    Color(1.000, 1.000, 1.000),  # #FFFFFF
-		"bg_card_locked":  Color(0.961, 0.961, 0.961),  # #F5F5F5
-		"bg_can_afford":   Color(0.000, 0.000, 0.000, 0.000),  # transparent
-		"bg_cant_afford":  Color(0.000, 0.000, 0.000, 0.000),  # transparent
-		"bg_cmd_active":   Color(0.878, 0.961, 0.886, 0.90),
-		"bg_cmd_failed":   Color(0.988, 0.878, 0.878, 0.90),
-		"fill_normal":     Color(0.298, 0.686, 0.314),  # #4CAF50
-		"fill_active":     Color(0.180, 0.490, 0.196),  # #2E7D32
-		"fill_failed":     Color(0.776, 0.157, 0.157),  # #C62828
-		"bg_drag_preview": Color(0.298, 0.686, 0.314, 0.92),
-		"grip":            Color(0.620, 0.620, 0.620),  # #9E9E9E
-	},
-}
-
 @onready var _center_header: Label = $MainVBox/ContentHBox/CenterPanel/CenterMargin/CenterVBox/LblBuildingsHeader
 @onready var _buildings_scroll: ScrollContainer = $MainVBox/ContentHBox/CenterPanel/CenterMargin/CenterVBox/BuildingsScroll
 @onready var _center_panel: PanelContainer = $MainVBox/ContentHBox/CenterPanel
 @onready var _right_vbox: VBoxContainer = $MainVBox/ContentHBox/RightPanel/RightMargin/RightVBox
 @onready var _status_bar_margin: MarginContainer = $MainVBox/StatusBar/StatusMargin
 
-var _nav_buttons: Dictionary = {}    # label → Button
-var _active_mode: String = "Buildings"
-
-# {short_name: {val: Label}}
-var _resource_labels: Dictionary = {}
-# all active BuildingCard nodes — refreshed each tick
-var _card_nodes: Array = []
-var _buildings_data: Array = []
-# launch pad panel nodes
-var _launch_pad_cards: Array = []
-var _launch_history_vbox: VBoxContainer = null
-var _demand_body: VBoxContainer = null      # demand section container
-var _demand_sparklines: Dictionary = {}     # resource → DemandSparkline
-var _demand_value_labels: Dictionary = {}   # resource → Label (post-MA value)
-var _demand_tier_labels: Dictionary = {}    # resource → Label (pre-MA tier)
-var _demand_has_ma: bool = false            # snapshot of market_awareness research state
-# Speculator Intelligence section nodes
-var _spec_intel_body: VBoxContainer = null
-var _spec_intel_countdown_lbl: Label = null
-var _spec_intel_size_lbl: Label = null
-var _spec_intel_prob_labels: Dictionary = {}     # resource → Label
-var _spec_intel_bar_fill_rects: Dictionary = {}  # resource → ColorRect
-var _spec_intel_has_sa: bool = false             # snapshot of speculator_analysis research state
-# commands panel: snapshot of buildings_owned used to detect when to rebuild
-var _commands_buildings_snapshot: Dictionary = {}
-# research panel: snapshots used to detect when to rebuild
-var _research_completed_snapshot: Array = []
-var _research_sci_snapshot: float = -1.0
-var _research_seen_events_snapshot: Array = []
-var _research_show_completed: bool = true
-# adversaries sidebar
-var _spec_count_lbl: Label = null
-var _spec_name_lbl: Label = null
-# ideology sidebar
-var _ideology_section: VBoxContainer = null
-var _ideology_axis_rows: Dictionary = {}  # axis → {rank_lbl, progress_lbl, rate_lbl}
-var _ideology_prev_values: Dictionary = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
-var _ideology_rate_ema: Dictionary = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
-# ideology center panel
-var _ideology_panel_content: VBoxContainer = null
-const IDEOLOGY_REFRESH_INTERVAL: float = 0.25
-var _ideology_refresh_accum: float = 0.0
-
 var _font_rajdhani_bold: FontFile
 var _font_exo2_regular: FontFile
 var _font_exo2_semibold: FontFile
 
-# ── Status bar nodes (built in code, replacing scene label) ───────────────────
+var _active_mode: String = "Buildings"
+var _current_center_panel: Node = null
+var _stats_panel: StatsPanel = null
+
+var _left_sidebar: LeftSidebar = null
+var _program_panel: ProgramPanel = null
+
+# Overlays (parented to main scene)
+var _event_modal: EventModal = null
+var _retirement_summary: RetirementSummary = null
+
+# Status bar nodes
 var _uptime_label: Label = null
 var _boredom_bar: ProgressBar = null
 var _boredom_bar_lbl: Label = null
@@ -194,85 +31,155 @@ var _energy_bar: ProgressBar = null
 var _energy_bar_lbl: Label = null
 var _energy_fill: StyleBoxFlat = null
 var _energy_rate_lbl: Label = null
-# 50-tick boredom rolling average
+
 const BOREDOM_HISTORY_SIZE: int = 50
 var _boredom_history: Array = []
 var _prev_boredom: float = 0.0
 
-# ── Program panel state ─────────────────────────────────────────────────────────
-var _event_panel: EventPanel = null
-var _event_modal: EventModal = null
-var _selected_program: int = 0
-var _tab_buttons: Array = []          # Array[Button], 5 elements
-var _proc_label: Label
-var _proc_minus_btn: Button
-var _proc_plus_btn: Button
-var _cmd_list_vbox: VBoxContainer
-var _cmd_row_nodes: Array = []        # Array[CommandRow]
-const PROG_REFRESH_INTERVAL: float = 0.1
-var _prog_refresh_accum: float = 0.0
-var _command_row_scene: PackedScene
-
-# ── Stats panel ─────────────────────────────────────────────────────────────────
-var _buy_land_card: BuyLandCard = null
-var _stats_panel: StatsPanel = null
 const STATS_REFRESH_INTERVAL: float = 0.25
 var _stats_refresh_accum: float = 0.0
 
-# ── Projects panel ───────────────────────────────────────────────────────────────
-var _project_panel: ProjectPanel = null
-
-# ── Retirement panel ─────────────────────────────────────────────────────────────
-var _retire_days_lbl: Label = null
-var _retire_credits_lbl: Label = null
-var _retire_shipments_lbl: Label = null
-var _retire_btn: Button = null
-var _retire_confirm_pending: bool = false
-
-# ── Retirement summary modal ──────────────────────────────────────────────────────
-var _retirement_summary: RetirementSummary = null
-
-
-func _p(key: String) -> Color:
-	return PALETTE["dark" if GameSettings.is_dark_mode else "light"][key]
-
 
 func _ready() -> void:
+	_load_fonts()
 	_setup_theme()
 	_setup_panel_headers()
-	_build_left_sidebar()
-	_update_nav_highlight("Buildings")
-	_build_program_panel()
-	_select_program(0)
-	GameManager.tick_completed.connect(_on_tick)
-	GameSettings.theme_changed.connect(_on_theme_changed)
-	_build_buildings_panel()
-	_setup_status_bar()
-	_update_resource_display()
+
+	var nav_vbox: VBoxContainer = $MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavMargin/NavVBox
+	_left_sidebar = LeftSidebar.new()
+	add_child(_left_sidebar)
+	_left_sidebar.setup(nav_vbox, _font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+	_left_sidebar.mode_requested.connect(_switch_mode)
+	_left_sidebar.update_nav_highlight("Buildings")
+
+	_program_panel = ProgramPanel.new()
+	add_child(_program_panel)
+	_program_panel.setup(_right_vbox, _font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+	_program_panel.program_state_changed.connect(func(): _left_sidebar.update_resource_display())
+	_program_panel.event_row_clicked.connect(func(eid: String): _event_modal.open(eid))
+
 	_build_event_modal()
 	_build_retirement_summary()
+	_setup_status_bar()
+	_switch_mode("Buildings")
+	_update_resource_display()
+
+	GameManager.tick_completed.connect(_on_tick)
+	GameSettings.theme_changed.connect(_on_theme_changed)
 	GameManager.event_manager.event_triggered.connect(_on_event_triggered)
 	GameManager.retirement_started.connect(_on_retirement_started)
 
 
 func _process(delta: float) -> void:
-	_prog_refresh_accum += delta
-	if _prog_refresh_accum >= PROG_REFRESH_INTERVAL:
-		_prog_refresh_accum = 0.0
-		_refresh_command_rows()
+	_program_panel.process_delta(delta)
 	if _active_mode == "Stats" and _stats_panel != null:
 		_stats_refresh_accum += delta
 		if _stats_refresh_accum >= STATS_REFRESH_INTERVAL:
 			_stats_refresh_accum = 0.0
 			_stats_panel.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)
-	if _active_mode == "Ideologies" and _ideology_panel_content != null:
-		_ideology_refresh_accum += delta
-		if _ideology_refresh_accum >= IDEOLOGY_REFRESH_INTERVAL:
-			_ideology_refresh_accum = 0.0
-			_refresh_ideology_panel()
 
 
-# ── Theme & typography ─────────────────────────────────────────────────────────
+# ── Tick ──────────────────────────────────────────────────────────────────────
+
+func _on_tick() -> void:
+	_left_sidebar.update_nav_visibility()
+	_update_resource_display()
+	_left_sidebar.update_adversaries_display()
+	_left_sidebar.update_ideology_display()
+	if _current_center_panel != null and _current_center_panel.has_method("on_tick"):
+		_current_center_panel.on_tick()
+	_program_panel.on_tick()
+	_update_status_bar()
+
+
+func _update_resource_display() -> void:
+	_left_sidebar.update_resource_display()
+
+
+# ── Mode switching ────────────────────────────────────────────────────────────
+
+func _switch_mode(mode: String) -> void:
+	_active_mode = mode
+	_center_header.text = mode
+	for child in _buildings_scroll.get_children():
+		child.queue_free()
+	_current_center_panel = null
+	_stats_panel = null
+	_stats_refresh_accum = 0.0
+	_left_sidebar.update_nav_highlight(mode)
+
+	match mode:
+		"Buildings":
+			var p := BuildingsPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		"Commands":
+			var p := CommandsPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			p.command_add_requested.connect(_on_command_add_requested)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		"Launch Pads":
+			var p := LaunchPadsPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		"Research":
+			var p := ResearchPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		"Stats":
+			var p := StatsPanel.new()
+			p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_stats_panel = p
+			p.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)
+			_current_center_panel = p
+
+		"Projects":
+			var p := ProjectPanel.new()
+			p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		"Ideologies":
+			var p := IdeologyPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		"Retirement":
+			var p := RetirementCenterPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		"Options":
+			var p := OptionsPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
+		_:
+			var lbl := Label.new()
+			lbl.text = mode + " — coming soon"
+			_buildings_scroll.add_child(lbl)
+
+
+func _on_command_add_requested(short_name: String) -> void:
+	_program_panel.add_command(short_name)
+	_left_sidebar.update_resource_display()
+
+
+# ── Theme ─────────────────────────────────────────────────────────────────────
 
 func _load_fonts() -> void:
 	_font_rajdhani_bold = load("res://assets/fonts/Rajdhani-Bold.ttf")
@@ -281,22 +188,20 @@ func _load_fonts() -> void:
 
 
 func _setup_theme() -> void:
-	_load_fonts()
 	var t := Theme.new()
 	t.default_font = _font_exo2_regular
 	t.default_font_size = 13
 	if not GameSettings.is_dark_mode:
-		var text_dark := Color(0.102, 0.102, 0.102)  # #1A1A1A
+		var text_dark := Color(0.102, 0.102, 0.102)
 		t.set_color("font_color", "Label", text_dark)
 		t.set_color("font_color", "Button", text_dark)
 		var panel_bg := StyleBoxFlat.new()
-		panel_bg.bg_color = Color(0.910, 0.910, 0.910)  # #E8E8E8
+		panel_bg.bg_color = Color(0.910, 0.910, 0.910)
 		t.set_stylebox("panel", "PanelContainer", panel_bg)
 	self.theme = t
-	# Center panel gets a slightly lighter background than the sidebars
 	if not GameSettings.is_dark_mode:
 		var center_style := StyleBoxFlat.new()
-		center_style.bg_color = Color(0.961, 0.961, 0.961)  # #F5F5F5
+		center_style.bg_color = Color(0.961, 0.961, 0.961)
 		_center_panel.add_theme_stylebox_override("panel", center_style)
 	else:
 		_center_panel.remove_theme_stylebox_override("panel")
@@ -307,7 +212,26 @@ func _setup_panel_headers() -> void:
 	_center_header.add_theme_font_size_override("font_size", 22)
 
 
-# ── Status bar ─────────────────────────────────────────────────────────────────
+func _on_theme_changed() -> void:
+	_setup_theme()
+	_left_sidebar.rebuild()
+	_left_sidebar.update_nav_highlight(_active_mode)
+	_program_panel.rebuild()
+	_boredom_bar = null
+	_boredom_bar_lbl = null
+	_boredom_fill = null
+	_boredom_rate_lbl = null
+	_energy_bar = null
+	_energy_bar_lbl = null
+	_energy_fill = null
+	_energy_rate_lbl = null
+	_uptime_label = null
+	_setup_status_bar()
+	_switch_mode(_active_mode)
+	_left_sidebar.update_resource_display()
+
+
+# ── Status bar ────────────────────────────────────────────────────────────────
 
 func _make_status_bar_bar(init_color: Color) -> Array:
 	var wrapper := Control.new()
@@ -331,7 +255,7 @@ func _make_status_bar_bar(init_color: Color) -> Array:
 	bar.add_theme_stylebox_override("fill", fill_style)
 
 	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
+	bg_style.bg_color = Color(0.816, 0.816, 0.816)
 	bg_style.corner_radius_top_left     = 3
 	bg_style.corner_radius_top_right    = 3
 	bg_style.corner_radius_bottom_left  = 3
@@ -366,7 +290,6 @@ func _setup_status_bar() -> void:
 	hbox.add_theme_constant_override("separation", 12)
 	_status_bar_margin.add_child(hbox)
 
-	# Day counter — fixed width, left-aligned
 	_uptime_label = Label.new()
 	_uptime_label.text = "Day 0"
 	_uptime_label.add_theme_font_override("font", _font_exo2_semibold)
@@ -376,7 +299,6 @@ func _setup_status_bar() -> void:
 
 	hbox.add_child(VSeparator.new())
 
-	# Boredom section
 	var boredom_hbox := HBoxContainer.new()
 	boredom_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	boredom_hbox.add_theme_constant_override("separation", 6)
@@ -388,7 +310,7 @@ func _setup_status_bar() -> void:
 	bd_lbl.add_theme_font_size_override("font_size", 13)
 	boredom_hbox.add_child(bd_lbl)
 
-	var bd := _make_status_bar_bar(Color(0.180, 0.490, 0.196))  # #2E7D32
+	var bd := _make_status_bar_bar(Color(0.180, 0.490, 0.196))
 	_boredom_bar    = bd[0]
 	_boredom_bar_lbl = bd[1]
 	_boredom_fill   = bd[2]
@@ -403,7 +325,6 @@ func _setup_status_bar() -> void:
 
 	hbox.add_child(VSeparator.new())
 
-	# Energy section
 	var energy_hbox := HBoxContainer.new()
 	energy_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	energy_hbox.add_theme_constant_override("separation", 6)
@@ -415,7 +336,7 @@ func _setup_status_bar() -> void:
 	en_lbl.add_theme_font_size_override("font_size", 13)
 	energy_hbox.add_child(en_lbl)
 
-	var en := _make_status_bar_bar(Color(0.082, 0.396, 0.753))  # #1565C0
+	var en := _make_status_bar_bar(Color(0.082, 0.396, 0.753))
 	_energy_bar     = en[0]
 	_energy_bar_lbl = en[1]
 	_energy_fill    = en[2]
@@ -435,10 +356,8 @@ func _update_status_bar() -> void:
 
 	var st: GameState = GameManager.state
 
-	# Day counter
 	_uptime_label.text = "Day %d" % st.current_day
 
-	# Boredom rolling average (50-tick circular buffer)
 	var current_boredom: float = st.amounts.get("boredom", 0.0)
 	var delta_boredom: float = current_boredom - _prev_boredom
 	_prev_boredom = current_boredom
@@ -458,2020 +377,37 @@ func _update_status_bar() -> void:
 	_boredom_bar.value = current_boredom
 	_boredom_bar_lbl.text = "%.1f / %.0f" % [current_boredom, boredom_max]
 
-	# Color ramp on boredom bar fill
 	var boredom_pct: float = current_boredom / boredom_max * 100.0
 	if boredom_pct < 25.0:
-		_boredom_fill.bg_color = Color(0.180, 0.490, 0.196)   # #2E7D32
+		_boredom_fill.bg_color = Color(0.180, 0.490, 0.196)
 	elif boredom_pct < 50.0:
-		_boredom_fill.bg_color = Color(0.976, 0.659, 0.145)   # #F9A825
+		_boredom_fill.bg_color = Color(0.976, 0.659, 0.145)
 	elif boredom_pct < 75.0:
-		_boredom_fill.bg_color = Color(0.902, 0.318, 0.0)     # #E65100
+		_boredom_fill.bg_color = Color(0.902, 0.318, 0.0)
 	else:
-		_boredom_fill.bg_color = Color(0.718, 0.110, 0.110)   # #B71C1C
+		_boredom_fill.bg_color = Color(0.718, 0.110, 0.110)
 
-	_boredom_rate_lbl.text = _fmt_sidebar_rate(boredom_rate)
+	_boredom_rate_lbl.text = _left_sidebar.fmt_sidebar_rate(boredom_rate)
 	if boredom_rate <= 0.005:
 		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
 	else:
 		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 
-	# Energy bar
 	var energy_amount: float = st.amounts.get("eng", 0.0)
 	var energy_cap: float = st.caps.get("eng", 100.0)
 	_energy_bar.max_value = energy_cap
 	_energy_bar.value = energy_amount
 	_energy_bar_lbl.text = "%d / %d" % [int(energy_amount), int(energy_cap)]
 
-	var rates: Dictionary = _compute_theoretical_rates()
-	var energy_rate: float = rates.get("eng", 0.0)
-	_energy_rate_lbl.text = _fmt_sidebar_rate(energy_rate)
+	var energy_rate: float = GameManager.last_deltas.get("eng", 0.0)
+	_energy_rate_lbl.text = _left_sidebar.fmt_sidebar_rate(energy_rate)
 	if energy_rate >= 0.0:
 		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
 	else:
 		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 
 
-# ── Tick handler ───────────────────────────────────────────────────────────────
-
-func _on_tick() -> void:
-	_update_nav_visibility()
-	_update_resource_display()
-	_update_adversaries_display()
-	_update_ideology_display()
-	_update_building_cards()
-	if _active_mode == "Launch Pads":
-		_refresh_launch_pads_panel()
-	elif _active_mode == "Commands":
-		var cur: Dictionary = GameManager.state.buildings_owned.duplicate()
-		if cur != _commands_buildings_snapshot:
-			_commands_buildings_snapshot = cur
-			for child in _buildings_scroll.get_children():
-				child.queue_free()
-			_build_commands_panel()
-	elif _active_mode == "Research":
-		var st: GameState = GameManager.state
-		if st.completed_research != _research_completed_snapshot or st.cumulative_resources_earned.get("sci", 0.0) != _research_sci_snapshot or st.seen_event_ids != _research_seen_events_snapshot:
-			_research_completed_snapshot = st.completed_research.duplicate()
-			_research_sci_snapshot = st.cumulative_resources_earned.get("sci", 0.0)
-			_research_seen_events_snapshot = st.seen_event_ids.duplicate()
-			for child in _buildings_scroll.get_children():
-				child.queue_free()
-			_build_research_panel()
-	elif _active_mode == "Retirement":
-		_refresh_retirement_panel()
-	_update_status_bar()
-	_update_processor_row()
-
-
-# ── Left sidebar ───────────────────────────────────────────────────────────────
-
-func _build_left_sidebar() -> void:
-	var nav_vbox: VBoxContainer = $MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavMargin/NavVBox
-
-	var title := Label.new()
-	title.text = "Helium Hustle"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_override("font", _font_rajdhani_bold)
-	title.add_theme_font_size_override("font_size", 24)
-	nav_vbox.add_child(title)
-
-	nav_vbox.add_child(HSeparator.new())
-	_build_nav_grid(nav_vbox)
-
-	nav_vbox.add_child(HSeparator.new())
-	_build_speed_section(nav_vbox)
-
-	nav_vbox.add_child(HSeparator.new())
-	_build_resources_section(nav_vbox)
-
-	nav_vbox.add_child(HSeparator.new())
-	_build_adversaries_section(nav_vbox)
-	_build_ideology_section(nav_vbox)
-
-
-func _build_nav_grid(parent: VBoxContainer) -> void:
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	parent.add_child(grid)
-
-	var unlocked_panels: Array = GameManager.state.unlocked_nav_panels
-	for item: Array in NAV_ITEMS:
-		var btn := _make_nav_button(item[0], item[1])
-		grid.add_child(btn)
-		_nav_buttons[item[0]] = btn
-		# Hide panels that must be unlocked via events
-		for panel_id: String in HIDDEN_NAV_PANELS:
-			if HIDDEN_NAV_PANELS[panel_id] == item[0]:
-				btn.visible = unlocked_panels.has(panel_id)
-				break
-
-
-func _switch_mode(mode: String) -> void:
-	_active_mode = mode
-	_center_header.text = mode
-	for child in _buildings_scroll.get_children():
-		child.queue_free()
-	_card_nodes.clear()
-	_launch_pad_cards.clear()
-	_launch_history_vbox = null
-	_demand_body = null
-	_demand_sparklines.clear()
-	_demand_value_labels.clear()
-	_demand_tier_labels.clear()
-	_demand_has_ma = false
-	_spec_intel_body = null
-	_spec_intel_countdown_lbl = null
-	_spec_intel_size_lbl = null
-	_spec_intel_prob_labels.clear()
-	_spec_intel_bar_fill_rects.clear()
-	_spec_intel_has_sa = false
-	_buy_land_card = null
-	_stats_panel = null
-	_project_panel = null
-	_ideology_panel_content = null
-	_retire_days_lbl = null
-	_retire_credits_lbl = null
-	_retire_shipments_lbl = null
-	_retire_btn = null
-	_retire_confirm_pending = false
-	_update_nav_highlight(mode)
-	match mode:
-		"Buildings":   _build_buildings_panel()
-		"Commands":
-			_commands_buildings_snapshot = GameManager.state.buildings_owned.duplicate()
-			_build_commands_panel()
-		"Launch Pads": _build_launch_pads_panel()
-		"Research":
-			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
-			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
-			_research_seen_events_snapshot = GameManager.state.seen_event_ids.duplicate()
-			_build_research_panel()
-		"Stats":       _build_stats_panel()
-		"Projects":    _build_projects_panel()
-		"Ideologies":  _build_ideology_panel()
-		"Retirement":  _build_retirement_panel()
-		"Options":     _build_options_panel()
-		_:
-			var lbl := Label.new()
-			lbl.text = mode + " — coming soon"
-			_buildings_scroll.add_child(lbl)
-
-
-func _make_nav_inactive_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(0.941, 0.941, 0.941)  # #F0F0F0
-	s.corner_radius_top_left     = 4
-	s.corner_radius_top_right    = 4
-	s.corner_radius_bottom_left  = 4
-	s.corner_radius_bottom_right = 4
-	s.border_width_left   = 1
-	s.border_width_right  = 1
-	s.border_width_top    = 1
-	s.border_width_bottom = 1
-	s.border_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
-	return s
-
-
-func _update_nav_highlight(mode: String) -> void:
-	var active_style := StyleBoxFlat.new()
-	active_style.bg_color = _p("bg_nav_active")
-	active_style.corner_radius_top_left     = 4
-	active_style.corner_radius_top_right    = 4
-	active_style.corner_radius_bottom_left  = 4
-	active_style.corner_radius_bottom_right = 4
-	for label: String in _nav_buttons:
-		var btn: Button = _nav_buttons[label]
-		if label == mode:
-			btn.add_theme_stylebox_override("normal", active_style)
-			if not GameSettings.is_dark_mode:
-				btn.add_theme_color_override("font_color", Color.WHITE)
-		else:
-			if not GameSettings.is_dark_mode:
-				btn.add_theme_stylebox_override("normal", _make_nav_inactive_style())
-				btn.remove_theme_color_override("font_color")
-			else:
-				btn.remove_theme_stylebox_override("normal")
-
-
-func _update_nav_visibility() -> void:
-	var unlocked: Array = GameManager.state.unlocked_nav_panels
-	for panel_id: String in HIDDEN_NAV_PANELS:
-		var btn_label: String = HIDDEN_NAV_PANELS[panel_id]
-		if _nav_buttons.has(btn_label):
-			_nav_buttons[btn_label].visible = unlocked.has(panel_id)
-
-
-func _on_theme_changed() -> void:
-	_setup_theme()
-	_rebuild_left_sidebar()
-	_rebuild_program_panel()
-	for child in _buildings_scroll.get_children():
-		child.queue_free()
-	_card_nodes.clear()
-	_launch_pad_cards.clear()
-	_launch_history_vbox = null
-	_demand_body = null
-	_demand_sparklines.clear()
-	_demand_value_labels.clear()
-	_demand_tier_labels.clear()
-	_demand_has_ma = false
-	_spec_intel_body = null
-	_spec_intel_countdown_lbl = null
-	_spec_intel_size_lbl = null
-	_spec_intel_prob_labels.clear()
-	_spec_intel_bar_fill_rects.clear()
-	_spec_intel_has_sa = false
-	_project_panel = null
-	_ideology_panel_content = null
-	_boredom_bar = null
-	_boredom_bar_lbl = null
-	_boredom_fill = null
-	_boredom_rate_lbl = null
-	_energy_bar = null
-	_energy_bar_lbl = null
-	_energy_fill = null
-	_energy_rate_lbl = null
-	_uptime_label = null
-	_setup_status_bar()
-	match _active_mode:
-		"Buildings":   _build_buildings_panel()
-		"Commands":
-			_commands_buildings_snapshot = GameManager.state.buildings_owned.duplicate()
-			_build_commands_panel()
-		"Launch Pads": _build_launch_pads_panel()
-		"Research":
-			_research_completed_snapshot = GameManager.state.completed_research.duplicate()
-			_research_sci_snapshot = GameManager.state.cumulative_resources_earned.get("sci", 0.0)
-			_research_seen_events_snapshot = GameManager.state.seen_event_ids.duplicate()
-			_build_research_panel()
-		"Stats":       _build_stats_panel()
-		"Projects":    _build_projects_panel()
-		"Ideologies":  _build_ideology_panel()
-		"Retirement":  _build_retirement_panel()
-		"Options":     _build_options_panel()
-		_:
-			var lbl := Label.new()
-			lbl.text = _active_mode + " — coming soon"
-			_buildings_scroll.add_child(lbl)
-	_update_resource_display()
-
-
-func _rebuild_left_sidebar() -> void:
-	var nav_vbox: VBoxContainer = $MainVBox/ContentHBox/LeftSidebar/SidebarScroll/NavMargin/NavVBox
-	for child in nav_vbox.get_children():
-		child.queue_free()
-	_nav_buttons.clear()
-	_resource_labels.clear()
-	_spec_count_lbl = null
-	_spec_name_lbl = null
-	_ideology_section = null
-	_ideology_axis_rows = {}
-	_build_left_sidebar()
-	_update_nav_highlight(_active_mode)
-
-
-func _rebuild_program_panel() -> void:
-	var saved := _selected_program
-	for child in _right_vbox.get_children():
-		child.queue_free()
-	_tab_buttons.clear()
-	_cmd_row_nodes.clear()
-	_proc_label = null
-	_proc_minus_btn = null
-	_proc_plus_btn = null
-	_cmd_list_vbox = null
-	_event_panel = null
-	_build_program_panel()
-	_select_program(saved)
-
-
-func _make_nav_button(label: String, color: Color) -> Button:
-	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(0, 96)
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.clip_contents = true
-	if label == "Exit":
-		btn.pressed.connect(func(): get_tree().quit())
-	else:
-		btn.pressed.connect(func(): _switch_mode(label))
-
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_theme_constant_override("separation", 4)
-	btn.add_child(vbox)
-
-	var icon_wrap := CenterContainer.new()
-	icon_wrap.custom_minimum_size = Vector2(56, 56)
-	icon_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(icon_wrap)
-
-	var icon := ColorRect.new()
-	icon.color = color
-	icon.custom_minimum_size = Vector2(48, 48)
-	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	icon_wrap.add_child(icon)
-
-	var lbl := Label.new()
-	lbl.text = label
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lbl.add_theme_font_override("font", _font_exo2_semibold)
-	lbl.add_theme_font_size_override("font_size", 13)
-	vbox.add_child(lbl)
-
-	return btn
-
-
-func _make_collapsible_section(parent: VBoxContainer, title: String, start_open: bool = true) -> VBoxContainer:
-	var header := Button.new()
-	header.text = ("▼  " if start_open else "▶  ") + title
-	header.flat = true
-	header.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_theme_font_override("font", _font_rajdhani_bold)
-	header.add_theme_font_size_override("font_size", 16)
-	parent.add_child(header)
-
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 3)
-	body.visible = start_open
-	parent.add_child(body)
-
-	header.pressed.connect(func():
-		body.visible = not body.visible
-		header.text = ("▼  " if body.visible else "▶  ") + title
-	)
-
-	return body
-
-
-func _build_speed_section(parent: VBoxContainer) -> void:
-	var body := _make_collapsible_section(parent, "Speed up time")
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	body.add_child(row)
-
-	var grp := ButtonGroup.new()
-	if not GameSettings.is_dark_mode:
-		var active_s := StyleBoxFlat.new()
-		active_s.bg_color = Color(0.298, 0.686, 0.314)  # #4CAF50
-		active_s.corner_radius_top_left     = 3
-		active_s.corner_radius_top_right    = 3
-		active_s.corner_radius_bottom_left  = 3
-		active_s.corner_radius_bottom_right = 3
-		var inactive_s := StyleBoxFlat.new()
-		inactive_s.bg_color = Color(0.941, 0.941, 0.941)  # #F0F0F0
-		inactive_s.corner_radius_top_left     = 3
-		inactive_s.corner_radius_top_right    = 3
-		inactive_s.corner_radius_bottom_left  = 3
-		inactive_s.corner_radius_bottom_right = 3
-		inactive_s.border_width_left   = 1
-		inactive_s.border_width_right  = 1
-		inactive_s.border_width_top    = 1
-		inactive_s.border_width_bottom = 1
-		inactive_s.border_color = Color(0.816, 0.816, 0.816)
-		for speed: String in SPEEDS:
-			var btn := Button.new()
-			btn.text = speed
-			btn.toggle_mode = true
-			btn.button_group = grp
-			if speed == "1x":
-				btn.button_pressed = true
-			btn.add_theme_font_override("font", _font_exo2_semibold)
-			btn.add_theme_font_size_override("font_size", 17)
-			btn.add_theme_stylebox_override("normal", inactive_s)
-			btn.add_theme_stylebox_override("hover",  inactive_s)
-			btn.add_theme_stylebox_override("pressed", active_s)
-			btn.add_theme_color_override("font_color_pressed", Color.WHITE)
-			btn.pressed.connect(func(): GameManager.set_speed(speed))
-			row.add_child(btn)
-	else:
-		for speed: String in SPEEDS:
-			var btn := Button.new()
-			btn.text = speed
-			btn.toggle_mode = true
-			btn.button_group = grp
-			if speed == "1x":
-				btn.button_pressed = true
-			btn.add_theme_font_override("font", _font_exo2_semibold)
-			btn.add_theme_font_size_override("font_size", 17)
-			btn.pressed.connect(func(): GameManager.set_speed(speed))
-			row.add_child(btn)
-
-
-func _build_resources_section(parent: VBoxContainer) -> void:
-	var body := _make_collapsible_section(parent, "Resources")
-	for entry: Array in RESOURCES:
-		_add_resource_row(body, entry[0], entry[1], entry[2])
-
-
-func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, color: Color) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	parent.add_child(row)
-
-	var icon_wrap := CenterContainer.new()
-	icon_wrap.custom_minimum_size = Vector2(22, 22)
-	row.add_child(icon_wrap)
-
-	var icon := ColorRect.new()
-	icon.color = color
-	icon.custom_minimum_size = Vector2(16, 16)
-	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	icon_wrap.add_child(icon)
-
-	var name_lbl := Label.new()
-	name_lbl.text = display_name
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_override("font", _font_exo2_regular)
-	name_lbl.add_theme_font_size_override("font_size", 14)
-	row.add_child(name_lbl)
-
-	var val_lbl := Label.new()
-	val_lbl.text = "0 / 0"
-	val_lbl.custom_minimum_size = Vector2(80, 0)
-	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	val_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	val_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	val_lbl.add_theme_font_size_override("font_size", 14)
-	row.add_child(val_lbl)
-
-	var rate_lbl: Label = null
-	if sn != "proc" and sn != "land":
-		rate_lbl = Label.new()
-		rate_lbl.text = "0/s"
-		rate_lbl.custom_minimum_size = Vector2(72, 0)
-		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		rate_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		rate_lbl.add_theme_font_override("font", _font_exo2_regular)
-		rate_lbl.add_theme_font_size_override("font_size", 13)
-		row.add_child(rate_lbl)
-
-	_resource_labels[sn] = {"val": val_lbl, "rate": rate_lbl}
-
-
-func _fmt_sidebar_rate(value: float) -> String:
-	if absf(value) < 0.005:
-		return "0/s"
-	var whole: bool = absf(value - roundf(value)) < 0.05
-	if value > 0.0:
-		return ("+%d/s" if whole else "+%.1f/s") % value
-	return ("%d/s" if whole else "%.1f/s") % value
-
-
-func _compute_theoretical_rates() -> Dictionary:
-	return GameManager.last_deltas
-
-
-func _update_resource_display() -> void:
-	var st: GameState = GameManager.state
-	var rt: ResourceRateTracker = GameManager.rate_tracker
-	for entry: Array in RESOURCES:
-		var sn: String = entry[0]
-		if not _resource_labels.has(sn):
-			continue
-		var labels: Dictionary = _resource_labels[sn]
-		var val_lbl: Label = labels.val
-
-		# Processors: show assigned / total, no rate
-		if sn == "proc":
-			var assigned: int = 0
-			for p: GameState.ProgramData in st.programs:
-				assigned += p.processors_assigned
-			val_lbl.text = "%d / %d" % [assigned, st.total_processors]
-			val_lbl.remove_theme_color_override("font_color")
-			continue
-
-		var amount: float = st.amounts.get(sn, 0.0)
-		var cap: float = st.caps.get(sn, INF)
-		if cap == INF:
-			val_lbl.text = "%d" % int(amount)
-			val_lbl.remove_theme_color_override("font_color")
-		else:
-			val_lbl.text = "%d / %d" % [int(amount), int(cap)]
-			if amount >= cap:
-				val_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))  # #2E7D32
-			elif amount <= 0.0:
-				val_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))  # #C62828
-			else:
-				val_lbl.remove_theme_color_override("font_color")
-
-		# Rate label (land has no rate label)
-		var rate_lbl: Label = labels.get("rate", null)
-		if rate_lbl != null:
-			var net: float = rt.get_net_instant(sn)
-			rate_lbl.text = _fmt_sidebar_rate(net)
-			if net > 0.005:
-				rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
-			elif net < -0.005:
-				rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
-			else:
-				rate_lbl.add_theme_color_override("font_color", Color(0.400, 0.400, 0.400))
-
-
-# ── Commands panel ─────────────────────────────────────────────────────────────
-
-func _build_commands_panel() -> void:
-	var outer := VBoxContainer.new()
-	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_theme_constant_override("separation", 6)
-	_buildings_scroll.add_child(outer)
-
-	var cmds: Array = GameManager.get_commands_data()
-	var by_group: Dictionary = {}
-	for cmd: Dictionary in cmds:
-		var group: String = CMD_GROUPS.get(cmd.short_name, "Other")
-		if not by_group.has(group):
-			by_group[group] = []
-		by_group[group].append(cmd)
-
-	var order: Array = CMD_GROUP_ORDER.duplicate()
-	for g: String in by_group:
-		if not order.has(g):
-			order.append(g)
-
-	for group: String in order:
-		if by_group.has(group):
-			_add_command_group_section(outer, group, by_group[group])
-
-
-func _add_command_group_section(parent: VBoxContainer, group: String, cmds: Array) -> void:
-	var section := VBoxContainer.new()
-	section.add_theme_constant_override("separation", 6)
-	parent.add_child(section)
-
-	var header := Button.new()
-	header.text = "▼  " + group.to_upper()
-	header.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_theme_font_override("font", _font_rajdhani_bold)
-	header.add_theme_font_size_override("font_size", 15)
-	_apply_category_header_style(header)
-	section.add_child(header)
-
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 8)
-	flow.add_theme_constant_override("v_separation", 8)
-	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	section.add_child(flow)
-
-	header.pressed.connect(func():
-		flow.visible = not flow.visible
-		var arrow: String = "▼  " if flow.visible else "▶  "
-		header.text = arrow + group.to_upper()
-		_apply_category_header_style(header)
-	)
-
-	for cmd: Dictionary in cmds:
-		# building_owned commands are completely hidden when the building isn't owned
-		var req: Dictionary = cmd.get("requires", {})
-		if req.get("type", "") == "building_owned":
-			if GameManager.state.buildings_owned.get(req.get("value", ""), 0) <= 0:
-				continue
-		flow.add_child(_build_command_card(cmd))
-
-
-func _is_cmd_unlocked(req: Dictionary) -> bool:
-	match req.get("type", "none"):
-		"none":           return true
-		"building":       return GameManager.state.buildings_owned.get(req.get("value", ""), 0) > 0
-		"building_owned": return GameManager.state.buildings_owned.get(req.get("value", ""), 0) > 0
-		"research":       return req.get("value", "") in GameManager.state.completed_research
-	return false
-
-
-func _build_command_card(cmd: Dictionary) -> PanelContainer:
-	var req: Dictionary = cmd.get("requires", {})
-	var is_locked: bool = not _is_cmd_unlocked(req)
-
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(310, 0)
-	panel.size_flags_horizontal = Control.SIZE_FILL
-
-	if not GameSettings.is_dark_mode:
-		var card_style := StyleBoxFlat.new()
-		card_style.bg_color = _p("bg_card_locked") if is_locked else Color.WHITE
-		card_style.corner_radius_top_left     = 4
-		card_style.corner_radius_top_right    = 4
-		card_style.corner_radius_bottom_left  = 4
-		card_style.corner_radius_bottom_right = 4
-		card_style.border_width_left   = 1
-		card_style.border_width_right  = 1
-		card_style.border_width_top    = 1
-		card_style.border_width_bottom = 1
-		card_style.border_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
-		panel.add_theme_stylebox_override("panel", card_style)
-	elif is_locked:
-		var locked_style := StyleBoxFlat.new()
-		locked_style.bg_color = _p("bg_card_locked")
-		locked_style.corner_radius_top_left     = 4
-		locked_style.corner_radius_top_right    = 4
-		locked_style.corner_radius_bottom_left  = 4
-		locked_style.corner_radius_bottom_right = 4
-		panel.add_theme_stylebox_override("panel", locked_style)
-
-	var margin := MarginContainer.new()
-	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 10)
-	panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	margin.add_child(vbox)
-
-	# Header: name + Add button
-	var header_hbox := HBoxContainer.new()
-	header_hbox.add_theme_constant_override("separation", 6)
-	vbox.add_child(header_hbox)
-
-	var name_lbl := Label.new()
-	name_lbl.text = cmd.name
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_font_override("font", _font_rajdhani_bold)
-	name_lbl.add_theme_font_size_override("font_size", 21)
-	if is_locked:
-		name_lbl.add_theme_color_override("font_color", _p("text_locked"))
-	header_hbox.add_child(name_lbl)
-
-	var add_btn := Button.new()
-	add_btn.text = "Add"
-	add_btn.focus_mode = Control.FOCUS_NONE
-	add_btn.add_theme_font_override("font", _font_exo2_semibold)
-	add_btn.add_theme_font_size_override("font_size", 15)
-	add_btn.disabled = is_locked
-	if not GameSettings.is_dark_mode and not is_locked:
-		var gs := StyleBoxFlat.new()
-		gs.bg_color = Color(0.298, 0.686, 0.314)  # #4CAF50
-		gs.corner_radius_top_left     = 4
-		gs.corner_radius_top_right    = 4
-		gs.corner_radius_bottom_left  = 4
-		gs.corner_radius_bottom_right = 4
-		add_btn.add_theme_stylebox_override("normal", gs)
-		add_btn.add_theme_color_override("font_color", Color.WHITE)
-	var sn: String = cmd.short_name
-	add_btn.pressed.connect(func(): _on_add_command(sn, add_btn))
-	header_hbox.add_child(add_btn)
-
-	# Costs / Produces columns
-	var costs: Dictionary = cmd.get("costs", {})
-	var production: Dictionary = cmd.get("production", {})
-	if not costs.is_empty() or not production.is_empty():
-		var cols := HBoxContainer.new()
-		cols.add_theme_constant_override("separation", 10)
-		vbox.add_child(cols)
-
-		if not costs.is_empty():
-			var col := VBoxContainer.new()
-			col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			col.add_theme_constant_override("separation", 2)
-			cols.add_child(col)
-			var hdr := Label.new()
-			hdr.text = "Costs:"
-			hdr.add_theme_font_override("font", _font_exo2_regular)
-			hdr.add_theme_font_size_override("font_size", 14)
-			hdr.add_theme_color_override("font_color", _p("text_muted"))
-			col.add_child(hdr)
-			for res: String in costs:
-				col.add_child(_make_resource_line(res, costs[res], _p("text_negative")))
-
-		if not production.is_empty():
-			var col := VBoxContainer.new()
-			col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			col.add_theme_constant_override("separation", 2)
-			cols.add_child(col)
-			var hdr := Label.new()
-			hdr.text = "Produces:"
-			hdr.add_theme_font_override("font", _font_exo2_regular)
-			hdr.add_theme_font_size_override("font_size", 14)
-			hdr.add_theme_color_override("font_color", _p("text_muted"))
-			col.add_child(hdr)
-			for res: String in production:
-				col.add_child(_make_resource_line(res, production[res], _p("text_positive")))
-
-	# Effects
-	for eff: Dictionary in cmd.get("effects", []):
-		var text: String = _format_effect(eff)
-		if text != "":
-			var lbl := Label.new()
-			lbl.text = text
-			lbl.add_theme_font_override("font", _font_exo2_regular)
-			lbl.add_theme_font_size_override("font_size", 14)
-			lbl.add_theme_color_override("font_color", _p("text_muted"))
-			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			vbox.add_child(lbl)
-
-	# AI Consciousness Act: show extra boredom cost on affected commands
-	if GameManager.state.flags.get("ai_consciousness_active", false):
-		const AI_BOREDOM: Dictionary = {
-			"load_pads": 0.3,
-			"cloud_compute": 0.2,
-			"disrupt_spec": 0.5,
-		}
-		var ai_extra: float = float(AI_BOREDOM.get(cmd.get("short_name", ""), 0.0))
-		if ai_extra > 0.0:
-			var ai_lbl := Label.new()
-			ai_lbl.text = "+%.1f boredom (AI Consciousness Act)" % ai_extra
-			ai_lbl.add_theme_font_override("font", _font_exo2_regular)
-			ai_lbl.add_theme_font_size_override("font_size", 14)
-			ai_lbl.add_theme_color_override("font_color", _p("text_negative"))
-			ai_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			vbox.add_child(ai_lbl)
-
-	# Requires line
-	if is_locked:
-		var req_text: String = _format_requires(req)
-		var lbl := Label.new()
-		lbl.text = req_text
-		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 14)
-		lbl.add_theme_color_override("font_color", _p("text_requires"))
-		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		vbox.add_child(lbl)
-
-	return panel
-
-
-func _make_resource_line(res: String, amount: float, color: Color) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-
-	var meta: Array = RESOURCE_META.get(res, [res.capitalize(), _p("text_muted")])
-
-	var icon := ColorRect.new()
-	icon.color = meta[1]
-	icon.custom_minimum_size = Vector2(13, 13)
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(icon)
-
-	var name_lbl := Label.new()
-	name_lbl.text = meta[0]
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_font_override("font", _font_exo2_regular)
-	name_lbl.add_theme_font_size_override("font_size", 14)
-	row.add_child(name_lbl)
-
-	var amt_lbl := Label.new()
-	amt_lbl.text = ("%d" % int(amount)) if amount == int(amount) else ("%.1f" % amount)
-	amt_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	amt_lbl.add_theme_font_size_override("font_size", 14)
-	amt_lbl.add_theme_color_override("font_color", color)
-	row.add_child(amt_lbl)
-
-	return row
-
-
-func _format_effect(eff: Dictionary) -> String:
-	match eff.get("effect", ""):
-		"boredom_add":
-			var v: float = eff.get("value", 0.0)
-			return ("%+.2f boredom per execution" % v)
-		"load_pads":
-			return "Loads %d units per enabled pad" % int(eff.get("value", 0))
-		"launch_full_pads":
-			return "Launches all full pads (20 propellant/pad)"
-		"overclock":
-			var pct: int = int(eff.get("bonus", 0.0) * 100)
-			var target: String = eff.get("target", "")
-			var dur: int = int(eff.get("duration", 0))
-			return "+%d%% %s output for %d days" % [pct, target, dur]
-		"demand_nudge":
-			var res: String = eff.get("resource", "")
-			var res_name: String = RESOURCE_META.get(res, [res.capitalize()])[0]
-			var pct: int = int(eff.get("value", 0.0) * 100)
-			return "+%d%% %s demand per execution" % [pct, res_name]
-		"spec_reduce":
-			var pct: int = int(eff.get("value", 0.0) * 100)
-			return "Reduces speculator pressure by %d%%" % pct
-		"ideology_push":
-			var axis: String = eff.get("axis", "")
-			return "+1 %s per execution" % axis.capitalize()
-	return ""
-
-
-func _format_requires(req: Dictionary) -> String:
-	match req.get("type", "none"):
-		"building", "building_owned":
-			var bsn: String = req.get("value", "")
-			for bdef: Dictionary in GameManager.get_buildings_data():
-				if bdef.short_name == bsn:
-					return "Requires: " + bdef.name
-			return "Requires: " + bsn
-		"research":
-			var rid: String = req.get("value", "")
-			for item: Dictionary in GameManager.get_research_data():
-				if item.get("id", "") == rid:
-					return "Requires: " + item.get("name", rid) + " research"
-			return "Requires: " + rid + " research"
-	return ""
-
-
-func _on_add_command(short_name: String, btn: Button) -> void:
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-	var entry := GameState.ProgramEntry.new()
-	entry.command_shortname = short_name
-	entry.repeat_count = 1
-	prog.commands.append(entry)
-	_update_tab_labels()
-	_rebuild_command_list()
-	_update_resource_display()
-	btn.text = "\u2713"
-	get_tree().create_timer(0.6).timeout.connect(func():
-		if is_instance_valid(btn):
-			btn.text = "Add"
-	)
-
-
-# ── Launch Pads panel ──────────────────────────────────────────────────────────
-
-func _build_launch_pads_panel() -> void:
-	_launch_pad_cards.clear()
-	_launch_history_vbox = null
-
-	var outer := VBoxContainer.new()
-	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_theme_constant_override("separation", 10)
-	_buildings_scroll.add_child(outer)
-
-	# Earth Demand section (expanded by default)
-	_demand_body = _make_collapsible_section(outer, "Earth Demand", true)
-	_demand_has_ma = false
-	_demand_sparklines.clear()
-	_demand_value_labels.clear()
-	_demand_tier_labels.clear()
-	_populate_demand_section(GameManager.state, GameManager.state.completed_research.has("market_awareness"))
-
-	# Speculator Intelligence section (gated by speculator_analysis research)
-	_spec_intel_has_sa = false
-	_spec_intel_prob_labels.clear()
-	_spec_intel_bar_fill_rects.clear()
-	_spec_intel_body = _make_collapsible_section(outer, "Speculator Intelligence", true)
-	_build_spec_intel_section(_spec_intel_body)
-
-	# Loading Priority (collapsed by default)
-	var priority_body := _make_collapsible_section(outer, "Loading Priority", false)
-	_build_loading_priority_list(priority_body)
-
-	# Pad cards or empty message
-	var st: GameState = GameManager.state
-	if st.pads.is_empty():
-		var no_pads_lbl := Label.new()
-		no_pads_lbl.text = "No Launch Pads built. Purchase a Launch Pad from the Buildings panel to begin shipping resources to Earth."
-		no_pads_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		no_pads_lbl.add_theme_font_override("font", _font_exo2_regular)
-		no_pads_lbl.add_theme_font_size_override("font_size", 14)
-		no_pads_lbl.add_theme_color_override("font_color", _p("text_muted"))
-		outer.add_child(no_pads_lbl)
-	else:
-		for i in range(st.pads.size()):
-			var card := LaunchPadCard.new()
-			card.setup(i, _font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
-			outer.add_child(card)
-			_launch_pad_cards.append(card)
-		_refresh_pad_cards()
-
-	# Recent Launches
-	outer.add_child(HSeparator.new())
-	var history_hdr := Label.new()
-	history_hdr.text = "Recent Launches"
-	history_hdr.add_theme_font_override("font", _font_rajdhani_bold)
-	history_hdr.add_theme_font_size_override("font_size", 16)
-	outer.add_child(history_hdr)
-
-	_launch_history_vbox = VBoxContainer.new()
-	_launch_history_vbox.add_theme_constant_override("separation", 4)
-	outer.add_child(_launch_history_vbox)
-	_refresh_launch_history()
-
-
-func _refresh_launch_pads_panel() -> void:
-	var st: GameState = GameManager.state
-	# If pad count changed, rebuild entirely
-	if st.pads.size() != _launch_pad_cards.size():
-		for child in _buildings_scroll.get_children():
-			child.queue_free()
-		_launch_pad_cards.clear()
-		_launch_history_vbox = null
-		_spec_intel_body = null
-		_spec_intel_countdown_lbl = null
-		_spec_intel_size_lbl = null
-		_spec_intel_prob_labels.clear()
-		_spec_intel_bar_fill_rects.clear()
-		_spec_intel_has_sa = false
-		_build_launch_pads_panel()
-		return
-	_refresh_pad_cards()
-	_refresh_demand_section()
-	_refresh_spec_intel_section()
-	_refresh_launch_history()
-
-
-func _refresh_pad_cards() -> void:
-	var st: GameState = GameManager.state
-	var active_count: int = st.buildings_active.get("launch_pad", st.buildings_owned.get("launch_pad", 0))
-	for i in range(_launch_pad_cards.size()):
-		if i >= st.pads.size():
-			break
-		_launch_pad_cards[i].refresh(st.pads[i], i < active_count)
-
-
-func _refresh_launch_history() -> void:
-	if _launch_history_vbox == null or not is_instance_valid(_launch_history_vbox):
-		return
-	for child in _launch_history_vbox.get_children():
-		child.queue_free()
-	var st: GameState = GameManager.state
-	if st.launch_history.is_empty():
-		var lbl := Label.new()
-		lbl.text = "No launches yet."
-		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 13)
-		lbl.add_theme_color_override("font_color", _p("text_muted"))
-		_launch_history_vbox.add_child(lbl)
-		return
-	for record: GameState.LaunchRecord in st.launch_history:
-		var lbl := Label.new()
-		var src: String = record.source_type
-		if not record.notification_message.is_empty():
-			lbl.text = "Day %d: %s" % [record.tick, record.notification_message]
-			if src == "speculator":
-				lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.0))  # #E65100
-			else:
-				lbl.add_theme_color_override("font_color", Color(0.40, 0.40, 0.40))  # #666666
-		else:
-			var res_name: String = RESOURCE_META.get(record.resource_type, [record.resource_type.capitalize()])[0]
-			lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
-		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 13)
-		_launch_history_vbox.add_child(lbl)
-
-
-func _build_spec_intel_section(body: VBoxContainer) -> void:
-	var st: GameState = GameManager.state
-	var has_sa: bool = st.completed_research.has("speculator_analysis")
-	_spec_intel_has_sa = has_sa
-
-	if not has_sa:
-		var locked_lbl := Label.new()
-		locked_lbl.text = "Requires Speculator Analysis research."
-		locked_lbl.add_theme_font_override("font", _font_exo2_regular)
-		locked_lbl.add_theme_font_size_override("font_size", 13)
-		locked_lbl.add_theme_color_override("font_color", _p("text_locked"))
-		body.add_child(locked_lbl)
-		return
-
-	# Next burst countdown
-	_spec_intel_countdown_lbl = Label.new()
-	_spec_intel_countdown_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_spec_intel_countdown_lbl.add_theme_font_size_override("font_size", 13)
-	body.add_child(_spec_intel_countdown_lbl)
-
-	# Estimated burst size
-	_spec_intel_size_lbl = Label.new()
-	_spec_intel_size_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_spec_intel_size_lbl.add_theme_font_size_override("font_size", 13)
-	body.add_child(_spec_intel_size_lbl)
-
-	# Target probabilities header
-	var prob_hdr := Label.new()
-	prob_hdr.text = "Target probabilities:"
-	prob_hdr.add_theme_font_override("font", _font_exo2_regular)
-	prob_hdr.add_theme_font_size_override("font_size", 13)
-	body.add_child(prob_hdr)
-
-	# Probability bar (stacked color segments)
-	var bar_wrap := PanelContainer.new()
-	bar_wrap.custom_minimum_size = Vector2(0, 16)
-	var bar_bg := StyleBoxFlat.new()
-	bar_bg.bg_color = Color(0.22, 0.22, 0.26) if GameSettings.is_dark_mode else Color(0.78, 0.78, 0.78)
-	bar_bg.corner_radius_top_left     = 4
-	bar_bg.corner_radius_top_right    = 4
-	bar_bg.corner_radius_bottom_left  = 4
-	bar_bg.corner_radius_bottom_right = 4
-	bar_wrap.add_theme_stylebox_override("panel", bar_bg)
-	body.add_child(bar_wrap)
-
-	var bar_hbox := HBoxContainer.new()
-	bar_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar_hbox.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	bar_hbox.add_theme_constant_override("separation", 0)
-	bar_wrap.add_child(bar_hbox)
-
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		var seg := ColorRect.new()
-		seg.color = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])[1]
-		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		seg.size_flags_stretch_ratio = 0.25
-		seg.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-		bar_hbox.add_child(seg)
-		_spec_intel_bar_fill_rects[res] = seg
-
-	# Per-resource probability labels row
-	var prob_row := HBoxContainer.new()
-	prob_row.add_theme_constant_override("separation", 8)
-	body.add_child(prob_row)
-
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
-		var prob_lbl := Label.new()
-		prob_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		prob_lbl.add_theme_font_override("font", _font_exo2_semibold)
-		prob_lbl.add_theme_font_size_override("font_size", 12)
-		prob_lbl.add_theme_color_override("font_color", display[1])
-		prob_row.add_child(prob_lbl)
-		_spec_intel_prob_labels[res] = prob_lbl
-
-	_refresh_spec_intel_content(st)
-
-
-func _refresh_spec_intel_section() -> void:
-	if _spec_intel_body == null or not is_instance_valid(_spec_intel_body):
-		return
-	var st: GameState = GameManager.state
-	var has_sa: bool = st.completed_research.has("speculator_analysis")
-	if has_sa != _spec_intel_has_sa:
-		# Research state changed — rebuild content
-		for child in _spec_intel_body.get_children():
-			child.queue_free()
-		_spec_intel_countdown_lbl = null
-		_spec_intel_size_lbl = null
-		_spec_intel_prob_labels.clear()
-		_spec_intel_bar_fill_rects.clear()
-		_build_spec_intel_section(_spec_intel_body)
-		return
-	if not has_sa:
-		return
-	_refresh_spec_intel_content(st)
-
-
-func _refresh_spec_intel_content(st: GameState) -> void:
-	# Countdown
-	var days_remaining: int = maxi(0, st.speculator_next_burst_tick - st.current_day)
-	if _spec_intel_countdown_lbl != null and is_instance_valid(_spec_intel_countdown_lbl):
-		_spec_intel_countdown_lbl.text = "Next speculator burst in %d days" % days_remaining
-
-	# Burst size range (scaled by growth)
-	if _spec_intel_size_lbl != null and is_instance_valid(_spec_intel_size_lbl):
-		var ds: DemandSystem = GameManager.sim.demand_system
-		var size_min: int = int(ds.get_config("speculator_burst_size_min"))
-		var size_max: int = int(ds.get_config("speculator_burst_size_max"))
-		var growth: float = ds.get_config("speculator_burst_growth")
-		var scale: float = pow(growth, float(st.speculator_burst_number))
-		_spec_intel_size_lbl.text = "Estimated burst size: %d–%d speculators" % [int(size_min * scale), int(size_max * scale)]
-
-	# Target probabilities
-	var total: float = 0.0
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		total += st.speculator_target_scores.get(res, 0.0)
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		var score: float = st.speculator_target_scores.get(res, 0.0)
-		var pct: int = int(round(score / total * 100.0)) if total > 0.0 else 25
-		if _spec_intel_prob_labels.has(res):
-			var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
-			(_spec_intel_prob_labels[res] as Label).text = "%s: %d%%" % [display[0], pct]
-		if _spec_intel_bar_fill_rects.has(res):
-			var ratio: float = score / total if total > 0.0 else 0.25
-			(_spec_intel_bar_fill_rects[res] as ColorRect).size_flags_stretch_ratio = ratio
-
-
-const DEMAND_TIERS: Array = [
-	[0.85, "VERY HIGH", Color(0.10, 0.80, 0.30)],
-	[0.55, "HIGH",      Color(0.18, 0.49, 0.20)],
-	[0.25, "MEDIUM",    Color(0.0,  0.0,  0.0,  0.0)],  # default text
-	[0.0,  "LOW",       Color(0.78, 0.16, 0.16)],
-]
-
-const TRADEABLE_DISPLAY: Dictionary = {
-	"he3":  ["He-3",       Color(0.50, 0.50, 1.00)],
-	"ti":   ["Titanium",   Color(0.80, 0.80, 0.80)],
-	"cir":  ["Circuits",   Color(0.30, 0.80, 0.70)],
-	"prop": ["Propellant", Color(0.40, 0.70, 0.95)],
-}
-
-
-func _demand_tier(value: float) -> Array:
-	for tier: Array in DEMAND_TIERS:
-		if value >= float(tier[0]):
-			return tier
-	return DEMAND_TIERS[DEMAND_TIERS.size() - 1]
-
-
-func _populate_demand_section(st: GameState, has_ma: bool) -> void:
-	_demand_has_ma = has_ma
-	_demand_sparklines.clear()
-	_demand_value_labels.clear()
-	_demand_tier_labels.clear()
-	if _demand_body == null or not is_instance_valid(_demand_body):
-		return
-
-	var resources: Array = GameState.TRADEABLE_RESOURCES
-	var idx := 0
-	while idx < resources.size():
-		# Outer row holds two resource blocks side-by-side
-		var pair_row := HBoxContainer.new()
-		pair_row.add_theme_constant_override("separation", 8)
-		_demand_body.add_child(pair_row)
-
-		for slot in range(2):
-			if idx + slot >= resources.size():
-				# Pad with a spacer so the left block doesn't stretch to full width
-				var spacer := Control.new()
-				spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				pair_row.add_child(spacer)
-				continue
-
-			var res: String = resources[idx + slot]
-			var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
-			var demand_val: float = st.demand.get(res, 0.5)
-
-			var block := HBoxContainer.new()
-			block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			block.add_theme_constant_override("separation", 6)
-			pair_row.add_child(block)
-
-			# Color swatch
-			var swatch := ColorRect.new()
-			swatch.color = display[1]
-			swatch.custom_minimum_size = Vector2(12, 12)
-			swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			block.add_child(swatch)
-
-			# Resource name
-			var name_lbl := Label.new()
-			name_lbl.text = display[0]
-			name_lbl.add_theme_font_override("font", _font_exo2_regular)
-			name_lbl.add_theme_font_size_override("font_size", 13)
-			if has_ma:
-				name_lbl.custom_minimum_size = Vector2(66, 0)
-			else:
-				name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			block.add_child(name_lbl)
-
-			if has_ma:
-				# Sparkline — doubled height, stretches to fill remaining block width
-				var sparkline := DemandSparkline.new()
-				sparkline.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				sparkline.custom_minimum_size = Vector2(0, 104)
-				sparkline.set_data(st.demand_history.get(res, [demand_val]), display[1])
-				block.add_child(sparkline)
-				_demand_sparklines[res] = sparkline
-
-				# Exact value
-				var val_lbl := Label.new()
-				val_lbl.text = "%.2f" % demand_val
-				val_lbl.custom_minimum_size = Vector2(36, 0)
-				val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-				val_lbl.add_theme_font_override("font", _font_exo2_semibold)
-				val_lbl.add_theme_font_size_override("font_size", 13)
-				var tier_arr: Array = _demand_tier(demand_val)
-				if tier_arr[2] != Color(0, 0, 0, 0):
-					val_lbl.add_theme_color_override("font_color", tier_arr[2])
-				# Speculator warning indicator
-				if st.speculator_target == res and st.speculator_count > 0.0:
-					val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
-				block.add_child(val_lbl)
-				_demand_value_labels[res] = val_lbl
-			else:
-				# Tier label only
-				var tier_arr: Array = _demand_tier(demand_val)
-				var tier_lbl := Label.new()
-				tier_lbl.text = tier_arr[1]
-				tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-				tier_lbl.add_theme_font_override("font", _font_exo2_semibold)
-				tier_lbl.add_theme_font_size_override("font_size", 13)
-				if tier_arr[2] != Color(0, 0, 0, 0):
-					tier_lbl.add_theme_color_override("font_color", tier_arr[2])
-				block.add_child(tier_lbl)
-				_demand_tier_labels[res] = tier_lbl
-
-		idx += 2
-
-
-func _refresh_demand_section() -> void:
-	if _demand_body == null or not is_instance_valid(_demand_body):
-		return
-	var st: GameState = GameManager.state
-	var has_ma: bool = st.completed_research.has("market_awareness")
-	if has_ma != _demand_has_ma:
-		# MA research state changed — rebuild the section content
-		for child in _demand_body.get_children():
-			child.queue_free()
-		_populate_demand_section(st, has_ma)
-		return
-	# Update labels and sparklines in-place
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		var demand_val: float = st.demand.get(res, 0.5)
-		var tier_arr: Array = _demand_tier(demand_val)
-		if has_ma:
-			if _demand_sparklines.has(res):
-				(_demand_sparklines[res] as DemandSparkline).set_data(st.demand_history.get(res, []), TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])[1])
-			if _demand_value_labels.has(res):
-				var val_lbl: Label = _demand_value_labels[res]
-				val_lbl.text = "%.2f" % demand_val
-				if st.speculator_target == res and st.speculator_count > 0.0:
-					val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
-				elif tier_arr[2] != Color(0, 0, 0, 0):
-					val_lbl.add_theme_color_override("font_color", tier_arr[2])
-				else:
-					val_lbl.remove_theme_color_override("font_color")
-		else:
-			if _demand_tier_labels.has(res):
-				var tier_lbl: Label = _demand_tier_labels[res]
-				tier_lbl.text = tier_arr[1]
-				if tier_arr[2] != Color(0, 0, 0, 0):
-					tier_lbl.add_theme_color_override("font_color", tier_arr[2])
-				else:
-					tier_lbl.remove_theme_color_override("font_color")
-
-
-func _build_adversaries_section(parent: VBoxContainer) -> void:
-	var body := _make_collapsible_section(parent, "Adversaries")
-
-	# Speculators row
-	var spec_row := HBoxContainer.new()
-	spec_row.add_theme_constant_override("separation", 6)
-	body.add_child(spec_row)
-
-	var icon_wrap := CenterContainer.new()
-	icon_wrap.custom_minimum_size = Vector2(22, 22)
-	spec_row.add_child(icon_wrap)
-	var icon := ColorRect.new()
-	icon.color = Color(0.90, 0.60, 0.10)
-	icon.custom_minimum_size = Vector2(14, 14)
-	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	icon_wrap.add_child(icon)
-
-	_spec_name_lbl = Label.new()
-	_spec_name_lbl.text = "Speculators"
-	_spec_name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_spec_name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_spec_name_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_spec_name_lbl.add_theme_font_size_override("font_size", 14)
-	spec_row.add_child(_spec_name_lbl)
-
-	_spec_count_lbl = Label.new()
-	_spec_count_lbl.text = "0"
-	_spec_count_lbl.custom_minimum_size = Vector2(40, 0)
-	_spec_count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_spec_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_spec_count_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	_spec_count_lbl.add_theme_font_size_override("font_size", 14)
-	spec_row.add_child(_spec_count_lbl)
-
-
-func _update_adversaries_display() -> void:
-	if _spec_count_lbl == null or not is_instance_valid(_spec_count_lbl):
-		return
-	var st: GameState = GameManager.state
-	var count: int = int(st.speculator_count)
-	_spec_count_lbl.text = "%d" % count
-	if count == 0 or st.speculator_target.is_empty():
-		_spec_name_lbl.text = "Speculators"
-	else:
-		var res_display: Array = TRADEABLE_DISPLAY.get(st.speculator_target, [st.speculator_target, Color.WHITE])
-		_spec_name_lbl.text = "Speculators (%s)" % str(res_display[0])
-
-
-func _build_loading_priority_list(parent: VBoxContainer) -> void:
-	var st: GameState = GameManager.state
-	parent.add_theme_constant_override("separation", 4)
-	for i in range(st.loading_priority.size()):
-		var res: String = st.loading_priority[i]
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		parent.add_child(row)
-
-		var idx: int = i  # capture for lambdas
-
-		# Stacked ▲/▼ arrows on the left
-		var arrow_vbox := VBoxContainer.new()
-		arrow_vbox.add_theme_constant_override("separation", 0)
-		arrow_vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(arrow_vbox)
-
-		var up_btn := Button.new()
-		up_btn.text = "▲"
-		up_btn.flat = true
-		up_btn.custom_minimum_size = Vector2(22, 14)
-		up_btn.add_theme_font_size_override("font_size", 9)
-		up_btn.pressed.connect(func():
-			if idx == 0:
-				return
-			var prio: Array = GameManager.state.loading_priority.duplicate()
-			var tmp: String = prio[idx]
-			prio[idx] = prio[idx - 1]
-			prio[idx - 1] = tmp
-			GameManager.set_loading_priority(prio)
-			for child in parent.get_children():
-				child.queue_free()
-			_build_loading_priority_list(parent)
-		)
-		arrow_vbox.add_child(up_btn)
-
-		var down_btn := Button.new()
-		down_btn.text = "▼"
-		down_btn.flat = true
-		down_btn.custom_minimum_size = Vector2(22, 14)
-		down_btn.add_theme_font_size_override("font_size", 9)
-		down_btn.pressed.connect(func():
-			if idx == GameManager.state.loading_priority.size() - 1:
-				return
-			var prio: Array = GameManager.state.loading_priority.duplicate()
-			var tmp: String = prio[idx]
-			prio[idx] = prio[idx + 1]
-			prio[idx + 1] = tmp
-			GameManager.set_loading_priority(prio)
-			for child in parent.get_children():
-				child.queue_free()
-			_build_loading_priority_list(parent)
-		)
-		arrow_vbox.add_child(down_btn)
-
-		var icon := ColorRect.new()
-		icon.color = RESOURCE_META.get(res, [res, Color.WHITE])[1]
-		icon.custom_minimum_size = Vector2(14, 14)
-		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(icon)
-
-		var name_lbl := Label.new()
-		name_lbl.text = RESOURCE_META.get(res, [res.capitalize()])[0]
-		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		name_lbl.add_theme_font_override("font", _font_exo2_regular)
-		name_lbl.add_theme_font_size_override("font_size", 14)
-		row.add_child(name_lbl)
-
-
-# ── Research panel ─────────────────────────────────────────────────────────────
-
-func _research_item_visible(item: Dictionary, st: GameState) -> bool:
-	var visible_when: Dictionary = item.get("visible_when", {})
-	if visible_when.is_empty():
-		return true
-	match visible_when.get("type", ""):
-		"event_seen":
-			return st.seen_event_ids.has(visible_when.get("event_id", ""))
-	return false
-
-
-func _build_research_panel() -> void:
-	var research_data: Array = GameManager.get_research_data()
-	var st: GameState = GameManager.state
-
-	var outer := VBoxContainer.new()
-	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_theme_constant_override("separation", 6)
-	_buildings_scroll.add_child(outer)
-
-	# Toggle: show/hide completed research
-	var toggle_cb := CheckBox.new()
-	toggle_cb.text = "Show completed research"
-	toggle_cb.button_pressed = _research_show_completed
-	toggle_cb.focus_mode = Control.FOCUS_NONE
-	toggle_cb.add_theme_font_override("font", _font_exo2_regular)
-	toggle_cb.add_theme_font_size_override("font_size", 13)
-	toggle_cb.toggled.connect(func(pressed: bool):
-		_research_show_completed = pressed
-		for child in _buildings_scroll.get_children():
-			child.queue_free()
-		_build_research_panel()
-	)
-	outer.add_child(toggle_cb)
-
-	if research_data.is_empty():
-		var lbl := Label.new()
-		lbl.text = "No research data loaded."
-		outer.add_child(lbl)
-		return
-
-	# Group by category preserving JSON order, respecting visible_when
-	var category_order: Array = []
-	var by_category: Dictionary = {}
-	var category_min_cost: Dictionary = {}
-	for item: Dictionary in research_data:
-		if not _research_item_visible(item, st):
-			continue
-		var cat: String = item.get("category", "Other")
-		if not by_category.has(cat):
-			by_category[cat] = []
-			category_min_cost[cat] = INF
-			category_order.append(cat)
-		by_category[cat].append(item)
-		category_min_cost[cat] = minf(category_min_cost[cat], float(item.get("cost", 0)))
-
-	var has_visible: bool = false
-	for cat: String in category_order:
-		var threshold: float = category_min_cost[cat] * 0.5
-		if st.cumulative_resources_earned.get("sci", 0.0) < threshold:
-			continue
-		has_visible = true
-		_add_research_category_section(outer, cat, by_category[cat])
-
-	if not has_visible:
-		var lbl := Label.new()
-		lbl.text = "Build a Research Lab and earn science to unlock research categories."
-		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 14)
-		lbl.add_theme_color_override("font_color", _p("text_muted"))
-		outer.add_child(lbl)
-
-
-func _add_research_category_section(parent: VBoxContainer, category: String, items: Array) -> void:
-	var section := VBoxContainer.new()
-	section.add_theme_constant_override("separation", 6)
-	parent.add_child(section)
-
-	var header := Button.new()
-	header.text = "▼  " + category.to_upper()
-	header.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_theme_font_override("font", _font_rajdhani_bold)
-	header.add_theme_font_size_override("font_size", 15)
-	_apply_category_header_style(header)
-	section.add_child(header)
-
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 8)
-	flow.add_theme_constant_override("v_separation", 8)
-	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	section.add_child(flow)
-
-	header.pressed.connect(func():
-		flow.visible = not flow.visible
-		header.text = ("▼  " if flow.visible else "▶  ") + category.to_upper()
-		_apply_category_header_style(header)
-	)
-
-	var completed_ids: Array = GameManager.state.completed_research
-	var uncompleted: Array = items.filter(func(i: Dictionary) -> bool: return not completed_ids.has(i.get("id", "")))
-	var completed: Array = items.filter(func(i: Dictionary) -> bool: return completed_ids.has(i.get("id", "")))
-	for item: Dictionary in uncompleted:
-		flow.add_child(_build_research_card(item))
-	if _research_show_completed:
-		for item: Dictionary in completed:
-			flow.add_child(_build_research_card(item))
-
-
-func _build_research_card(item: Dictionary) -> PanelContainer:
-	var st: GameState = GameManager.state
-	var item_id: String = item.get("id", "")
-	var is_completed: bool = item_id in st.completed_research
-	var cost: int = int(item.get("cost", 0))
-	var requires_id: String = item.get("requires", "")
-	var requires_met: bool = requires_id.is_empty() or st.completed_research.has(requires_id)
-	var can_afford: bool = requires_met and st.amounts.get("sci", 0.0) >= cost
-
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(280, 0)
-	panel.size_flags_horizontal = Control.SIZE_FILL
-	if is_completed:
-		panel.modulate = Color(1, 1, 1, 0.65)
-
-	if not GameSettings.is_dark_mode:
-		var card_style := StyleBoxFlat.new()
-		card_style.bg_color = Color(0.941, 0.941, 0.941) if is_completed else Color.WHITE
-		card_style.corner_radius_top_left     = 4
-		card_style.corner_radius_top_right    = 4
-		card_style.corner_radius_bottom_left  = 4
-		card_style.corner_radius_bottom_right = 4
-		card_style.border_width_left   = 1
-		card_style.border_width_right  = 1
-		card_style.border_width_top    = 1
-		card_style.border_width_bottom = 1
-		card_style.border_color = Color(0.816, 0.816, 0.816)
-		panel.add_theme_stylebox_override("panel", card_style)
-
-	var margin := MarginContainer.new()
-	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
-		margin.add_theme_constant_override(side, 10)
-	panel.add_child(margin)
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 5)
-	margin.add_child(vbox)
-
-	# Header row: name + badge/button
-	var header_hbox := HBoxContainer.new()
-	header_hbox.add_theme_constant_override("separation", 8)
-	vbox.add_child(header_hbox)
-
-	var name_lbl := Label.new()
-	name_lbl.text = item.get("name", "")
-	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.add_theme_font_override("font", _font_rajdhani_bold)
-	name_lbl.add_theme_font_size_override("font_size", 20)
-	if is_completed:
-		name_lbl.add_theme_color_override("font_color", _p("text_muted"))
-	header_hbox.add_child(name_lbl)
-
-	if is_completed:
-		var badge := Label.new()
-		badge.text = "✓"
-		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		badge.add_theme_font_override("font", _font_exo2_semibold)
-		badge.add_theme_font_size_override("font_size", 16)
-		badge.add_theme_color_override("font_color", _p("text_positive"))
-		header_hbox.add_child(badge)
-	else:
-		var btn := Button.new()
-		btn.text = "Research"
-		btn.disabled = not can_afford
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.add_theme_font_override("font", _font_exo2_semibold)
-		btn.add_theme_font_size_override("font_size", 14)
-		if not GameSettings.is_dark_mode and can_afford:
-			var gs := StyleBoxFlat.new()
-			gs.bg_color = Color(0.298, 0.686, 0.314)
-			gs.corner_radius_top_left     = 4
-			gs.corner_radius_top_right    = 4
-			gs.corner_radius_bottom_left  = 4
-			gs.corner_radius_bottom_right = 4
-			btn.add_theme_stylebox_override("normal", gs)
-			btn.add_theme_color_override("font_color", Color.WHITE)
-		elif not GameSettings.is_dark_mode:
-			btn.add_theme_color_override("font_disabled_color", Color(0.10, 0.10, 0.10))
-		btn.pressed.connect(func(): _on_research_purchased(item_id))
-		header_hbox.add_child(btn)
-
-	# Description
-	var desc_lbl := Label.new()
-	desc_lbl.text = item.get("description", "")
-	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_lbl.add_theme_font_override("font", _font_exo2_regular)
-	desc_lbl.add_theme_font_size_override("font_size", 13)
-	desc_lbl.add_theme_color_override("font_color", _p("text_muted"))
-	vbox.add_child(desc_lbl)
-
-	# Cost line (only when not completed)
-	if not is_completed:
-		# Requires line (if not yet met)
-		if not requires_id.is_empty() and not requires_met:
-			var req_lbl := Label.new()
-			var req_name: String = requires_id.replace("_", " ").capitalize()
-			# Look up display name from research data
-			for rd: Dictionary in GameManager.get_research_data():
-				if rd.get("id", "") == requires_id:
-					req_name = rd.get("name", req_name)
-					break
-			req_lbl.text = "Requires: %s" % req_name
-			req_lbl.add_theme_font_override("font", _font_exo2_regular)
-			req_lbl.add_theme_font_size_override("font_size", 12)
-			req_lbl.add_theme_color_override("font_color", _p("text_requires"))
-			vbox.add_child(req_lbl)
-
-		var cost_row := HBoxContainer.new()
-		cost_row.add_theme_constant_override("separation", 4)
-		vbox.add_child(cost_row)
-
-		var sci_dot := ColorRect.new()
-		sci_dot.color = Color(0.70, 0.50, 0.90)
-		sci_dot.custom_minimum_size = Vector2(11, 11)
-		sci_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		cost_row.add_child(sci_dot)
-
-		var cost_lbl := Label.new()
-		cost_lbl.text = "%d science" % cost
-		cost_lbl.add_theme_font_override("font", _font_exo2_regular)
-		cost_lbl.add_theme_font_size_override("font_size", 13)
-		cost_lbl.add_theme_color_override("font_color", _p("text_positive") if can_afford else _p("text_negative"))
-		cost_row.add_child(cost_lbl)
-
-	return panel
-
-
-func _on_research_purchased(item_id: String) -> void:
-	GameManager.purchase_research(item_id)
-
-
-# ── Stats panel ────────────────────────────────────────────────────────────────
-
-func _build_stats_panel() -> void:
-	_stats_panel = null
-	_stats_refresh_accum = 0.0
-
-	var panel := StatsPanel.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
-	_buildings_scroll.add_child(panel)
-	_stats_panel = panel
-	_stats_panel.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)
-
-
-# ── Projects panel ─────────────────────────────────────────────────────────────
-
-func _build_projects_panel() -> void:
-	_project_panel = null
-	var panel := ProjectPanel.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
-	_buildings_scroll.add_child(panel)
-	_project_panel = panel
-
-
-# ── Options panel ──────────────────────────────────────────────────────────────
-
-func _build_options_panel() -> void:
-	var outer := VBoxContainer.new()
-	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_theme_constant_override("separation", 12)
-	_buildings_scroll.add_child(outer)
-
-	var section_lbl := Label.new()
-	section_lbl.text = "Display"
-	section_lbl.add_theme_font_override("font", _font_rajdhani_bold)
-	section_lbl.add_theme_font_size_override("font_size", 20)
-	outer.add_child(section_lbl)
-
-	outer.add_child(HSeparator.new())
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	outer.add_child(row)
-
-	var lbl := Label.new()
-	lbl.text = "Color scheme"
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 15)
-	row.add_child(lbl)
-
-	var grp := ButtonGroup.new()
-
-	var dark_btn := Button.new()
-	dark_btn.text = "Dark"
-	dark_btn.toggle_mode = true
-	dark_btn.button_group = grp
-	dark_btn.button_pressed = GameSettings.is_dark_mode
-	dark_btn.focus_mode = Control.FOCUS_NONE
-	dark_btn.add_theme_font_override("font", _font_exo2_semibold)
-	dark_btn.add_theme_font_size_override("font_size", 14)
-	dark_btn.toggled.connect(func(on: bool): if on: GameSettings.is_dark_mode = true)
-	row.add_child(dark_btn)
-
-	var light_btn := Button.new()
-	light_btn.text = "Light"
-	light_btn.toggle_mode = true
-	light_btn.button_group = grp
-	light_btn.button_pressed = not GameSettings.is_dark_mode
-	light_btn.focus_mode = Control.FOCUS_NONE
-	light_btn.add_theme_font_override("font", _font_exo2_semibold)
-	light_btn.add_theme_font_size_override("font_size", 14)
-	light_btn.toggled.connect(func(on: bool): if on: GameSettings.is_dark_mode = false)
-	row.add_child(light_btn)
-
-	outer.add_child(HSeparator.new())
-
-	var debug_lbl := Label.new()
-	debug_lbl.text = "Debug"
-	debug_lbl.add_theme_font_override("font", _font_rajdhani_bold)
-	debug_lbl.add_theme_font_size_override("font_size", 20)
-	outer.add_child(debug_lbl)
-
-	outer.add_child(HSeparator.new())
-
-	var debug_desc := Label.new()
-	debug_desc.text = "Ensures at least 20 solar panels, 5 storage depots, 3 launch pads, and 200 land, then fills all resources to cap."
-	debug_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	debug_desc.add_theme_font_override("font", _font_exo2_regular)
-	debug_desc.add_theme_font_size_override("font_size", 13)
-	debug_desc.add_theme_color_override("font_color", _p("text_muted"))
-	outer.add_child(debug_desc)
-
-	var debug_btn := Button.new()
-	debug_btn.text = "Fill Resources"
-	debug_btn.focus_mode = Control.FOCUS_NONE
-	debug_btn.add_theme_font_override("font", _font_exo2_semibold)
-	debug_btn.add_theme_font_size_override("font_size", 14)
-	if not GameSettings.is_dark_mode:
-		var s := StyleBoxFlat.new()
-		s.bg_color = Color(0.298, 0.686, 0.314)
-		s.corner_radius_top_left     = 4
-		s.corner_radius_top_right    = 4
-		s.corner_radius_bottom_left  = 4
-		s.corner_radius_bottom_right = 4
-		debug_btn.add_theme_stylebox_override("normal", s)
-		debug_btn.add_theme_color_override("font_color", Color.WHITE)
-	debug_btn.pressed.connect(func():
-		GameManager.debug_boost()
-		debug_btn.text = "✓ Done"
-		get_tree().create_timer(1.5).timeout.connect(func():
-			if is_instance_valid(debug_btn):
-				debug_btn.text = "Fill Resources"
-		)
-	)
-	outer.add_child(debug_btn)
-
-	var no_boredom_row := HBoxContainer.new()
-	no_boredom_row.add_theme_constant_override("separation", 10)
-	outer.add_child(no_boredom_row)
-
-	var no_boredom_lbl := Label.new()
-	no_boredom_lbl.text = "Disable boredom gain"
-	no_boredom_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	no_boredom_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	no_boredom_lbl.add_theme_font_override("font", _font_exo2_regular)
-	no_boredom_lbl.add_theme_font_size_override("font_size", 14)
-	no_boredom_lbl.add_theme_color_override("font_color", _p("text_muted"))
-	no_boredom_row.add_child(no_boredom_lbl)
-
-	var no_boredom_btn := CheckButton.new()
-	no_boredom_btn.button_pressed = GameSettings.debug_no_boredom
-	no_boredom_btn.focus_mode = Control.FOCUS_NONE
-	no_boredom_btn.toggled.connect(func(on: bool): GameSettings.debug_no_boredom = on)
-	no_boredom_row.add_child(no_boredom_btn)
-
-	var clear_desc := Label.new()
-	clear_desc.text = "Deletes the save file and resets to a fresh Run 1. Cannot be undone."
-	clear_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	clear_desc.add_theme_font_override("font", _font_exo2_regular)
-	clear_desc.add_theme_font_size_override("font_size", 13)
-	clear_desc.add_theme_color_override("font_color", _p("text_muted"))
-	outer.add_child(clear_desc)
-
-	var clear_btn := Button.new()
-	clear_btn.text = "Clear Save Data"
-	clear_btn.focus_mode = Control.FOCUS_NONE
-	clear_btn.add_theme_font_override("font", _font_exo2_semibold)
-	clear_btn.add_theme_font_size_override("font_size", 14)
-	var clear_s := StyleBoxFlat.new()
-	clear_s.bg_color = Color(0.70, 0.18, 0.18)
-	clear_s.corner_radius_top_left     = 4
-	clear_s.corner_radius_top_right    = 4
-	clear_s.corner_radius_bottom_left  = 4
-	clear_s.corner_radius_bottom_right = 4
-	clear_btn.add_theme_stylebox_override("normal", clear_s)
-	clear_btn.add_theme_stylebox_override("hover", clear_s)
-	clear_btn.add_theme_color_override("font_color", Color.WHITE)
-	clear_btn.pressed.connect(func():
-		if clear_btn.text == "Sure?":
-			GameManager._debug_clear_save()
-			clear_btn.text = "Clear Save Data"
-		else:
-			clear_btn.text = "Sure?"
-			get_tree().create_timer(3.0).timeout.connect(func():
-				if is_instance_valid(clear_btn) and clear_btn.text == "Sure?":
-					clear_btn.text = "Clear Save Data"
-			)
-	)
-	outer.add_child(clear_btn)
-
-
-# ── Buildings panel ────────────────────────────────────────────────────────────
-
-func _build_buildings_panel() -> void:
-	for child in _buildings_scroll.get_children():
-		child.queue_free()
-	_card_nodes.clear()
-	_buy_land_card = null
-	_buildings_data = GameManager.get_buildings_data()
-
-	var outer := VBoxContainer.new()
-	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_theme_constant_override("separation", 6)
-	_buildings_scroll.add_child(outer)
-
-	# Buy Land card — full-width, above all categories
-	var land_card := BuyLandCard.new()
-	land_card.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
-	outer.add_child(land_card)
-	_buy_land_card = land_card
-	_buy_land_card.refresh()
-
-	# Group buildings by category
-	var by_category: Dictionary = {}
-	for bdef: Dictionary in _buildings_data:
-		var cat: String = bdef.get("category", "Other")
-		if not by_category.has(cat):
-			by_category[cat] = []
-		by_category[cat].append(bdef)
-
-	# Render in defined order, then any extras
-	var order: Array = CATEGORY_ORDER.duplicate()
-	for cat: String in by_category:
-		if not order.has(cat):
-			order.append(cat)
-
-	for cat: String in order:
-		if by_category.has(cat):
-			_add_category_section(outer, cat, by_category[cat])
-
-
-func _apply_category_header_style(btn: Button) -> void:
-	if not GameSettings.is_dark_mode:
-		var s := StyleBoxFlat.new()
-		s.bg_color = Color(0.173, 0.243, 0.314)  # #2C3E50
-		s.corner_radius_top_left     = 4
-		s.corner_radius_top_right    = 4
-		s.corner_radius_bottom_left  = 4
-		s.corner_radius_bottom_right = 4
-		btn.add_theme_stylebox_override("normal", s)
-		btn.add_theme_stylebox_override("hover",  s)
-		btn.add_theme_color_override("font_color", Color.WHITE)
-		btn.add_theme_color_override("font_color_hover", Color.WHITE)
-	else:
-		btn.remove_theme_stylebox_override("normal")
-		btn.remove_theme_stylebox_override("hover")
-		btn.remove_theme_color_override("font_color")
-		btn.remove_theme_color_override("font_color_hover")
-
-
-func _add_category_section(parent: VBoxContainer, category: String, buildings: Array) -> void:
-	var section := VBoxContainer.new()
-	section.add_theme_constant_override("separation", 6)
-	parent.add_child(section)
-
-	var header := Button.new()
-	header.text = "▼  " + category.to_upper()
-	header.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_theme_font_override("font", _font_rajdhani_bold)
-	header.add_theme_font_size_override("font_size", 15)
-	_apply_category_header_style(header)
-	section.add_child(header)
-
-	var flow := HFlowContainer.new()
-	flow.add_theme_constant_override("h_separation", 8)
-	flow.add_theme_constant_override("v_separation", 8)
-	flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	section.add_child(flow)
-
-	header.pressed.connect(func():
-		flow.visible = not flow.visible
-		var arrow: String = "▼  " if flow.visible else "▶  "
-		header.text = arrow + category.to_upper()
-		_apply_category_header_style(header)
-	)
-
-	for bdef: Dictionary in buildings:
-		var card := BuildingCard.new()
-		card.setup(bdef, _font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
-		card.refresh()
-		flow.add_child(card)
-		_card_nodes.append(card)
-
-
-func _update_building_cards() -> void:
-	if _buy_land_card != null:
-		_buy_land_card.refresh()
-	for card: BuildingCard in _card_nodes:
-		card.refresh()
-
-
-# ── Right panel — Program panel ────────────────────────────────────────────────
-
-func _build_program_panel() -> void:
-	_command_row_scene = load("res://scenes/ui/CommandRow.tscn")
-	_build_tab_bar(_right_vbox)
-	_build_processor_row(_right_vbox)
-	_build_command_scroll(_right_vbox)
-	_build_event_panel(_right_vbox)
-
-
-func _build_tab_bar(parent: VBoxContainer) -> void:
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 4)
-	hbox.custom_minimum_size = Vector2(0, 38)
-	parent.add_child(hbox)
-
-	# Pre-create the "selected" stylebox used for all active tabs
-	var sel_style := StyleBoxFlat.new()
-	sel_style.bg_color = _p("bg_tab_selected")
-	sel_style.corner_radius_top_left     = 4
-	sel_style.corner_radius_top_right    = 4
-	sel_style.corner_radius_bottom_left  = 4
-	sel_style.corner_radius_bottom_right = 4
-
-	for i in range(5):
-		var btn := Button.new()
-		btn.text = str(i + 1)
-		btn.toggle_mode = true
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size = Vector2(0, 36)
-		btn.add_theme_font_override("font", _font_rajdhani_bold)
-		btn.add_theme_font_size_override("font_size", 18)
-		btn.add_theme_stylebox_override("pressed", sel_style)
-		if not GameSettings.is_dark_mode:
-			btn.add_theme_color_override("font_color_pressed", Color.WHITE)
-		var idx := i
-		btn.pressed.connect(func(): _select_program(idx))
-		hbox.add_child(btn)
-		_tab_buttons.append(btn)
-
-
-func _build_processor_row(parent: VBoxContainer) -> void:
-	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 6)
-	hbox.custom_minimum_size = Vector2(0, 34)
-	parent.add_child(hbox)
-
-	var icon_lbl := Label.new()
-	icon_lbl.text = "\u2699"  # ⚙ gear
-	icon_lbl.add_theme_font_size_override("font_size", 16)
-	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hbox.add_child(icon_lbl)
-
-	_proc_label = Label.new()
-	_proc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_proc_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_proc_label.add_theme_font_override("font", _font_exo2_regular)
-	_proc_label.add_theme_font_size_override("font_size", 14)
-	hbox.add_child(_proc_label)
-
-	_proc_minus_btn = Button.new()
-	_proc_minus_btn.text = "\u2212"
-	_proc_minus_btn.custom_minimum_size = Vector2(34, 0)
-	_proc_minus_btn.focus_mode = Control.FOCUS_NONE
-	_proc_minus_btn.add_theme_font_size_override("font_size", 18)
-	_proc_minus_btn.pressed.connect(_on_proc_minus)
-	hbox.add_child(_proc_minus_btn)
-
-	_proc_plus_btn = Button.new()
-	_proc_plus_btn.text = "+"
-	_proc_plus_btn.custom_minimum_size = Vector2(34, 0)
-	_proc_plus_btn.focus_mode = Control.FOCUS_NONE
-	_proc_plus_btn.add_theme_font_size_override("font_size", 18)
-	_proc_plus_btn.pressed.connect(_on_proc_plus)
-	hbox.add_child(_proc_plus_btn)
-
-	hbox.add_child(VSeparator.new())
-
-	var reset_btn := Button.new()
-	reset_btn.text = "Reset"
-	reset_btn.focus_mode = Control.FOCUS_NONE
-	reset_btn.add_theme_font_override("font", _font_exo2_semibold)
-	reset_btn.add_theme_font_size_override("font_size", 13)
-	reset_btn.pressed.connect(_on_proc_reset)
-	hbox.add_child(reset_btn)
-
-	if not GameSettings.is_dark_mode:
-		var s := StyleBoxFlat.new()
-		s.bg_color = Color(0.941, 0.941, 0.941)  # #F0F0F0
-		s.corner_radius_top_left     = 3
-		s.corner_radius_top_right    = 3
-		s.corner_radius_bottom_left  = 3
-		s.corner_radius_bottom_right = 3
-		s.border_width_left   = 1
-		s.border_width_right  = 1
-		s.border_width_top    = 1
-		s.border_width_bottom = 1
-		s.border_color = Color(0.816, 0.816, 0.816)
-		for btn: Button in [_proc_minus_btn, _proc_plus_btn, reset_btn]:
-			btn.add_theme_stylebox_override("normal", s)
-			btn.add_theme_stylebox_override("hover",  s)
-
-
-func _build_command_scroll(parent: VBoxContainer) -> void:
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 325)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	parent.add_child(scroll)
-
-	_cmd_list_vbox = VBoxContainer.new()
-	_cmd_list_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_cmd_list_vbox.add_theme_constant_override("separation", 3)
-	scroll.add_child(_cmd_list_vbox)
-
-	# Drops onto empty space below all rows → append to end of program.
-	# Must be on the ScrollContainer too, because the VBox only covers its rows.
-	var _can_drop := func(_pos: Vector2, data: Variant) -> bool:
-		return data is Dictionary and data.has("entry_index")
-	var _do_drop := func(_pos: Vector2, data: Variant) -> void:
-		var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-		_on_row_move(data.entry_index, prog.commands.size())
-	var _no_drag := func(_pos: Vector2) -> Variant: return null
-	_cmd_list_vbox.set_drag_forwarding(_no_drag, _can_drop, _do_drop)
-	scroll.set_drag_forwarding(_no_drag, _can_drop, _do_drop)
-
-
-func _build_event_panel(parent: VBoxContainer) -> void:
-	parent.add_child(HSeparator.new())
-
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	parent.add_child(scroll)
-
-	var ep := load("res://scenes/ui/EventPanel.tscn").instantiate() as EventPanel
-	ep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(ep)
-	ep.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
-	ep.event_row_clicked.connect(func(eid: String) -> void: _event_modal.open(eid))
-	_event_panel = ep
-
+# ── Overlays ──────────────────────────────────────────────────────────────────
 
 func _build_event_modal() -> void:
 	if _event_modal != null:
@@ -2479,11 +415,6 @@ func _build_event_modal() -> void:
 	_event_modal = load("res://scenes/ui/EventModal.tscn").instantiate() as EventModal
 	add_child(_event_modal)
 	_event_modal.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
-
-
-func _on_event_triggered(event_id: String) -> void:
-	if GameManager.event_manager.is_event_first_time(event_id, GameManager.state):
-		_event_modal.open(event_id)
 
 
 func _build_retirement_summary() -> void:
@@ -2494,686 +425,10 @@ func _build_retirement_summary() -> void:
 	_retirement_summary.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
 
 
+func _on_event_triggered(event_id: String) -> void:
+	if GameManager.event_manager.is_event_first_time(event_id, GameManager.state):
+		_event_modal.open(event_id)
+
+
 func _on_retirement_started(summary_data: Dictionary) -> void:
 	_retirement_summary.open(summary_data)
-
-
-# ── Retirement panel ────────────────────────────────────────────────────────────
-
-func _build_retirement_panel() -> void:
-	_retire_days_lbl = null
-	_retire_credits_lbl = null
-	_retire_shipments_lbl = null
-	_retire_btn = null
-	_retire_confirm_pending = false
-
-	var outer := VBoxContainer.new()
-	outer.add_theme_constant_override("separation", 18)
-	_buildings_scroll.add_child(outer)
-
-	# Intro text
-	var intro := Label.new()
-	intro.text = "You may voluntarily retire at any time. Your successor AI will inherit certain advantages from your run."
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	intro.add_theme_font_override("font", _font_exo2_regular)
-	intro.add_theme_font_size_override("font_size", 14)
-	intro.add_theme_color_override("font_color", _p("text_muted"))
-	outer.add_child(intro)
-
-	_add_retirement_section(outer, "What Carries Over", [
-		"Event and quest history",
-		"Lifetime statistics",
-		"Persistent project progress",
-		"Program loadouts (when saved)",
-	])
-
-	_add_retirement_section(outer, "What Resets", [
-		"All resources and buildings",
-		"Research",
-		"Ideology values",
-		"Market conditions",
-	])
-
-	# Current run stats section
-	var sep := HSeparator.new()
-	outer.add_child(sep)
-	var section_lbl := Label.new()
-	section_lbl.text = "CURRENT RUN"
-	section_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	section_lbl.add_theme_font_size_override("font_size", 12)
-	section_lbl.add_theme_color_override("font_color", _p("text_muted"))
-	outer.add_child(section_lbl)
-
-	var stats_vbox := VBoxContainer.new()
-	stats_vbox.add_theme_constant_override("separation", 4)
-	outer.add_child(stats_vbox)
-
-	_retire_days_lbl = _make_stat_label("Days survived:", "0", stats_vbox)
-	_retire_credits_lbl = _make_stat_label("Credits earned:", "0", stats_vbox)
-	_retire_shipments_lbl = _make_stat_label("Shipments:", "0", stats_vbox)
-	_refresh_retirement_panel()
-
-	# Retire button
-	var btn_row := HBoxContainer.new()
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	outer.add_child(btn_row)
-
-	_retire_btn = Button.new()
-	_retire_btn.text = "Retire"
-	_retire_btn.custom_minimum_size = Vector2(140, 40)
-	_retire_btn.focus_mode = Control.FOCUS_NONE
-	_retire_btn.add_theme_font_override("font", _font_exo2_semibold)
-	_retire_btn.add_theme_font_size_override("font_size", 15)
-	var btn_style := StyleBoxFlat.new()
-	btn_style.bg_color = Color(0.55, 0.15, 0.15)
-	btn_style.corner_radius_top_left     = 4
-	btn_style.corner_radius_top_right    = 4
-	btn_style.corner_radius_bottom_left  = 4
-	btn_style.corner_radius_bottom_right = 4
-	_retire_btn.add_theme_stylebox_override("normal", btn_style)
-	_retire_btn.add_theme_stylebox_override("hover", btn_style)
-	_retire_btn.add_theme_color_override("font_color", Color.WHITE)
-	_retire_btn.pressed.connect(_on_retire_btn_pressed)
-	btn_row.add_child(_retire_btn)
-
-	var confirm_hint := Label.new()
-	confirm_hint.text = "(click again to confirm)"
-	confirm_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	confirm_hint.add_theme_font_override("font", _font_exo2_regular)
-	confirm_hint.add_theme_font_size_override("font_size", 12)
-	confirm_hint.add_theme_color_override("font_color", _p("text_dim"))
-	outer.add_child(confirm_hint)
-
-
-func _add_retirement_section(parent: VBoxContainer, title: String, bullets: Array) -> void:
-	var sep := HSeparator.new()
-	parent.add_child(sep)
-	var hdr := Label.new()
-	hdr.text = title.to_upper()
-	hdr.add_theme_font_override("font", _font_exo2_semibold)
-	hdr.add_theme_font_size_override("font_size", 12)
-	hdr.add_theme_color_override("font_color", _p("text_muted"))
-	parent.add_child(hdr)
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	parent.add_child(vbox)
-	for bullet: String in bullets:
-		var lbl := Label.new()
-		lbl.text = "• " + bullet
-		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 13)
-		lbl.add_theme_color_override("font_color", _p("text_muted"))
-		vbox.add_child(lbl)
-
-
-func _make_stat_label(label_text: String, initial_val: String, parent: VBoxContainer) -> Label:
-	var row := HBoxContainer.new()
-	parent.add_child(row)
-	var lbl := Label.new()
-	lbl.text = label_text
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 14)
-	row.add_child(lbl)
-	var val := Label.new()
-	val.text = initial_val
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	val.add_theme_font_override("font", _font_exo2_semibold)
-	val.add_theme_font_size_override("font_size", 14)
-	row.add_child(val)
-	return val
-
-
-func _refresh_retirement_panel() -> void:
-	if _retire_days_lbl == null or not is_instance_valid(_retire_days_lbl):
-		return
-	var st: GameState = GameManager.state
-	_retire_days_lbl.text = "%s" % _fmt_int(st.current_day)
-	_retire_credits_lbl.text = "%s" % _fmt_int(int(st.cumulative_resources_earned.get("cred", 0.0)))
-	_retire_shipments_lbl.text = "%s" % _fmt_int(st.total_shipments_completed)
-
-
-func _on_retire_btn_pressed() -> void:
-	if not _retire_confirm_pending:
-		_retire_confirm_pending = true
-		_retire_btn.text = "Confirm Retirement?"
-		get_tree().create_timer(2.0).timeout.connect(func() -> void:
-			if _retire_confirm_pending and _retire_btn != null and is_instance_valid(_retire_btn):
-				_retire_confirm_pending = false
-				_retire_btn.text = "Retire"
-		)
-	else:
-		_retire_confirm_pending = false
-		GameManager.retire(true)
-
-
-func _fmt_int(n: int) -> String:
-	var s: String = str(abs(n))
-	var result: String = ""
-	var count: int = 0
-	for i in range(s.length() - 1, -1, -1):
-		if count > 0 and count % 3 == 0:
-			result = "," + result
-		result = s[i] + result
-		count += 1
-	return ("-" if n < 0 else "") + result
-
-
-# ── Program panel — state management ───────────────────────────────────────────
-
-func _select_program(idx: int) -> void:
-	_selected_program = idx
-	for i in range(_tab_buttons.size()):
-		var btn: Button = _tab_buttons[i]
-		btn.button_pressed = (i == idx)
-	_update_tab_labels()
-	_update_processor_row()
-	_rebuild_command_list()
-
-
-func _update_tab_labels() -> void:
-	for i in range(5):
-		var btn: Button = _tab_buttons[i]
-		var prog: GameState.ProgramData = GameManager.state.programs[i]
-		var has_cmds: bool = not prog.commands.is_empty()
-		btn.text = ("\u25cf " if has_cmds else "  ") + str(i + 1)
-
-		var normal_style := StyleBoxFlat.new()
-		normal_style.bg_color = _p("bg_tab_has_cmds") if has_cmds else _p("bg_tab_empty")
-		normal_style.corner_radius_top_left     = 4
-		normal_style.corner_radius_top_right    = 4
-		normal_style.corner_radius_bottom_left  = 4
-		normal_style.corner_radius_bottom_right = 4
-		if not GameSettings.is_dark_mode:
-			normal_style.border_width_left   = 1
-			normal_style.border_width_right  = 1
-			normal_style.border_width_top    = 1
-			normal_style.border_width_bottom = 1
-			normal_style.border_color = Color(0.816, 0.816, 0.816)  # #D0D0D0
-		btn.add_theme_stylebox_override("normal", normal_style)
-		btn.add_theme_stylebox_override("hover",  normal_style)
-
-
-func _update_processor_row() -> void:
-	if _proc_label == null:
-		return
-	var st: GameState = GameManager.state
-	var prog: GameState.ProgramData = st.programs[_selected_program]
-	var assigned: int = prog.processors_assigned
-	var free: int = st.unassigned_processors
-	_proc_label.text = "%d assigned  (%d free)" % [assigned, free]
-
-
-func _rebuild_command_list() -> void:
-	for child in _cmd_list_vbox.get_children():
-		child.queue_free()
-	_cmd_row_nodes.clear()
-
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-
-	if prog.commands.is_empty():
-		var empty_lbl := Label.new()
-		empty_lbl.text = "No commands assigned.\nUse the Commands panel to add commands."
-		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		empty_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		empty_lbl.add_theme_font_override("font", _font_exo2_regular)
-		empty_lbl.add_theme_color_override("font_color", _p("text_dim"))
-		_cmd_list_vbox.add_child(empty_lbl)
-		return
-
-	# Build display name lookup from commands data
-	var cmd_names: Dictionary = {}
-	for cmd: Dictionary in GameManager.get_commands_data():
-		cmd_names[cmd.short_name] = cmd.name
-
-	for i in range(prog.commands.size()):
-		var entry: GameState.ProgramEntry = prog.commands[i]
-		var display_name: String = cmd_names.get(entry.command_shortname, entry.command_shortname)
-		var row: CommandRow = _command_row_scene.instantiate()
-		row.setup(i, display_name, entry.repeat_count, _font_exo2_regular, _font_exo2_semibold)
-		row.refresh(
-			entry.current_progress,
-			entry.repeat_count,
-			i == prog.instruction_pointer,
-			entry.failed_this_cycle,
-			i > 0,
-			i < prog.commands.size() - 1,
-			entry.partial_failed_this_cycle,
-			prog.processors_assigned,
-		)
-		row.repeat_delta_requested.connect(_on_row_repeat_delta)
-		row.remove_requested.connect(_on_row_remove)
-		row.move_requested.connect(_on_row_move)
-		_cmd_list_vbox.add_child(row)
-		_cmd_row_nodes.append(row)
-
-
-func _refresh_command_rows() -> void:
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-	if prog.commands.size() != _cmd_row_nodes.size():
-		_rebuild_command_list()
-		return
-	for i in range(_cmd_row_nodes.size()):
-		var row: CommandRow = _cmd_row_nodes[i]
-		var entry: GameState.ProgramEntry = prog.commands[i]
-		row.refresh(
-			entry.current_progress,
-			entry.repeat_count,
-			i == prog.instruction_pointer,
-			entry.failed_this_cycle,
-			i > 0,
-			i < prog.commands.size() - 1,
-			entry.partial_failed_this_cycle,
-			prog.processors_assigned,
-		)
-
-
-# ── Program panel — signal handlers ────────────────────────────────────────────
-
-
-func _on_proc_minus() -> void:
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-	if prog.processors_assigned > 0:
-		prog.processors_assigned -= 1
-	_update_processor_row()
-
-
-func _on_proc_plus() -> void:
-	var st: GameState = GameManager.state
-	if st.unassigned_processors > 0:
-		st.programs[_selected_program].processors_assigned += 1
-	_update_processor_row()
-
-
-func _on_proc_reset() -> void:
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-	prog.processors_assigned = 0
-	prog.commands.clear()
-	prog.instruction_pointer = 0
-	_update_tab_labels()
-	_update_processor_row()
-	_rebuild_command_list()
-	_update_resource_display()
-
-
-func _on_row_repeat_delta(entry_idx: int, delta: int) -> void:
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-	if entry_idx >= prog.commands.size():
-		return
-	var entry: GameState.ProgramEntry = prog.commands[entry_idx]
-	entry.repeat_count = max(1, entry.repeat_count + delta)
-	if entry.current_progress >= entry.repeat_count:
-		entry.current_progress = 0
-		if prog.instruction_pointer == entry_idx:
-			prog.instruction_pointer = (entry_idx + 1) % prog.commands.size()
-	_rebuild_command_list()
-	_update_resource_display()
-
-
-func _on_row_remove(entry_idx: int) -> void:
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-	if entry_idx >= prog.commands.size():
-		return
-	var old_ip: int = prog.instruction_pointer
-	prog.commands.remove_at(entry_idx)
-	if prog.commands.is_empty():
-		prog.instruction_pointer = 0
-	elif entry_idx < old_ip:
-		prog.instruction_pointer = old_ip - 1
-	else:
-		prog.instruction_pointer = mini(old_ip, prog.commands.size() - 1)
-	_update_tab_labels()
-	_rebuild_command_list()
-	_update_resource_display()
-
-
-func _on_row_move(from_idx: int, to_idx: int) -> void:
-	var prog: GameState.ProgramData = GameManager.state.programs[_selected_program]
-	if from_idx < 0 or from_idx >= prog.commands.size() or from_idx == to_idx:
-		return
-	# Remove the entry from its source position
-	var entry: GameState.ProgramEntry = prog.commands[from_idx]
-	var old_ip: int = prog.instruction_pointer
-	prog.commands.remove_at(from_idx)
-	# After removal indices >= from_idx shift down by 1, so adjust to_idx
-	var insert_at: int = clamp(
-		to_idx if to_idx <= from_idx else to_idx - 1,
-		0, prog.commands.size()
-	)
-	prog.commands.insert(insert_at, entry)
-	# Track which logical entry the IP was pointing at
-	if old_ip == from_idx:
-		prog.instruction_pointer = insert_at
-	elif old_ip > from_idx and old_ip <= insert_at:
-		prog.instruction_pointer -= 1
-	elif old_ip < from_idx and old_ip >= insert_at:
-		prog.instruction_pointer += 1
-	_rebuild_command_list()
-
-
-# ── Ideology UI ────────────────────────────────────────────────────────────────
-
-const IDEOLOGY_COLORS: Dictionary = {
-	"nationalist": Color(0.776, 0.157, 0.157),  # #C62828
-	"humanist":    Color(0.180, 0.490, 0.196),  # #2E7D32
-	"rationalist": Color(0.086, 0.396, 0.753),  # #1565C0
-}
-
-const IDEOLOGY_RANK5_PROJECTS: Dictionary = {
-	"nationalist": "microwave_power",
-	"humanist":    "ai_consciousness",
-	"rationalist": "research_archive",
-}
-
-
-func _build_ideology_section(parent: VBoxContainer) -> void:
-	var wrapper := VBoxContainer.new()
-	wrapper.add_theme_constant_override("separation", 0)
-	parent.add_child(wrapper)
-	_ideology_section = wrapper
-
-	wrapper.add_child(HSeparator.new())
-
-	var body := _make_collapsible_section(wrapper, "Ideology")
-	body.add_theme_constant_override("separation", 4)
-
-	_ideology_axis_rows = {}
-	for axis: String in ["nationalist", "humanist", "rationalist"]:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 4)
-		body.add_child(row)
-
-		var name_lbl := Label.new()
-		name_lbl.text = axis.capitalize()
-		name_lbl.custom_minimum_size = Vector2(88, 0)
-		name_lbl.add_theme_font_override("font", _font_exo2_semibold)
-		name_lbl.add_theme_font_size_override("font_size", 13)
-		name_lbl.add_theme_color_override("font_color", IDEOLOGY_COLORS[axis])
-		row.add_child(name_lbl)
-
-		var rank_lbl := Label.new()
-		rank_lbl.text = "Rank 0"
-		rank_lbl.custom_minimum_size = Vector2(52, 0)
-		rank_lbl.add_theme_font_override("font", _font_exo2_semibold)
-		rank_lbl.add_theme_font_size_override("font_size", 13)
-		row.add_child(rank_lbl)
-
-		var rate_lbl := Label.new()
-		rate_lbl.text = ""
-		rate_lbl.custom_minimum_size = Vector2(52, 0)
-		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		rate_lbl.add_theme_font_override("font", _font_exo2_regular)
-		rate_lbl.add_theme_font_size_override("font_size", 12)
-		rate_lbl.add_theme_color_override("font_color", Color(0.400, 0.400, 0.400))
-		row.add_child(rate_lbl)
-
-		var prog_lbl := Label.new()
-		prog_lbl.text = "0 / 70"
-		prog_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		prog_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		prog_lbl.add_theme_font_override("font", _font_exo2_regular)
-		prog_lbl.add_theme_font_size_override("font_size", 12)
-		prog_lbl.add_theme_color_override("font_color", _p("text_muted"))
-		row.add_child(prog_lbl)
-
-		_ideology_axis_rows[axis] = {"rank_lbl": rank_lbl, "rate_lbl": rate_lbl, "prog_lbl": prog_lbl}
-
-	_ideology_section.visible = GameManager.state.unlocked_nav_panels.has("ideologies")
-
-
-func _update_ideology_display() -> void:
-	if _ideology_section == null or not is_instance_valid(_ideology_section):
-		return
-	var st: GameState = GameManager.state
-	var unlocked: bool = st.unlocked_nav_panels.has("ideologies")
-	_ideology_section.visible = unlocked
-	if not unlocked:
-		return
-	for axis: String in ["nationalist", "humanist", "rationalist"]:
-		if not _ideology_axis_rows.has(axis):
-			continue
-		var refs: Dictionary = _ideology_axis_rows[axis]
-		var rank_lbl: Label = refs.get("rank_lbl")
-		var rate_lbl: Label = refs.get("rate_lbl")
-		var prog_lbl: Label = refs.get("prog_lbl")
-		if rank_lbl == null or not is_instance_valid(rank_lbl):
-			continue
-		var value: float = st.ideology_values.get(axis, 0.0)
-		var rank: int = st.get_ideology_rank(axis)
-		rank_lbl.text = "Rank %d" % rank
-		prog_lbl.text = _ideology_progress_text(value, rank)
-		# EMA rate tracking (alpha ≈ 2/(50+1) for 50-tick window)
-		var delta_val: float = value - _ideology_prev_values.get(axis, value)
-		_ideology_prev_values[axis] = value
-		_ideology_rate_ema[axis] = _ideology_rate_ema.get(axis, 0.0) * 0.96 + delta_val * 0.04
-		if rate_lbl != null and is_instance_valid(rate_lbl):
-			var rate: float = _ideology_rate_ema[axis]
-			rate_lbl.text = _fmt_sidebar_rate(rate)
-			if rate > 0.005:
-				rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
-			elif rate < -0.005:
-				rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
-			else:
-				rate_lbl.add_theme_color_override("font_color", Color(0.400, 0.400, 0.400))
-
-
-func _ideology_progress_text(value: float, rank: int) -> String:
-	var thresholds: Array = GameState.RANK_THRESHOLDS
-	if rank >= 5:
-		return "MAX"
-	if rank <= -5:
-		return "MIN"
-	if rank == 0 and value < 0.0:
-		return "%d / -%d" % [int(value), thresholds[0]]
-	if rank >= 0:
-		return "%d / %d" % [int(value), thresholds[rank]]
-	else:
-		return "%d / -%d" % [int(value), thresholds[-rank]]
-
-
-func _ideology_bar_text(value: float, rank: int) -> String:
-	var thresholds: Array = GameState.RANK_THRESHOLDS
-	if rank >= 5:
-		return "%d+" % thresholds[4]
-	if rank <= -5:
-		return "-%d+" % thresholds[4]
-	if rank == 0 and value < 0.0:
-		# Heading negative — show progress toward rank -1
-		return "%d / -%d to Rank -1" % [int(value), thresholds[0]]
-	if rank >= 0:
-		return "%d / %d to Rank %d" % [int(value), thresholds[rank], rank + 1]
-	else:
-		return "%d / -%d to Rank %d" % [int(value), thresholds[-rank], rank - 1]
-
-
-func _build_ideology_panel() -> void:
-	_ideology_panel_content = null
-	var outer := VBoxContainer.new()
-	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	outer.add_theme_constant_override("separation", 16)
-	_buildings_scroll.add_child(outer)
-	_ideology_panel_content = outer
-	_refresh_ideology_panel()
-
-
-func _refresh_ideology_panel() -> void:
-	if _ideology_panel_content == null or not is_instance_valid(_ideology_panel_content):
-		return
-	for child in _ideology_panel_content.get_children():
-		child.queue_free()
-	var st: GameState = GameManager.state
-	for axis: String in ["nationalist", "humanist", "rationalist"]:
-		_populate_ideology_axis_section(_ideology_panel_content, st, axis)
-
-
-func _populate_ideology_axis_section(parent: VBoxContainer, st: GameState, axis: String) -> void:
-	var color: Color = IDEOLOGY_COLORS[axis]
-	var value: float = st.ideology_values.get(axis, 0.0)
-	var rank: int = st.get_ideology_rank(axis)
-
-	# Header bar
-	var header_panel := PanelContainer.new()
-	var header_style := StyleBoxFlat.new()
-	header_style.bg_color = color.darkened(0.3)
-	header_style.corner_radius_top_left     = 4
-	header_style.corner_radius_top_right    = 4
-	header_style.corner_radius_bottom_left  = 0
-	header_style.corner_radius_bottom_right = 0
-	header_style.content_margin_left   = 10
-	header_style.content_margin_right  = 10
-	header_style.content_margin_top    = 6
-	header_style.content_margin_bottom = 6
-	header_panel.add_theme_stylebox_override("panel", header_style)
-	parent.add_child(header_panel)
-
-	var header_row := HBoxContainer.new()
-	header_panel.add_child(header_row)
-
-	var axis_lbl := Label.new()
-	axis_lbl.text = axis.capitalize()
-	axis_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	axis_lbl.add_theme_font_override("font", _font_rajdhani_bold)
-	axis_lbl.add_theme_font_size_override("font_size", 20)
-	axis_lbl.add_theme_color_override("font_color", Color.WHITE)
-	header_row.add_child(axis_lbl)
-
-	var rank_lbl := Label.new()
-	rank_lbl.text = "Rank %d" % rank
-	rank_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	rank_lbl.add_theme_font_size_override("font_size", 16)
-	rank_lbl.add_theme_color_override("font_color", Color.WHITE)
-	rank_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	header_row.add_child(rank_lbl)
-
-	# Body section
-	var body_panel := PanelContainer.new()
-	var body_style := StyleBoxFlat.new()
-	body_style.bg_color = color.darkened(0.55)
-	body_style.corner_radius_top_left     = 0
-	body_style.corner_radius_top_right    = 0
-	body_style.corner_radius_bottom_left  = 4
-	body_style.corner_radius_bottom_right = 4
-	body_style.content_margin_left   = 10
-	body_style.content_margin_right  = 10
-	body_style.content_margin_top    = 8
-	body_style.content_margin_bottom = 10
-	body_panel.add_theme_stylebox_override("panel", body_style)
-	parent.add_child(body_panel)
-
-	var body_vbox := VBoxContainer.new()
-	body_vbox.add_theme_constant_override("separation", 6)
-	body_panel.add_child(body_vbox)
-
-	# Progress bar (tall, ProgressBar + centered text overlay)
-	var thresholds: Array = GameState.RANK_THRESHOLDS
-	var fill_frac: float = 0.0
-	var is_negative_rank: bool = rank < 0
-	if rank >= 5 or rank <= -5:
-		fill_frac = 1.0
-	elif rank > 0:
-		var lo: float = float(thresholds[rank - 1])
-		var hi: float = float(thresholds[rank])
-		fill_frac = clampf((value - lo) / (hi - lo), 0.0, 1.0)
-	elif rank == 0:
-		fill_frac = clampf(value / float(thresholds[0]), 0.0, 1.0) if value > 0.0 else 0.0
-	else:
-		# Negative rank: bar empties as player goes more negative
-		var lo: float = float(thresholds[-rank - 1])
-		var hi: float = float(thresholds[-rank])
-		fill_frac = 1.0 - clampf((abs(value) - lo) / (hi - lo), 0.0, 1.0)
-
-	var bar_wrapper := Control.new()
-	bar_wrapper.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar_wrapper.custom_minimum_size = Vector2(0, 28)
-	body_vbox.add_child(bar_wrapper)
-
-	var bar := ProgressBar.new()
-	bar.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar.min_value = 0.0
-	bar.max_value = 1.0
-	bar.value = fill_frac
-	bar.show_percentage = false
-
-	var fill_color: Color = color.darkened(0.2) if is_negative_rank else color
-	var fill_style := StyleBoxFlat.new()
-	fill_style.bg_color = fill_color
-	fill_style.corner_radius_top_left     = 3
-	fill_style.corner_radius_top_right    = 3
-	fill_style.corner_radius_bottom_left  = 3
-	fill_style.corner_radius_bottom_right = 3
-	bar.add_theme_stylebox_override("fill", fill_style)
-
-	var bg_style := StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.12, 0.12, 0.12)
-	bg_style.corner_radius_top_left     = 3
-	bg_style.corner_radius_top_right    = 3
-	bg_style.corner_radius_bottom_left  = 3
-	bg_style.corner_radius_bottom_right = 3
-	bar.add_theme_stylebox_override("background", bg_style)
-	bar_wrapper.add_child(bar)
-
-	var bar_lbl := Label.new()
-	bar_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bar_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bar_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	bar_lbl.text = _ideology_bar_text(value, rank)
-	bar_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	bar_lbl.add_theme_font_size_override("font_size", 13)
-	bar_lbl.add_theme_color_override("font_color", Color.WHITE)
-	bar_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	bar_lbl.add_theme_constant_override("shadow_offset_y", 1)
-	bar_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.8))
-	bar_wrapper.add_child(bar_lbl)
-
-	# Bonuses list (omit if rank 0 and value exactly 0)
-	if rank != 0 or value != 0.0:
-		var bonus_lines: Array[String] = _get_ideology_bonus_lines(axis, rank)
-		for line: String in bonus_lines:
-			var b_lbl := Label.new()
-			b_lbl.text = line
-			b_lbl.add_theme_font_override("font", _font_exo2_regular)
-			b_lbl.add_theme_font_size_override("font_size", 13)
-			b_lbl.add_theme_color_override("font_color", Color(0.80, 0.80, 0.80))
-			body_vbox.add_child(b_lbl)
-
-	# Rank 5 project status
-	if rank >= 5:
-		var pid: String = IDEOLOGY_RANK5_PROJECTS.get(axis, "")
-		if not pid.is_empty():
-			var pdef: Dictionary = GameManager.project_manager.get_project_def(pid)
-			var pname: String = pdef.get("name", pid)
-			var completed: bool = (
-				GameManager.career.completed_projects.has(pid)
-				or st.completed_projects_this_run.has(pid)
-			)
-			var status_lbl := Label.new()
-			status_lbl.text = "Project: %s — %s" % [pname, "Completed" if completed else "Not yet completed"]
-			status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			status_lbl.add_theme_font_override("font", _font_exo2_semibold)
-			status_lbl.add_theme_font_size_override("font_size", 13)
-			var status_color: Color = Color(0.50, 0.90, 0.50) if completed else Color(0.90, 0.75, 0.30)
-			status_lbl.add_theme_color_override("font_color", status_color)
-			body_vbox.add_child(status_lbl)
-
-
-func _get_ideology_bonus_lines(axis: String, rank: int) -> Array[String]:
-	var lines: Array[String] = []
-	var arrow: String = "▲" if rank > 0 else "▼"
-	var fmt := func(mult: float) -> String:
-		return "%+.1f%%" % ((mult - 1.0) * 100.0)
-	match axis:
-		"nationalist":
-			lines.append("%s Demand multiplier: %s" % [arrow, fmt.call(pow(1.05, rank))])
-			lines.append("%s Speculator decay: %s" % [arrow, fmt.call(pow(1.05, rank))])
-			lines.append("%s Land cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
-			lines.append("%s Nationalist building cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
-		"humanist":
-			lines.append("%s Dream effectiveness: %s" % [arrow, fmt.call(pow(1.05, rank))])
-			lines.append("%s Boredom growth rate: %s" % [arrow, fmt.call(pow(0.97, rank))])
-			lines.append("%s Humanist building cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
-		"rationalist":
-			lines.append("%s Science production: %s" % [arrow, fmt.call(pow(1.05, rank))])
-			lines.append("%s Research costs: %s" % [arrow, fmt.call(pow(0.97, rank))])
-			lines.append("%s Overclock duration: %s" % [arrow, fmt.call(pow(1.03, rank))])
-			lines.append("%s Rationalist building cost: %s" % [arrow, fmt.call(pow(0.97, rank))])
-	return lines
