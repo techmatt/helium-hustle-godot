@@ -516,6 +516,7 @@ func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: floa
 	if state.launch_history.size() > 5:
 		state.launch_history.pop_back()
 	state.total_shipments_completed += 1
+	state.cumulative_resources_earned["cred"] = state.cumulative_resources_earned.get("cred", 0.0) + payout
 	if rate_tracker != null:
 		rate_tracker.record("shipment", "cred", payout)
 		rate_tracker.record("shipment", pad.resource_type, -pad.cargo_loaded)
@@ -849,11 +850,14 @@ func _get_overclock_mult(state: GameState, target: String) -> float:
 	for oc: Dictionary in state.overclock_states:
 		if oc.get("target", "") == target:
 			mult *= 1.0 + float(oc.get("bonus", 0.0))
-	return minf(mult, 3.0)  # hard cap at 3x (+200%)
-	# Note: research.json defines an "overclock_cap" effect type (used by overclock_boost)
-	# that would raise this cap to 2.0 (200%). That effect is not yet consumed here —
-	# the cap is hardcoded. Any test for overclock_boost will vacuously pass until this
-	# is implemented.
+	var cap: float = 1.5  # base cap: 150%
+	for id: String in state.completed_research:
+		if not _research_data.has(id):
+			continue
+		var effect: Dictionary = _research_data[id].get("effect", {})
+		if effect.get("type", "") == "overclock_cap":
+			cap = float(effect.get("value", cap))
+	return minf(mult, cap)
 
 
 func _get_bdef(short_name: String) -> Variant:

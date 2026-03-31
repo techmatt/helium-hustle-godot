@@ -113,11 +113,7 @@ func _test_research_effects() -> void:
 	_assert_true(not sim_g.is_building_locked(st_g, "electrolysis"),
 		"propellant_synthesis: electrolysis unlocked after research")
 
-	# ── overclock_boost: overclock cap change — SKIPPED ─────────────────────
-	# The research.json effect {"type": "overclock_cap", "value": 2} is not
-	# consumed anywhere in game_simulation.gd. _get_overclock_mult always caps
-	# at minf(mult, 3.0) unconditionally. The effect is data-only with no
-	# runtime implementation. No test written to avoid a false pass.
+	# ── overclock_boost: see test_passive_effects.gd ────────────────────────
 
 
 func _test_command_unlock_wiring() -> void:

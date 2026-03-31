@@ -28,7 +28,8 @@ var _font_e2s: FontFile
 var _resource_opt: OptionButton
 var _launch_btn: Button
 var _cargo_fill: ColorRect
-var _cargo_fill_space: Control
+var _bar_content: Control
+var _bar_ratio: float = 0.0
 var _cargo_label: Label
 var _value_label: Label
 var _status_label: Label
@@ -141,29 +142,23 @@ func _build_ui() -> void:
 	bar_wrap.add_theme_stylebox_override("panel", bar_bg)
 	vbox.add_child(bar_wrap)
 
-	# Custom proportional fill: HBoxContainer with a ColorRect (fill) and a
-	# transparent spacer. Setting their stretch ratios gives exact proportional
-	# width without relying on ProgressBar's fill clipping.
-	var bar_hbox := HBoxContainer.new()
-	bar_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar_hbox.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	bar_hbox.add_theme_constant_override("separation", 0)
-	bar_hbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	bar_wrap.add_child(bar_hbox)
+	# Proportional fill: a plain Control fills the PanelContainer content area,
+	# and _cargo_fill is sized directly via _apply_bar_fill. Using direct size
+	# assignment (instead of HBoxContainer stretch ratios) avoids deferred-sort
+	# timing issues that caused bars on pads 2/3 to render incorrectly.
+	_bar_content = Control.new()
+	_bar_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bar_content.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_bar_content.mouse_filter = Control.MOUSE_FILTER_PASS
+	bar_wrap.add_child(_bar_content)
 
 	_cargo_fill = ColorRect.new()
 	_cargo_fill.color = RESOURCE_COLORS["he3"]
-	_cargo_fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_cargo_fill.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	_cargo_fill.size_flags_stretch_ratio = 0.0
 	_cargo_fill.mouse_filter = Control.MOUSE_FILTER_PASS
-	bar_hbox.add_child(_cargo_fill)
+	_cargo_fill.visible = false
+	_bar_content.add_child(_cargo_fill)
 
-	_cargo_fill_space = Control.new()
-	_cargo_fill_space.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_cargo_fill_space.size_flags_stretch_ratio = 1.0
-	_cargo_fill_space.mouse_filter = Control.MOUSE_FILTER_PASS
-	bar_hbox.add_child(_cargo_fill_space)
+	_bar_content.resized.connect(_apply_bar_fill)
 
 	# ── Text labels ────────────────────────────────────────────────────────────
 	_cargo_label = Label.new()
@@ -267,11 +262,15 @@ func _set_value_label_color(demand: float) -> void:
 
 
 func _set_bar_fill(ratio: float) -> void:
-	ratio = clampf(ratio, 0.0, 1.0)
-	_cargo_fill.size_flags_stretch_ratio = ratio
-	_cargo_fill_space.size_flags_stretch_ratio = 1.0 - ratio
-	# When completely empty, hide the fill rect so it doesn't claim minimum space
-	_cargo_fill.visible = ratio > 0.0
+	_bar_ratio = clampf(ratio, 0.0, 1.0)
+	_apply_bar_fill()
+
+
+func _apply_bar_fill() -> void:
+	_cargo_fill.visible = _bar_ratio > 0.0
+	if _bar_ratio > 0.0:
+		_cargo_fill.position = Vector2.ZERO
+		_cargo_fill.size = Vector2(_bar_content.size.x * _bar_ratio, _bar_content.size.y)
 
 
 func _set_launch_btn(enabled: bool, _hint: String) -> void:

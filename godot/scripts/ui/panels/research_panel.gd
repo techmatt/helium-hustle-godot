@@ -100,6 +100,12 @@ func _item_visible(item: Dictionary, st: GameState) -> bool:
 	match visible_when.get("type", ""):
 		"event_seen":
 			return st.seen_event_ids.has(visible_when.get("event_id", ""))
+		"event_completed":
+			var eid: String = visible_when.get("event_id", "")
+			for inst: Dictionary in st.event_instances:
+				if inst.get("id", "") == eid and inst.get("state", "") == "completed":
+					return true
+			return false
 	return false
 
 

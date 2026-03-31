@@ -11,6 +11,7 @@ func run(_scene_root: Node) -> void:
 	_test_command_fund_ideology()
 	_test_command_failure()
 	_test_command_requires_gating()
+	_test_shipment_cumulative_credits()
 
 
 func _test_command_idle() -> void:
@@ -259,3 +260,36 @@ func _test_command_requires_gating() -> void:
 	state.amounts["eng"] = 100.0
 	_assert_false(sim.is_command_executable(state, "disrupt_spec"),
 		"gating: disrupt_spec is not executable without market_awareness")
+
+
+func _test_shipment_cumulative_credits() -> void:
+	print("--- Shipment: cumulative credits tracked ---")
+	var sim := TF.create_fresh_sim()
+	var state := TF.fresh_state_isolated(sim)
+
+	# Provide enough propellant for a launch (fuel cost = 20 per pad)
+	state.amounts["prop"] = 100.0
+
+	# Manually create a fully-loaded he3 pad at capacity (100)
+	var pad := GameState.LaunchPadData.new()
+	pad.resource_type = "he3"
+	pad.cargo_loaded = 100.0
+	pad.status = GameState.PAD_FULL
+	state.pads.append(pad)
+
+	# Fix demand to 1.0 for a deterministic payout.
+	# he3 base_value = 20 (from game_config shipment.base_values), so:
+	# payout = 20 * 1.0 * 100 = 2000 cred
+	state.demand["he3"] = 1.0
+
+	var cred_before: float = state.amounts.get("cred", 0.0)
+	var cumulative_before: float = state.cumulative_resources_earned.get("cred", 0.0)
+
+	var launched: bool = sim.launch_pad_manual(state, 0)
+	_assert_true(launched, "shipment: launch_pad_manual returned true for a full pad")
+
+	var expected_payout: float = 20.0 * 1.0 * 100.0  # base_value * demand * cargo
+	_assert_approx(state.amounts.get("cred", 0.0) - cred_before, expected_payout, 0.001,
+		"shipment: cred balance increases by payout (2000)")
+	_assert_approx(state.cumulative_resources_earned.get("cred", 0.0) - cumulative_before, expected_payout, 0.001,
+		"shipment: cumulative_resources_earned[cred] increases by payout (2000)")

@@ -7,7 +7,7 @@
     "description": "Develop electrolysis processes to produce propellant from lunar ice.",
     "effects": [],
     "requires": "",
-    "visible_when": { "type": "event_seen", "event_id": "propellant_discovery" }
+    "visible_when": { "type": "event_completed", "event_id": "propellant_discovery" }
   },
   {
     "id": "dream_protocols",
