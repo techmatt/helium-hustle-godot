@@ -15,7 +15,7 @@
     "reward": {
       "type": "starting_buildings",
       "buildings": {
-        "solar_panel": 1,
+        "panel": 1,
         "excavator": 1
       }
     }

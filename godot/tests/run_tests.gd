@@ -16,6 +16,9 @@ const _SUITES: Array = [
 	preload("res://tests/test_save_load.gd"),
 	preload("res://tests/test_research.gd"),
 	preload("res://tests/test_building_mechanics.gd"),
+	preload("res://tests/test_command_execution.gd"),
+	preload("res://tests/test_demand_system.gd"),
+	preload("res://tests/test_projects_milestones.gd"),
 ]
 
 var _done := false

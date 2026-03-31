@@ -546,6 +546,22 @@ func _clamp_processor_assignments(state: GameState) -> void:
 		excess -= remove
 
 
+# Returns true if the command's requires gate is satisfied AND all costs are
+# affordable. Use this for UI availability checks and tests.
+func is_command_executable(state: GameState, short_name: String) -> bool:
+	return _can_afford_command(state, short_name)
+
+
+# Executes a single command directly without program infrastructure.
+# Returns true if the command was affordable and applied, false otherwise.
+# Useful for unit tests and one-shot scripted actions.
+func execute_command(state: GameState, short_name: String) -> bool:
+	if not _can_afford_command(state, short_name):
+		return false
+	_apply_command(state, short_name)
+	return true
+
+
 func _can_afford_command(state: GameState, short_name: String) -> bool:
 	if not _commands_data.has(short_name):
 		return false
@@ -581,6 +597,10 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		state.amounts[res] = state.amounts.get(res, 0.0) - cost
 		last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
 		prog_delta[res] = prog_delta.get(res, 0.0) - cost
+	# Note: some commands (e.g. Sell Cloud Compute) put "boredom" directly in
+	# their production dict to get a simple additive change. Others (e.g. Dream)
+	# use a "boredom_add" effect below to support ideology scaling. Don't mix
+	# the two for the same command — only one path applies ideology modifiers.
 	for res in cmd.production:
 		var delta: float = float(cmd.production[res])
 		state.amounts[res] = state.amounts.get(res, 0.0) + delta

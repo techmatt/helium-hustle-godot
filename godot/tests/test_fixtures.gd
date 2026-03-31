@@ -63,6 +63,9 @@ static func create_fresh_sim() -> GameSimulation:
 # Note: energy starts at its storage cap (100). If testing production from buildings
 # like the solar panel, drain state.amounts["eng"] = 0.0 first so the output is
 # visible after clamping.
+#
+# Available land = starting_resources.land(40) minus building footprints from
+# game_config starting_buildings: panel=1, data_center=2 → 37 available on day 0.
 static func fresh_state(sim: GameSimulation) -> GameState:
 	var config := load_game_config()
 	var buildings_data := load_buildings_data()
@@ -70,6 +73,101 @@ static func fresh_state(sim: GameSimulation) -> GameState:
 	sim.recalculate_caps(state)
 	sim.demand_system.initialize_demand(state)
 	return state
+
+
+# Returns a fresh state with all starting buildings deactivated (buildings_active
+# set to 0 for each owned building). Use this to isolate a single building's
+# effect without interference from panel energy production or data_center upkeep.
+static func fresh_state_isolated(sim: GameSimulation) -> GameState:
+	var state := fresh_state(sim)
+	for sn: String in state.buildings_owned:
+		state.buildings_active[sn] = 0
+	return state
+
+
+# Sets buildings_owned and buildings_active to count for the given short_name.
+# Use this to inject a building into a test state without going through buy_building.
+static func add_building(state: GameState, short_name: String, count: int = 1) -> void:
+	state.buildings_owned[short_name] = count
+	state.buildings_active[short_name] = count
+
+
+# Sets up program slot with a single command entry and 1 processor.
+# Clears any existing commands in the slot first.
+static func setup_program(state: GameState, command_shortname: String, slot: int = 0) -> void:
+	var entry := GameState.ProgramEntry.new()
+	entry.command_shortname = command_shortname
+	entry.repeat_count = 1
+	state.programs[slot].commands.clear()
+	state.programs[slot].commands.append(entry)
+	state.programs[slot].processors_assigned = 1
+	state.programs[slot].instruction_pointer = 0
+
+
+# Returns a fresh isolated state with fixed perlin seeds and zeroed demand
+# accumulators so demand calculations are deterministic across test calls.
+# Random events (speculator bursts, rival dumps) are deferred via defer_random_events().
+# Note: state.demand is not populated until the first tick_demand call.
+static func fresh_state_demand_isolated(sim: GameSimulation) -> GameState:
+	var state := fresh_state_isolated(sim)
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		state.demand_perlin_seeds[res] = 5.0
+		state.demand_perlin_freq[res] = 0.02
+		state.demand_promote[res] = 0.0
+		state.demand_rival[res] = 0.0
+		state.demand_launch[res] = 0.0
+		state.demand_history[res] = []
+	state.speculator_count = 0.0
+	state.speculator_target = ""
+	defer_random_events(state)
+	return state
+
+
+# Defers all time-based random events to a far-future tick so they don't
+# fire unexpectedly during tests. Sets speculator burst and all rival dump
+# ticks to a sentinel value (999999).
+static func defer_random_events(state: GameState) -> void:
+	state.speculator_next_burst_tick = 999999
+	for rid: String in state.rival_next_dump_tick:
+		state.rival_next_dump_tick[rid] = 999999
+
+
+# Returns a fully initialized ProjectManager loaded from project JSON data.
+static func create_fresh_pm() -> ProjectManager:
+	var pm := ProjectManager.new()
+	pm.init(load_projects_data(), load_game_config())
+	return pm
+
+
+# Redirects SaveManager's save path to a temp file so retirement tests don't
+# touch the player's real save. Returns the original path for restoration.
+# Call restore_save() in a finally-style cleanup at the end of the test.
+static func redirect_save(temp_name: String) -> String:
+	var SM = preload("res://scripts/game/save_manager.gd")
+	var real: String = SM.save_path
+	SM.save_path = "user://" + temp_name
+	return real
+
+
+# Restores the save path redirected by redirect_save() and deletes the temp file.
+static func restore_save(real_path: String, temp_name: String) -> void:
+	var SM = preload("res://scripts/game/save_manager.gd")
+	SM.save_path = real_path
+	var full: String = "user://" + temp_name
+	if FileAccess.file_exists(full):
+		DirAccess.remove_absolute(full)
+
+
+# Pre-triggers every milestone from game_config except the one under test.
+# Call this before ticking so only the target milestone can fire.
+# Reading from config ensures the exclusion list stays current as milestones
+# are added — without this, new milestones silently corrupt boredom assertions.
+static func pretrigger_all_milestones_except(state: GameState, except_id: String) -> void:
+	var config := load_game_config()
+	for m: Dictionary in config.get("milestones", []):
+		var mid: String = m.get("id", "")
+		if mid != except_id and not state.triggered_milestones.has(mid):
+			state.triggered_milestones.append(mid)
 
 
 # Returns a fresh state with the given research IDs pre-completed.

@@ -249,6 +249,17 @@ func purchase_research(research_id: String) -> void:
 		tick_completed.emit()
 
 
+# Executes a full tick against the live state without using the timer.
+# Runs sim + event_manager + project_manager in the same order as _on_tick().
+# Pass debug_no_boredom = true to suppress boredom accumulation (useful in
+# tests that assert on exact boredom values after milestone reductions).
+# Does NOT emit tick_completed, trigger autosave, or check boredom >= 1000.
+func execute_tick(debug_no_boredom: bool = false) -> void:
+	sim.tick(state, debug_no_boredom)
+	event_manager.tick(state)
+	project_manager.tick(state, career)
+
+
 func _on_tick() -> void:
 	sim.tick(state, GameSettings.debug_no_boredom)
 	event_manager.tick(state)

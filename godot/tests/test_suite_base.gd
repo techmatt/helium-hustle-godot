@@ -30,6 +30,14 @@ func _assert_true(value: bool, test_name: String) -> void:
 		print("  FAIL: ", test_name)
 
 
+func _assert_false(value: bool, test_name: String) -> void:
+	if not value:
+		tests_passed += 1
+	else:
+		tests_failed += 1
+		print("  FAIL: ", test_name)
+
+
 func _assert_gt(actual: float, threshold: float, test_name: String) -> void:
 	if actual > threshold:
 		tests_passed += 1
@@ -52,3 +60,13 @@ func _assert_approx(actual: float, expected: float, tolerance: float, test_name:
 	else:
 		tests_failed += 1
 		print("  FAIL: ", test_name, " — expected ~", expected, " (±", tolerance, ") got ", actual)
+
+
+func _assert_stall_status(state: GameState, short_name: String, expected: String, test_name: String) -> void:
+	var stall: Dictionary = state.building_stall_status.get(short_name, {})
+	var actual: String = stall.get("status", "")
+	if actual == expected:
+		tests_passed += 1
+	else:
+		tests_failed += 1
+		print("  FAIL: ", test_name, " — expected status '", expected, "' got '", actual, "' (full stall: ", stall, ")")

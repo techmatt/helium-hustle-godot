@@ -17,24 +17,19 @@ func _test_building_production() -> void:
 	print("--- Building Production ---")
 
 	# Solar panel: no upkeep, produces 6 eng per tick.
-	# Disable data_center so its eng upkeep doesn't interfere.
 	# Drain eng to 0 so the production isn't invisible behind the cap.
 	var sim := TF.create_fresh_sim()
-	var state := TF.fresh_state(sim)
-	state.buildings_active["data_center"] = 0
+	var state := TF.fresh_state_isolated(sim)
+	TF.add_building(state, "panel")
 	state.amounts["eng"] = 0.0
 	sim.tick(state, true)
 	_assert_approx(state.amounts.get("eng", 0.0), 6.0, 0.001,
 		"production: solar panel produces 6 eng per tick")
 
 	# Excavator: upkeep 2 eng, produces 2 reg per tick.
-	# Disable panel and data_center so energy balance is controlled.
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["excavator"] = 1
-	state.buildings_active["excavator"] = 1
+	state = TF.fresh_state_isolated(sim)
+	TF.add_building(state, "excavator")
 	state.amounts["reg"] = 0.0
 	state.amounts["eng"] = 10.0
 	sim.tick(state, true)
@@ -45,11 +40,8 @@ func _test_building_production() -> void:
 
 	# Smelter: upkeep 3 eng + 2 reg, produces 1 ti per tick.
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["smelter"] = 1
-	state.buildings_active["smelter"] = 1
+	state = TF.fresh_state_isolated(sim)
+	TF.add_building(state, "smelter")
 	state.amounts["ti"] = 0.0
 	state.amounts["eng"] = 20.0
 	state.amounts["reg"] = 20.0
@@ -68,22 +60,18 @@ func _test_production_gated_upkeep() -> void:
 	# Solar panel is a free producer (no upkeep). When its only output (eng) is
 	# at cap, Pass 2 marks it output_capped and skips production entirely.
 	var sim := TF.create_fresh_sim()
-	var state := TF.fresh_state(sim)
-	state.buildings_active["data_center"] = 0
+	var state := TF.fresh_state_isolated(sim)
+	TF.add_building(state, "panel")
 	state.amounts["eng"] = 100.0  # at eng cap
 	sim.tick(state, true)
-	var panel_stall: Dictionary = state.building_stall_status.get("panel", {})
-	_assert_equal(panel_stall.get("status", ""), "output_capped",
+	_assert_stall_status(state, "panel", "output_capped",
 		"gated_upkeep: solar panel stalls output_capped when eng at cap")
 
 	# Excavator: when reg is at cap, the output-capped check fires in Pass 1
 	# before upkeep is paid — so upkeep is NOT deducted and production is skipped.
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["excavator"] = 1
-	state.buildings_active["excavator"] = 1
+	state = TF.fresh_state_isolated(sim)
+	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 10.0
 	state.amounts["reg"] = 50.0  # at base reg cap (50)
 	var eng_before: float = state.amounts["eng"]
@@ -92,8 +80,7 @@ func _test_production_gated_upkeep() -> void:
 		"gated_upkeep: excavator does not pay eng upkeep when reg output is at cap")
 	_assert_approx(state.amounts.get("reg", 0.0), 50.0, 0.001,
 		"gated_upkeep: excavator does not produce reg when output is at cap")
-	var exc_stall: Dictionary = state.building_stall_status.get("excavator", {})
-	_assert_equal(exc_stall.get("status", ""), "output_capped",
+	_assert_stall_status(state, "excavator", "output_capped",
 		"gated_upkeep: excavator stall status is output_capped when reg at cap")
 
 
@@ -102,11 +89,8 @@ func _test_input_starvation_skip() -> void:
 
 	# Smelter starved of regolith: no production, no eng upkeep deducted.
 	var sim := TF.create_fresh_sim()
-	var state := TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["smelter"] = 1
-	state.buildings_active["smelter"] = 1
+	var state := TF.fresh_state_isolated(sim)
+	TF.add_building(state, "smelter")
 	state.amounts["eng"] = 20.0
 	state.amounts["reg"] = 0.0   # starved
 	state.amounts["ti"] = 0.0
@@ -118,11 +102,8 @@ func _test_input_starvation_skip() -> void:
 
 	# Smelter starved of energy: no production, no reg upkeep deducted.
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["smelter"] = 1
-	state.buildings_active["smelter"] = 1
+	state = TF.fresh_state_isolated(sim)
+	TF.add_building(state, "smelter")
 	state.amounts["eng"] = 0.0   # starved
 	state.amounts["reg"] = 20.0
 	state.amounts["ti"] = 0.0
@@ -138,44 +119,32 @@ func _test_stall_status_tracking() -> void:
 
 	# Excavator input starved: eng=0 → can't pay upkeep → input_starved.
 	var sim := TF.create_fresh_sim()
-	var state := TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["excavator"] = 1
-	state.buildings_active["excavator"] = 1
+	var state := TF.fresh_state_isolated(sim)
+	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 0.0
 	state.amounts["reg"] = 0.0
 	sim.tick(state, true)
-	var stall: Dictionary = state.building_stall_status.get("excavator", {})
-	_assert_equal(stall.get("status", ""), "input_starved",
+	_assert_stall_status(state, "excavator", "input_starved",
 		"stall: excavator is input_starved when eng=0")
 
 	# Excavator output capped: reg at cap → output_capped (upkeep not paid).
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["excavator"] = 1
-	state.buildings_active["excavator"] = 1
+	state = TF.fresh_state_isolated(sim)
+	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 10.0
 	state.amounts["reg"] = 50.0  # at base reg cap
 	sim.tick(state, true)
-	stall = state.building_stall_status.get("excavator", {})
-	_assert_equal(stall.get("status", ""), "output_capped",
+	_assert_stall_status(state, "excavator", "output_capped",
 		"stall: excavator is output_capped when reg at cap")
 
 	# Excavator running normally: eng available, reg below cap.
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state(sim)
-	state.buildings_active["panel"] = 0
-	state.buildings_active["data_center"] = 0
-	state.buildings_owned["excavator"] = 1
-	state.buildings_active["excavator"] = 1
+	state = TF.fresh_state_isolated(sim)
+	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 10.0
 	state.amounts["reg"] = 0.0   # well below cap
 	sim.tick(state, true)
-	stall = state.building_stall_status.get("excavator", {})
-	_assert_equal(stall.get("status", ""), "running",
+	_assert_stall_status(state, "excavator", "running",
 		"stall: excavator is running when eng available and reg below cap")
 
 
@@ -192,8 +161,7 @@ func _test_storage_caps() -> void:
 
 	# Storage Depot effects per buildings.json:
 	# reg+75, ice+40, he3+30, ti+25, cir+10, prop+40.
-	state.buildings_owned["storage_depot"] = 1
-	state.buildings_active["storage_depot"] = 1
+	TF.add_building(state, "storage_depot")
 	sim.recalculate_caps(state)
 	_assert_approx(state.caps.get("reg", 0.0), 125.0, 0.001,
 		"caps: 1 storage depot raises reg cap to 125")
@@ -213,8 +181,7 @@ func _test_storage_caps() -> void:
 	state = TF.fresh_state(sim)
 	_assert_approx(state.caps.get("eng", 0.0), 100.0, 0.001,
 		"caps: base eng cap is 100 before battery")
-	state.buildings_owned["battery"] = 1
-	state.buildings_active["battery"] = 1
+	TF.add_building(state, "battery")
 	sim.recalculate_caps(state)
 	_assert_approx(state.caps.get("eng", 0.0), 150.0, 0.001,
 		"caps: 1 battery raises eng cap to 150")

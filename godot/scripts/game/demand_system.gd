@@ -17,6 +17,24 @@ func get_config(key: String) -> float:
 	return float(_demand_cfg.get(key, 0.0))
 
 
+# Returns the speculator suppression component for a resource this tick.
+# Formula: max_suppression * (count / (count + half_point)).
+# Returns 0.0 if this resource is not the current speculator target.
+# Useful for tests that want to assert the suppression value directly
+# without reconstructing it from a demand delta.
+func get_suppression(state: GameState, resource: String) -> float:
+	if state.speculator_target != resource or state.speculator_count <= 0.0:
+		return 0.0
+	var max_sup: float = _dcfg("speculator_max_suppression")
+	var half_pt: float = _dcfg("speculator_half_point")
+	return max_sup * (state.speculator_count / (state.speculator_count + half_pt))
+
+
+# Initializes per-resource demand state (seeds, accumulators, history) and
+# fires an initial tick_demand to populate state.demand at day 0.
+# Note: perlin seeds are randomized via randf() here. For deterministic tests,
+# override state.demand_perlin_seeds and demand_perlin_freq after calling, or
+# use TestFixtures.fresh_state_demand_isolated() which sets fixed seeds.
 func initialize_demand(state: GameState) -> void:
 	var freq_min: float = _dcfg("perlin_freq_min")
 	var freq_max: float = _dcfg("perlin_freq_max")
@@ -39,6 +57,9 @@ func initialize_demand(state: GameState) -> void:
 	tick_demand(state)
 
 
+# Recomputes state.demand for all tradeable resources and decays the promote,
+# rival, and launch saturation accumulators by one step. Called once per tick
+# (before programs) and directly by tests to advance demand in isolation.
 func tick_demand(state: GameState) -> void:
 	var amplitude: float = _dcfg("perlin_amplitude")
 	if debug_pure_noise:
@@ -119,6 +140,10 @@ func tick_demand(state: GameState) -> void:
 		state.demand_history[res] = hist
 
 
+# Decays speculator count (proportional rate + arbitrage engine bonus) and
+# fires a speculator burst if current_day >= speculator_next_burst_tick.
+# Called once per tick after shipments. Test with defer_random_events() to
+# prevent burst side effects.
 func tick_speculators(state: GameState) -> void:
 	# Decay speculators — proportional base rate (boosted by Nationalist ideology + Arbitrage Engines)
 	var active_arb: int = state.buildings_active.get("arbitrage_engine", state.buildings_owned.get("arbitrage_engine", 0))
@@ -131,6 +156,9 @@ func tick_speculators(state: GameState) -> void:
 		_fire_speculator_burst(state)
 
 
+# Checks each rival's dump schedule and applies demand_hit to the target
+# resource when due. Returns an Array of notification dicts for any dumps
+# that fired this tick. Called once per tick after shipments.
 func tick_rivals(state: GameState) -> Array:
 	var notifications: Array = []
 	for rival in _rivals:
