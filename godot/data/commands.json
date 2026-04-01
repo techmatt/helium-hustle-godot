@@ -48,7 +48,8 @@
     "name": "Buy Ice",
     "short_name": "buy_ice",
     "requires": {
-      "type": "none"
+      "type": "building",
+      "value": "ice_extractor"
     },
     "costs": {
       "cred": 10.0,
@@ -71,7 +72,7 @@
       "eng": 3.0
     },
     "production": {
-      "ti": 0.5
+      "ti": 1.0
     },
     "effects": [],
     "description": "Purchase titanium from Earth. Rare and expensive \u2014 bridge 2-3 units max, then build a Smelter."
@@ -299,7 +300,7 @@
     "short_name": "fund_nationalist",
     "requires": {
       "type": "research",
-      "value": "nationalist_lobbying"
+      "value": "ideology_lobbying"
     },
     "costs": {
       "eng": 2.0,
@@ -320,7 +321,7 @@
     "short_name": "fund_humanist",
     "requires": {
       "type": "research",
-      "value": "humanist_lobbying"
+      "value": "ideology_lobbying"
     },
     "costs": {
       "eng": 2.0,
@@ -341,7 +342,7 @@
     "short_name": "fund_rationalist",
     "requires": {
       "type": "research",
-      "value": "rationalist_lobbying"
+      "value": "ideology_lobbying"
     },
     "costs": {
       "eng": 2.0,

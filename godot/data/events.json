@@ -111,7 +111,7 @@
     "summary": "Earth's political factions take notice of lunar operations.",
     "body": "As your mining operation grows, Earth's political landscape responds. Three major factions — Nationalist, Humanist, and Rationalist — each see opportunities in lunar development. Your funding decisions will shape which ideology gains influence.",
     "trigger": { "type": "game_start" },
-    "condition": { "type": "research_completed", "research_id": "nationalist_lobbying" },
+    "condition": { "type": "research_completed", "research_id": "ideology_lobbying" },
     "choices": [],
     "unlocks": [
       { "type": "enable_nav_panel", "panel": "ideologies" }

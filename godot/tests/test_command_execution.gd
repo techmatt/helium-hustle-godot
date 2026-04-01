@@ -22,6 +22,8 @@ func _test_command_idle() -> void:
 	sim.execute_command(state, "idle")
 	_assert_approx(state.amounts.get("cred", 0.0), 1.0, 0.001,
 		"idle: cred increases by 1")
+	_assert_approx(state.cumulative_resources_earned.get("cred", 0.0), 1.0, 0.001,
+		"idle: cumulative_resources_earned[cred] increases by 1")
 
 
 func _test_command_sell_cloud_compute() -> void:
@@ -38,6 +40,8 @@ func _test_command_sell_cloud_compute() -> void:
 		"cloud_compute: eng decreases by 3")
 	_assert_approx(state.amounts.get("boredom", 0.0), 0.4, 0.001,
 		"cloud_compute: boredom increases by 0.4")
+	_assert_approx(state.cumulative_resources_earned.get("cred", 0.0), 5.0, 0.001,
+		"cloud_compute: cumulative_resources_earned[cred] increases by 5")
 
 
 func _test_command_buy_resources() -> void:
@@ -57,12 +61,14 @@ func _test_command_buy_resources() -> void:
 	_assert_approx(state.amounts.get("reg", 0.0), 1.0, 0.001,
 		"buy_regolith: reg increases by 1")
 
-	# Buy Ice: costs 10 cred + 2 eng, produces 1 ice
+	# Buy Ice: costs 10 cred + 2 eng, produces 1 ice; requires ice_extractor
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	state.amounts["ice"] = 0.0
+	state.buildings_owned["ice_extractor"] = 1
+	state.buildings_active["ice_extractor"] = 1
 	sim.execute_command(state, "buy_ice")
 	_assert_approx(state.amounts.get("cred", 0.0), 90.0, 0.001,
 		"buy_ice: cred decreases by 10")
@@ -71,7 +77,7 @@ func _test_command_buy_resources() -> void:
 	_assert_approx(state.amounts.get("ice", 0.0), 1.0, 0.001,
 		"buy_ice: ice increases by 1")
 
-	# Buy Titanium: costs 20 cred + 3 eng, produces 0.5 ti
+	# Buy Titanium: costs 20 cred + 3 eng, produces 1 ti
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
@@ -82,8 +88,8 @@ func _test_command_buy_resources() -> void:
 		"buy_titanium: cred decreases by 20")
 	_assert_approx(state.amounts.get("eng", 0.0), 97.0, 0.001,
 		"buy_titanium: eng decreases by 3")
-	_assert_approx(state.amounts.get("ti", 0.0), 0.5, 0.001,
-		"buy_titanium: ti increases by 0.5")
+	_assert_approx(state.amounts.get("ti", 0.0), 1.0, 0.001,
+		"buy_titanium: ti increases by 1")
 
 	# Buy Propellant: costs 12 cred + 2 eng, produces 1 prop
 	sim = TF.create_fresh_sim()
@@ -131,7 +137,7 @@ func _test_command_fund_ideology() -> void:
 
 	# Fund Nationalists: nationalist +1.0, humanist -0.5, rationalist -0.5
 	var sim := TF.create_fresh_sim()
-	var state := TF.fresh_state_with_research(sim, ["nationalist_lobbying"])
+	var state := TF.fresh_state_with_research(sim, ["ideology_lobbying"])
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	state.ideology_values = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -145,7 +151,7 @@ func _test_command_fund_ideology() -> void:
 
 	# Fund Humanists: humanist +1.0, nationalist -0.5, rationalist -0.5
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state_with_research(sim, ["humanist_lobbying"])
+	state = TF.fresh_state_with_research(sim, ["ideology_lobbying"])
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	state.ideology_values = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -159,7 +165,7 @@ func _test_command_fund_ideology() -> void:
 
 	# Fund Rationalists: rationalist +1.0, nationalist -0.5, humanist -0.5
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state_with_research(sim, ["rationalist_lobbying"])
+	state = TF.fresh_state_with_research(sim, ["ideology_lobbying"])
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	state.ideology_values = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -230,13 +236,13 @@ func _test_command_requires_gating() -> void:
 	_assert_approx(state.amounts.get("boredom", 0.0), 500.0, 0.001,
 		"gating: dream does not reduce boredom without dream_protocols")
 
-	# Fund Nationalist requires nationalist_lobbying.
+	# Fund Nationalist requires ideology_lobbying.
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	_assert_false(sim.is_command_executable(state, "fund_nationalist"),
-		"gating: fund_nationalist is not executable without nationalist_lobbying")
+		"gating: fund_nationalist is not executable without ideology_lobbying")
 
 	# Overclock Mining requires overclock_protocols.
 	sim = TF.create_fresh_sim()

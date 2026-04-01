@@ -7,8 +7,13 @@
 _(Add entries here when making changes directly via Claude Code without a 
 claude.ai design session. Format: date, what changed, one line.)_
 
-- 2026-03-31: Research passive effects audit — all 4 research effects and 6 project 
+- 2026-03-31: Research passive effects audit — all 4 research effects and 6 project
   modifiers verified working via new `test_passive_effects.gd` suite (~10 new tests).
+- 2026-03-31: Progressive disclosure system — resources/buildings/commands hidden until
+  earned; CareerState lifetime tracking; `building_count` requires type; ideology lobbying
+  merged to single `ideology_lobbying` research; `show_all_cards` debug toggle; Solar Panel
+  cost updated to 20 cred + 10 ti; Buy Ice requires ice_extractor; Buy Titanium yields 1.0
+  ti; new `test_progressive_disclosure.gd` suite (7 tests); all 1307 tests passing.
 
 ---
 
@@ -36,9 +41,11 @@ claude.ai design session. Format: date, what changed, one line.)_
 - Project system (5 persistent + 5 personal, drain model, modifier framework, 
   all 6 modifiers verified working)
 - Ideology system (3 axes, continuous bonuses, rank 5 projects)
-- Headless test infrastructure (10 suites, ~240+ assertions)
-- Options panel (light/dark mode, debug: disable boredom)
+- Headless test infrastructure (11 suites, 1307 assertions)
+- Options panel (light/dark mode, debug: disable boredom, show all cards)
 - Propellant gating (event → research → building unlock chain)
+- Progressive disclosure (resources/buildings/commands hidden until earned; CareerState
+  lifetime tracking; building_count requires type; ideology lobbying merged)
 
 ### Python Optimizer (`sim/`)
 - Scenario-based architecture

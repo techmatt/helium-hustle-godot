@@ -22,6 +22,7 @@ func _test_building_data_integrity() -> void:
 		"panel", "excavator", "ice_extractor", "smelter", "refinery",
 		"fabricator", "electrolysis", "launch_pad", "research_lab",
 		"data_center", "battery", "storage_depot", "arbitrage_engine",
+		"microwave_receiver",
 	]
 	for sn: String in expected:
 		_assert_true(by_sn.has(sn), "building exists: " + sn)

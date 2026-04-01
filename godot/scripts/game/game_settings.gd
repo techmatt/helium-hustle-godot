@@ -8,3 +8,4 @@ var is_dark_mode: bool = false:
 		theme_changed.emit()
 
 var debug_no_boredom: bool = false
+var show_all_cards: bool = false

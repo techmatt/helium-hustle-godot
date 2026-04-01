@@ -136,9 +136,7 @@ func _test_command_unlock_wiring() -> void:
 		"overclock_protocols":   ["overclock_mining", "overclock_factories"],
 		"market_awareness":      ["disrupt_spec"],
 		"trade_promotion":       ["promote_he3", "promote_ti", "promote_cir", "promote_prop"],
-		"nationalist_lobbying":  ["fund_nationalist"],
-		"humanist_lobbying":     ["fund_humanist"],
-		"rationalist_lobbying":  ["fund_rationalist"],
+		"ideology_lobbying":     ["fund_nationalist", "fund_humanist", "fund_rationalist"],
 	}
 
 	for research_id: String in unlock_map:

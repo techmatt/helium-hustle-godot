@@ -10,14 +10,15 @@
     "land": 1,
     "cost_scaling": 1.2,
     "costs": {
-      "cred": 8.0
+      "cred": 20.0,
+      "ti": 10.0
     },
     "production": {
       "eng": 6.0
     },
     "upkeep": {},
     "effects": [],
-    "description": "Cheap energy. No material cost \u2014 scale these freely throughout the run."
+    "description": "Energy infrastructure. Titanium cost scales with the resource chain."
   },
   {
     "name": "Regolith Excavator",
@@ -195,8 +196,10 @@
     "category": "Science",
     "ideology": "rationalist",
     "requires": {
-      "type": "building",
-      "value": "fabricator"
+      "type": "building_count",
+      "value": "data_center",
+      "count": 2,
+      "label": "2 Data Centers"
     },
     "land": 2,
     "cost_scaling": 1.3,

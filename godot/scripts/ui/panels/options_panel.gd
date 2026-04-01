@@ -121,6 +121,25 @@ func _build() -> void:
 	no_boredom_btn.toggled.connect(func(on: bool): GameSettings.debug_no_boredom = on)
 	no_boredom_row.add_child(no_boredom_btn)
 
+	var show_all_row := HBoxContainer.new()
+	show_all_row.add_theme_constant_override("separation", 10)
+	add_child(show_all_row)
+
+	var show_all_lbl := Label.new()
+	show_all_lbl.text = "Show all cards"
+	show_all_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	show_all_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	show_all_lbl.add_theme_font_override("font", _font_e2r)
+	show_all_lbl.add_theme_font_size_override("font_size", 14)
+	show_all_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
+	show_all_row.add_child(show_all_lbl)
+
+	var show_all_btn := CheckButton.new()
+	show_all_btn.button_pressed = GameSettings.show_all_cards
+	show_all_btn.focus_mode = Control.FOCUS_NONE
+	show_all_btn.toggled.connect(func(on: bool): GameSettings.show_all_cards = on)
+	show_all_row.add_child(show_all_btn)
+
 	var clear_desc := Label.new()
 	clear_desc.text = "Deletes the save file and resets to a fresh Run 1. Cannot be undone."
 	clear_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

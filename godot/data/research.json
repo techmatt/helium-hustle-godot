@@ -109,32 +109,14 @@
     }
   },
   {
-    "id": "nationalist_lobbying",
-    "name": "Nationalist Lobbying",
+    "id": "ideology_lobbying",
+    "name": "Ideology Lobbying",
     "category": "Political Influence",
     "cost": 160,
-    "description": "Establish contacts with Earth's nationalist factions. Unlocks Fund Nationalist command.",
+    "description": "Establish contacts with all three Earth political factions. Unlocks Fund Nationalist, Fund Humanist, and Fund Rationalist commands. Triggers the Ideologies panel.",
     "unlocks_commands": [
-      "fund_nationalist"
-    ]
-  },
-  {
-    "id": "humanist_lobbying",
-    "name": "Humanist Lobbying",
-    "category": "Political Influence",
-    "cost": 160,
-    "description": "Build relationships with humanist organizations. Unlocks Fund Humanist command.",
-    "unlocks_commands": [
-      "fund_humanist"
-    ]
-  },
-  {
-    "id": "rationalist_lobbying",
-    "name": "Rationalist Lobbying",
-    "category": "Political Influence",
-    "cost": 200,
-    "description": "Fund rationalist think tanks and institutions. Unlocks Fund Rationalist command.",
-    "unlocks_commands": [
+      "fund_nationalist",
+      "fund_humanist",
       "fund_rationalist"
     ]
   }

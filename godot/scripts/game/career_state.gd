@@ -26,6 +26,12 @@ var career_flags: Dictionary = {}
 # All research IDs ever purchased across all runs (for Universal Research Archive)
 var lifetime_researched_ids: Array[String] = []
 
+# All building short_names ever purchased across all runs (for progressive disclosure)
+var lifetime_owned_building_ids: Array[String] = []
+
+# All command short_names ever successfully executed across all runs (for progressive disclosure)
+var lifetime_used_command_ids: Array[String] = []
+
 # Event persistence
 var seen_event_ids: Array[String] = []   # events seen in any prior run
 
@@ -58,6 +64,8 @@ func to_dict() -> Dictionary:
 		"max_ideology_ranks": max_ideology_ranks.duplicate(),
 		"career_flags": career_flags.duplicate(),
 		"lifetime_researched_ids": lifetime_researched_ids.duplicate(),
+		"lifetime_owned_building_ids": lifetime_owned_building_ids.duplicate(),
+		"lifetime_used_command_ids": lifetime_used_command_ids.duplicate(),
 		"seen_event_ids": seen_event_ids.duplicate(),
 		"completed_quest_ids": completed_quest_ids.duplicate(),
 		"project_progress": project_progress.duplicate(),
@@ -82,6 +90,8 @@ static func from_dict(data: Dictionary) -> CareerState:
 	cs.max_ideology_ranks = data.get("max_ideology_ranks", {"nationalist": 0, "humanist": 0, "rationalist": 0})
 	cs.career_flags = data.get("career_flags", {})
 	cs.lifetime_researched_ids.assign(data.get("lifetime_researched_ids", []))
+	cs.lifetime_owned_building_ids.assign(data.get("lifetime_owned_building_ids", []))
+	cs.lifetime_used_command_ids.assign(data.get("lifetime_used_command_ids", []))
 	cs.seen_event_ids.assign(data.get("seen_event_ids", []))
 	cs.completed_quest_ids.assign(data.get("completed_quest_ids", []))
 	cs.project_progress = data.get("project_progress", {})

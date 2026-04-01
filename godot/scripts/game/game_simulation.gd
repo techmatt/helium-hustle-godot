@@ -11,6 +11,7 @@ var _milestones: Array = []           # milestone definitions from game_config
 var pending_program_events: Array = []   # populated during tick, read by GameManager
 var pending_milestone_triggers: Array = []  # {id, label, boredom_reduction} — read by GameManager
 var pending_rival_notifications: Array = []  # {tick, rival_name, resource, message}
+var pending_executed_commands: Array[String] = []  # short_names of successfully executed commands this tick
 var last_gross_deltas: Dictionary = {}  # pre-clamp net change per resource this tick
 
 # Shipment constants (set from game_config in init)
@@ -68,6 +69,7 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	pending_program_events.clear()
 	pending_milestone_triggers.clear()
 	pending_rival_notifications.clear()
+	pending_executed_commands.clear()
 	last_gross_deltas.clear()
 	if rate_tracker != null:
 		rate_tracker.begin_tick()
@@ -246,6 +248,11 @@ func execute_programs(state: GameState) -> void:
 		entry.failed_this_cycle = had_failure and not had_success
 		entry.partial_failed_this_cycle = had_success and had_failure
 
+		if had_success:
+			var sn: String = entry.command_shortname
+			if not pending_executed_commands.has(sn):
+				pending_executed_commands.append(sn)
+
 		entry.current_progress += prog.processors_assigned
 		pending_program_events.append({
 			"type": "step",
@@ -314,6 +321,13 @@ func get_building_requires_text(_state: GameState, short_name: String) -> String
 				if b.short_name == needed:
 					return "Requires: " + b.get("name", needed)
 			return "Requires: " + needed
+		"building_count":
+			var needed: String = req.get("value", "")
+			var count: int = int(req.get("count", 1))
+			for b in _buildings_data:
+				if b.short_name == needed:
+					return "Requires: %d %s" % [count, b.get("name", needed)]
+			return "Requires: %d %s" % [count, needed]
 		"research":
 			return "Requires: Research " + req.get("value", "")
 	return "Requires: " + req.get("value", "")
@@ -326,6 +340,8 @@ func _check_requires(state: GameState, bdef: Dictionary) -> bool:
 			return true
 		"building":
 			return state.buildings_owned.get(req.get("value", ""), 0) >= 1
+		"building_count":
+			return state.buildings_owned.get(req.get("value", ""), 0) >= int(req.get("count", 1))
 		"quest":
 			return state.unlocked_buildings.has(bdef.short_name)
 		"research":

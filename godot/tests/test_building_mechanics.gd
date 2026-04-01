@@ -190,43 +190,45 @@ func _test_storage_caps() -> void:
 func _test_building_cost_scaling() -> void:
 	print("--- Building Cost Scaling ---")
 
-	# Solar panel: base cost 8 cred, scaling 1.2, no ideology alignment.
+	# Solar panel: base cost 20 cred + 10 ti, scaling 1.2, no ideology alignment.
 	# Formula: base_cost * scaling^purchased, where purchased = max(0, owned - bonus).
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state(sim)
 
-	# 0 owned → purchased=0 → 8 * 1.2^0 = 8
+	# 0 owned → purchased=0 → 20 * 1.2^0 = 20
 	state.buildings_owned["panel"] = 0
 	state.buildings_bonus["panel"] = 0
 	var costs: Dictionary = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 8.0, 0.001,
-		"cost_scaling: panel 0 owned → cost 8")
+	_assert_approx(costs.get("cred", 0.0), 20.0, 0.001,
+		"cost_scaling: panel 0 owned → cred cost 20")
+	_assert_approx(costs.get("ti", 0.0), 10.0, 0.001,
+		"cost_scaling: panel 0 owned → ti cost 10")
 
-	# 1 owned → purchased=1 → 8 * 1.2^1 = 9.6
+	# 1 owned → purchased=1 → 20 * 1.2^1 = 24
 	state.buildings_owned["panel"] = 1
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 9.6, 0.001,
-		"cost_scaling: panel 1 owned → cost 9.6")
+	_assert_approx(costs.get("cred", 0.0), 24.0, 0.001,
+		"cost_scaling: panel 1 owned → cred cost 24")
 
-	# 5 owned → purchased=5 → 8 * 1.2^5 ≈ 19.907
+	# 5 owned → purchased=5 → 20 * 1.2^5
 	state.buildings_owned["panel"] = 5
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 8.0 * pow(1.2, 5.0), 0.001,
-		"cost_scaling: panel 5 owned → cost 8 * 1.2^5")
+	_assert_approx(costs.get("cred", 0.0), 20.0 * pow(1.2, 5.0), 0.001,
+		"cost_scaling: panel 5 owned → cred cost 20 * 1.2^5")
 
-	# Bonus offset: owned=3, bonus=1 → purchased=max(0,2)=2 → 8 * 1.2^2 = 11.52
+	# Bonus offset: owned=3, bonus=1 → purchased=max(0,2)=2 → 20 * 1.2^2 = 28.8
 	state.buildings_owned["panel"] = 3
 	state.buildings_bonus["panel"] = 1
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 8.0 * pow(1.2, 2.0), 0.001,
-		"cost_scaling: panel owned=3 bonus=1 → purchased=2, cost 11.52")
+	_assert_approx(costs.get("cred", 0.0), 20.0 * pow(1.2, 2.0), 0.001,
+		"cost_scaling: panel owned=3 bonus=1 → purchased=2, cred cost 28.8")
 
-	# Bonus matches owned: owned=1, bonus=1 → purchased=max(0,0)=0 → cost 8
+	# Bonus matches owned: owned=1, bonus=1 → purchased=max(0,0)=0 → cost 20
 	state.buildings_owned["panel"] = 1
 	state.buildings_bonus["panel"] = 1
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 8.0, 0.001,
-		"cost_scaling: panel owned=1 bonus=1 → purchased=0, cost 8")
+	_assert_approx(costs.get("cred", 0.0), 20.0, 0.001,
+		"cost_scaling: panel owned=1 bonus=1 → purchased=0, cred cost 20")
 
 
 func _test_land_system() -> void:
@@ -265,8 +267,9 @@ func _test_land_system() -> void:
 	# Building purchase consumes land. Solar panel costs 1 land.
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state(sim)
-	state.buildings_owned["panel"] = 0  # reset so purchased=0, cost=8 cred
-	state.amounts["cred"] = 8.0
+	state.buildings_owned["panel"] = 0  # reset so purchased=0, cost=20 cred + 10 ti
+	state.amounts["cred"] = 20.0
+	state.amounts["ti"] = 10.0
 	var land_start: float = state.amounts.get("land", 0.0)
 	sim.buy_building(state, "panel")
 	_assert_approx(state.amounts.get("land", 0.0), land_start - 1.0, 0.001,

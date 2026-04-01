@@ -46,6 +46,8 @@ var _font_e2r: FontFile
 var _font_e2s: FontFile
 
 var _buildings_snapshot: Dictionary = {}
+var _research_snapshot: Array = []
+var _lifetime_cmds_snapshot: Array = []
 
 
 func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
@@ -55,13 +57,20 @@ func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 6)
 	_buildings_snapshot = GameManager.state.buildings_owned.duplicate()
+	_research_snapshot = GameManager.state.completed_research.duplicate()
+	_lifetime_cmds_snapshot = GameManager.get_lifetime_used_command_ids()
 	_build()
 
 
 func on_tick() -> void:
-	var cur: Dictionary = GameManager.state.buildings_owned.duplicate()
-	if cur != _buildings_snapshot:
-		_buildings_snapshot = cur
+	var cur_bld: Dictionary = GameManager.state.buildings_owned.duplicate()
+	var cur_res: Array = GameManager.state.completed_research.duplicate()
+	var cur_cmds: Array = GameManager.get_lifetime_used_command_ids()
+	if cur_bld != _buildings_snapshot or cur_res != _research_snapshot \
+			or cur_cmds != _lifetime_cmds_snapshot:
+		_buildings_snapshot = cur_bld
+		_research_snapshot = cur_res
+		_lifetime_cmds_snapshot = cur_cmds
 		for child in get_children():
 			child.queue_free()
 		_build()
@@ -87,6 +96,14 @@ func _build() -> void:
 
 
 func _add_group_section(group: String, cmds: Array) -> void:
+	# Filter to visible commands; skip group if none are visible.
+	var visible_cmds: Array = []
+	for cmd: Dictionary in cmds:
+		if GameManager.is_command_visible(cmd.short_name):
+			visible_cmds.append(cmd)
+	if visible_cmds.is_empty():
+		return
+
 	var section := VBoxContainer.new()
 	section.add_theme_constant_override("separation", 6)
 	add_child(section)
@@ -112,11 +129,7 @@ func _add_group_section(group: String, cmds: Array) -> void:
 		_apply_category_header_style(header)
 	)
 
-	for cmd: Dictionary in cmds:
-		var req: Dictionary = cmd.get("requires", {})
-		if req.get("type", "") == "building_owned":
-			if GameManager.state.buildings_owned.get(req.get("value", ""), 0) <= 0:
-				continue
+	for cmd: Dictionary in visible_cmds:
 		flow.add_child(_build_command_card(cmd))
 
 

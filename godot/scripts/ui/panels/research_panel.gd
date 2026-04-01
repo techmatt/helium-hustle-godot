@@ -78,7 +78,8 @@ func _build() -> void:
 	var has_visible: bool = false
 	for cat: String in category_order:
 		var threshold: float = category_min_cost[cat] * 0.5
-		if st.cumulative_resources_earned.get("sci", 0.0) < threshold:
+		if not GameSettings.show_all_cards \
+				and st.cumulative_resources_earned.get("sci", 0.0) < threshold:
 			continue
 		has_visible = true
 		_add_category_section(cat, by_category[cat])

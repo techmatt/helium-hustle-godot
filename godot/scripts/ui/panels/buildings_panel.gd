@@ -9,6 +9,7 @@ var _font_e2s: FontFile
 
 var _card_nodes: Array = []
 var _buy_land_card: BuyLandCard = null
+var _visibility_snapshot: Array = []
 
 
 func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
@@ -17,14 +18,32 @@ func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
 	_font_e2s = font_e2s
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 6)
+	_visibility_snapshot = _get_visible_building_ids()
 	_build()
 
 
 func on_tick() -> void:
+	var cur_vis: Array = _get_visible_building_ids()
+	if cur_vis != _visibility_snapshot:
+		_visibility_snapshot = cur_vis
+		for child in get_children():
+			child.queue_free()
+		_card_nodes.clear()
+		_buy_land_card = null
+		_build()
+		return
 	if _buy_land_card != null:
 		_buy_land_card.refresh()
 	for card: BuildingCard in _card_nodes:
 		card.refresh()
+
+
+func _get_visible_building_ids() -> Array:
+	var result: Array = []
+	for bdef: Dictionary in GameManager.get_buildings_data():
+		if GameManager.is_building_visible(bdef.short_name):
+			result.append(bdef.short_name)
+	return result
 
 
 func _build() -> void:
@@ -56,6 +75,14 @@ func _build() -> void:
 
 
 func _add_category_section(category: String, buildings: Array) -> void:
+	# Filter to only visible buildings; skip category if none are visible.
+	var visible_buildings: Array = []
+	for bdef: Dictionary in buildings:
+		if GameManager.is_building_visible(bdef.short_name):
+			visible_buildings.append(bdef)
+	if visible_buildings.is_empty():
+		return
+
 	var section := VBoxContainer.new()
 	section.add_theme_constant_override("separation", 6)
 	add_child(section)
@@ -82,7 +109,7 @@ func _add_category_section(category: String, buildings: Array) -> void:
 		_apply_category_header_style(header)
 	)
 
-	for bdef: Dictionary in buildings:
+	for bdef: Dictionary in visible_buildings:
 		var card := BuildingCard.new()
 		card.setup(bdef, _font_rb, _font_e2r, _font_e2s)
 		card.refresh()

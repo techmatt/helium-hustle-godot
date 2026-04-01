@@ -330,17 +330,23 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 		rate_lbl.add_theme_font_size_override("font_size", 13)
 		row.add_child(rate_lbl)
 
-	_resource_labels[sn] = {"val": val_lbl, "rate": rate_lbl}
+	_resource_labels[sn] = {"val": val_lbl, "rate": rate_lbl, "row": row}
 
 
 func update_resource_display() -> void:
 	var st: GameState = GameManager.state
 	var rt: ResourceRateTracker = GameManager.rate_tracker
+	var visible_resources: Array[String] = GameManager.get_visible_resources()
 	for entry: Array in RESOURCES:
 		var sn: String = entry[0]
 		if not _resource_labels.has(sn):
 			continue
 		var labels: Dictionary = _resource_labels[sn]
+		var row_node: HBoxContainer = labels.get("row")
+		if row_node != null and is_instance_valid(row_node):
+			row_node.visible = visible_resources.has(sn)
+		if not visible_resources.has(sn):
+			continue
 		var val_lbl: Label = labels.val
 
 		if sn == "proc":

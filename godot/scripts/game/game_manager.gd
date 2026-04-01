@@ -149,6 +149,8 @@ func set_speed(speed_key: String) -> void:
 func buy_building(short_name: String) -> void:
 	if sim.can_buy_building(state, short_name):
 		sim.buy_building(state, short_name)
+		if not career.lifetime_owned_building_ids.has(short_name):
+			career.lifetime_owned_building_ids.append(short_name)
 		tick_completed.emit()
 
 
@@ -236,6 +238,69 @@ func get_commands_data() -> Array:
 	return _commands_data
 
 
+# Resources visible in the sidebar. Always-visible set plus resources unlocked
+# by owning a building this run or in a prior run.
+const _ALWAYS_VISIBLE_RESOURCES: Array[String] = [
+	"boredom", "eng", "proc", "land", "cred", "ti", "reg"
+]
+const _RESOURCE_UNLOCK_BUILDING: Dictionary = {
+	"ice":  "ice_extractor",
+	"he3":  "refinery",
+	"cir":  "fabricator",
+	"prop": "electrolysis",
+	"sci":  "research_lab",
+}
+
+func get_visible_resources() -> Array[String]:
+	var visible: Array[String] = _ALWAYS_VISIBLE_RESOURCES.duplicate()
+	for res: String in _RESOURCE_UNLOCK_BUILDING:
+		var bsn: String = _RESOURCE_UNLOCK_BUILDING[res]
+		if state.buildings_owned.get(bsn, 0) > 0 \
+				or career.lifetime_owned_building_ids.has(bsn):
+			if not visible.has(res):
+				visible.append(res)
+	return visible
+
+
+# Always-visible buildings (show regardless of requires or lifetime ownership).
+const _ALWAYS_VISIBLE_BUILDINGS: Array[String] = [
+	"panel", "battery", "storage_depot", "data_center", "excavator", "ice_extractor"
+]
+
+func is_building_visible(short_name: String) -> bool:
+	if GameSettings.show_all_cards:
+		return true
+	if _ALWAYS_VISIBLE_BUILDINGS.has(short_name):
+		return true
+	if career.lifetime_owned_building_ids.has(short_name):
+		return true
+	# Visible if its requires are currently satisfied
+	return not sim.is_building_locked(state, short_name)
+
+
+func is_command_visible(short_name: String) -> bool:
+	if GameSettings.show_all_cards:
+		return true
+	if career.lifetime_used_command_ids.has(short_name):
+		return true
+	for cmd: Dictionary in _commands_data:
+		if cmd.short_name == short_name:
+			var req: Dictionary = cmd.get("requires", {})
+			match req.get("type", "none"):
+				"none":
+					return true
+				"building", "building_owned":
+					return state.buildings_owned.get(req.get("value", ""), 0) > 0
+				"research":
+					return state.completed_research.has(req.get("value", ""))
+			return false
+	return false
+
+
+func get_lifetime_used_command_ids() -> Array:
+	return career.lifetime_used_command_ids.duplicate()
+
+
 func get_research_data() -> Array:
 	return _research_data
 
@@ -265,6 +330,9 @@ func _on_tick() -> void:
 	event_manager.tick(state)
 	project_manager.tick(state, career)
 	last_deltas = sim.last_gross_deltas.duplicate()
+	for sn: String in sim.pending_executed_commands:
+		if not career.lifetime_used_command_ids.has(sn):
+			career.lifetime_used_command_ids.append(sn)
 	for event in sim.pending_program_events:
 		if event.type == "step":
 			program_step_executed.emit(event.program_index, event.entry_index, event.success)

@@ -74,6 +74,8 @@ var _sell_all_btn: Button
 var _sell_all_pending: bool = false
 
 var _stall_lbl: Label
+var _ideology_pill: Control = null
+var _effect_store_rows: Dictionary = {}  # resource_sn → Control (for Storage Depot filter)
 
 
 func _c(key: String) -> Color:
@@ -128,6 +130,18 @@ func refresh() -> void:
 			_stall_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
 	else:
 		_stall_lbl.visible = false
+
+	# Storage Depot: show/hide per-resource storage lines based on resource visibility
+	if not _effect_store_rows.is_empty():
+		var visible_res: Array[String] = GameManager.get_visible_resources()
+		for res: String in _effect_store_rows:
+			var lbl_node: Label = _effect_store_rows[res]
+			if is_instance_valid(lbl_node):
+				lbl_node.visible = visible_res.has(res)
+
+	# Ideology pill: only visible when ideologies nav panel is unlocked
+	if _ideology_pill != null and is_instance_valid(_ideology_pill):
+		_ideology_pill.visible = GameManager.state.unlocked_nav_panels.has("ideologies")
 
 	var scaled: Dictionary = GameManager.get_scaled_costs(_bdef.short_name)
 	var st: GameState = GameManager.state
@@ -306,15 +320,18 @@ func _build_upkeep(parent: VBoxContainer) -> void:
 
 
 func _build_effects(parent: VBoxContainer) -> void:
+	_effect_store_rows.clear()
 	for effect: Dictionary in _bdef.effects:
 		if effect.get("prefix", "") == "store":
+			var res: String = effect.resource
 			var lbl := Label.new()
-			lbl.text = "  +%.0f %s storage" % [float(effect.value), RESOURCE_NAMES.get(effect.resource, effect.resource)]
+			lbl.text = "  +%.0f %s storage" % [float(effect.value), RESOURCE_NAMES.get(res, res)]
 			lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 			lbl.add_theme_font_override("font", _font_exo2_regular)
 			lbl.add_theme_font_size_override("font_size", 14)
 			lbl.add_theme_color_override("font_color", _c("positive"))
 			parent.add_child(lbl)
+			_effect_store_rows[res] = lbl
 
 
 func _build_ideology_pill(parent: VBoxContainer) -> void:
@@ -327,6 +344,7 @@ func _build_ideology_pill(parent: VBoxContainer) -> void:
 		"rationalist": Color(0.082, 0.396, 0.753),
 	}
 	var pill := PanelContainer.new()
+	_ideology_pill = pill
 	var pill_style := StyleBoxFlat.new()
 	pill_style.bg_color = IDEOLOGY_COLORS.get(alignment, Color.GRAY)
 	pill_style.corner_radius_top_left     = 3
