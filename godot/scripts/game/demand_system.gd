@@ -95,6 +95,16 @@ func tick_demand(state: GameState) -> void:
 	if spec_target != "" and spec_count > 0.0:
 		spec_sup_on_target = max_sup * (spec_count / (spec_count + half_pt))
 
+	# Bleedover: above threshold, non-targeted resources receive partial suppression
+	var bleedover_threshold: float = _dcfg("speculator_bleedover_threshold")
+	var bleedover_half_pt: float = _dcfg("speculator_bleedover_half_point")
+	var bleedover_max_frac: float = _dcfg("speculator_bleedover_max_fraction")
+	var excess: float = maxf(0.0, spec_count - bleedover_threshold)
+	var bleedover_fraction: float = 0.0
+	if excess > 0.0:
+		bleedover_fraction = (excess / (excess + bleedover_half_pt)) * bleedover_max_frac
+	var bleedover_suppression: float = spec_sup_on_target * bleedover_fraction
+
 	for res: String in GameState.TRADEABLE_RESOURCES:
 		# Decay accumulators each tick
 		state.demand_promote[res] = maxf(0.0, state.demand_promote.get(res, 0.0) - promote_decay)
@@ -113,8 +123,12 @@ func tick_demand(state: GameState) -> void:
 		)
 		var base_demand: float = 0.5 + perlin_val * amplitude
 
-		# Speculator suppression on this resource
-		var spec_sup: float = spec_sup_on_target if spec_target == res else 0.0
+		# Speculator suppression: direct on target, bleedover on all others
+		var spec_sup: float
+		if spec_target == res:
+			spec_sup = spec_sup_on_target
+		else:
+			spec_sup = bleedover_suppression
 
 		# Coupling bonus: other resources get a small lift when one is suppressed
 		var coupling_bonus: float = 0.0

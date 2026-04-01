@@ -75,6 +75,26 @@ func _build_mode_selector() -> void:
 	opt.selected = 1
 	opt.add_theme_font_override("font", _font_e2r)
 	opt.add_theme_font_size_override("font_size", 13)
+	if not GameSettings.is_dark_mode:
+		var opt_style := StyleBoxFlat.new()
+		opt_style.bg_color = Color(0.97, 0.97, 0.97)
+		opt_style.border_width_left   = 1
+		opt_style.border_width_right  = 1
+		opt_style.border_width_top    = 1
+		opt_style.border_width_bottom = 1
+		opt_style.border_color = Color(0.816, 0.816, 0.816)
+		opt_style.corner_radius_top_left     = 3
+		opt_style.corner_radius_top_right    = 3
+		opt_style.corner_radius_bottom_left  = 3
+		opt_style.corner_radius_bottom_right = 3
+		opt_style.content_margin_left   = 8
+		opt_style.content_margin_right  = 8
+		opt_style.content_margin_top    = 4
+		opt_style.content_margin_bottom = 4
+		opt.add_theme_stylebox_override("normal", opt_style)
+		opt.add_theme_stylebox_override("hover", opt_style)
+		opt.add_theme_stylebox_override("pressed", opt_style)
+		opt.add_theme_stylebox_override("focus", opt_style)
 	opt.item_selected.connect(func(idx: int): _instant_mode = (idx == 1))
 	row.add_child(opt)
 

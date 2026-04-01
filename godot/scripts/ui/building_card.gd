@@ -121,7 +121,6 @@ func refresh() -> void:
 	var stall: Dictionary = GameManager.state.building_stall_status.get(_bdef.short_name, {})
 	var stall_status: String = stall.get("status", "")
 	if active > 0 and stall_status != "" and stall_status != "running":
-		_stall_lbl.visible = true
 		if stall_status == "input_starved":
 			_stall_lbl.text = "⚠ Stalled: " + stall.get("reason", "")
 			_stall_lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.000))
@@ -129,7 +128,7 @@ func refresh() -> void:
 			_stall_lbl.text = "At storage cap"
 			_stall_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
 	else:
-		_stall_lbl.visible = false
+		_stall_lbl.text = ""
 
 	# Storage Depot: show/hide per-resource storage lines based on resource visibility
 	if not _effect_store_rows.is_empty():
@@ -374,7 +373,7 @@ func _build_ideology_pill(parent: VBoxContainer) -> void:
 
 func _build_stall_label(parent: VBoxContainer) -> void:
 	_stall_lbl = Label.new()
-	_stall_lbl.visible = false
+	_stall_lbl.text = ""
 	_stall_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	_stall_lbl.add_theme_font_override("font", _font_exo2_regular)
 	_stall_lbl.add_theme_font_size_override("font_size", 14)

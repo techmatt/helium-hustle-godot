@@ -18,6 +18,7 @@ const _SUITES: Array = [
 	preload("res://tests/test_building_mechanics.gd"),
 	preload("res://tests/test_command_execution.gd"),
 	preload("res://tests/test_demand_system.gd"),
+	preload("res://tests/test_speculator_bleedover.gd"),
 	preload("res://tests/test_projects_milestones.gd"),
 	preload("res://tests/test_passive_effects.gd"),
 	preload("res://tests/test_progressive_disclosure.gd"),

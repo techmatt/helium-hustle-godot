@@ -71,7 +71,10 @@
     "launch_saturation_min": 0.10,
     "launch_saturation_max": 0.20,
     "launch_saturation_decay_rate": 0.005,
-    "coupling_fraction": 0.10
+    "coupling_fraction": 0.10,
+    "speculator_bleedover_threshold": 200,
+    "speculator_bleedover_half_point": 300,
+    "speculator_bleedover_max_fraction": 0.5
   },
   "rivals": [
     {"id": "aria7",    "name": "ARIA-7",   "target_resource": "he3",  "dump_interval_min": 150, "dump_interval_max": 250, "demand_hit": 0.3},

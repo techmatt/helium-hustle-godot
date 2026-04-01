@@ -7,6 +7,8 @@
 _(Add entries here when making changes directly via Claude Code without a 
 claude.ai design session. Format: date, what changed, one line.)_
 
+- 2026-04-01: Speculator bleedover — when count exceeds 200, demand suppression bleeds into non-targeted tradeable resources (up to 50% of direct suppression). Configurable threshold/half_point/max_fraction in game_config.json. New test_speculator_bleedover.gd suite (6 tests); all 1410 tests passing.
+- 2026-04-01: Building cards now reserve space for the status row to prevent height flickering when stall statuses appear/disappear.
 - 2026-03-31: Partial production replaces input-starvation skip and residual drain.
   Buildings with insufficient inputs now run at reduced capacity (fraction = min of
   available/needed across all inputs). All inputs/outputs scale proportionally.

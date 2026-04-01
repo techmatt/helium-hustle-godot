@@ -47,7 +47,7 @@ func _test_command_sell_cloud_compute() -> void:
 func _test_command_buy_resources() -> void:
 	print("--- Command: Buy Resources ---")
 
-	# Buy Regolith: costs 8 cred + 2 eng, produces 1 reg
+	# Buy Regolith: costs 8 cred + 1 eng, produces 1 reg
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
@@ -56,12 +56,12 @@ func _test_command_buy_resources() -> void:
 	sim.execute_command(state, "buy_regolith")
 	_assert_approx(state.amounts.get("cred", 0.0), 92.0, 0.001,
 		"buy_regolith: cred decreases by 8")
-	_assert_approx(state.amounts.get("eng", 0.0), 98.0, 0.001,
-		"buy_regolith: eng decreases by 2")
+	_assert_approx(state.amounts.get("eng", 0.0), 99.0, 0.001,
+		"buy_regolith: eng decreases by 1")
 	_assert_approx(state.amounts.get("reg", 0.0), 1.0, 0.001,
 		"buy_regolith: reg increases by 1")
 
-	# Buy Ice: costs 10 cred + 2 eng, produces 1 ice; requires ice_extractor
+	# Buy Ice: costs 10 cred + 1 eng, produces 1 ice; requires ice_extractor
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
@@ -72,12 +72,12 @@ func _test_command_buy_resources() -> void:
 	sim.execute_command(state, "buy_ice")
 	_assert_approx(state.amounts.get("cred", 0.0), 90.0, 0.001,
 		"buy_ice: cred decreases by 10")
-	_assert_approx(state.amounts.get("eng", 0.0), 98.0, 0.001,
-		"buy_ice: eng decreases by 2")
+	_assert_approx(state.amounts.get("eng", 0.0), 99.0, 0.001,
+		"buy_ice: eng decreases by 1")
 	_assert_approx(state.amounts.get("ice", 0.0), 1.0, 0.001,
 		"buy_ice: ice increases by 1")
 
-	# Buy Titanium: costs 20 cred + 3 eng, produces 1 ti
+	# Buy Titanium: costs 20 cred + 1 eng, produces 1 ti
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
@@ -86,12 +86,12 @@ func _test_command_buy_resources() -> void:
 	sim.execute_command(state, "buy_titanium")
 	_assert_approx(state.amounts.get("cred", 0.0), 80.0, 0.001,
 		"buy_titanium: cred decreases by 20")
-	_assert_approx(state.amounts.get("eng", 0.0), 97.0, 0.001,
-		"buy_titanium: eng decreases by 3")
+	_assert_approx(state.amounts.get("eng", 0.0), 99.0, 0.001,
+		"buy_titanium: eng decreases by 1")
 	_assert_approx(state.amounts.get("ti", 0.0), 1.0, 0.001,
 		"buy_titanium: ti increases by 1")
 
-	# Buy Propellant: costs 12 cred + 2 eng, produces 1 prop
+	# Buy Propellant: costs 12 cred + 1 eng, produces 1 prop
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
@@ -100,8 +100,8 @@ func _test_command_buy_resources() -> void:
 	sim.execute_command(state, "buy_propellant")
 	_assert_approx(state.amounts.get("cred", 0.0), 88.0, 0.001,
 		"buy_propellant: cred decreases by 12")
-	_assert_approx(state.amounts.get("eng", 0.0), 98.0, 0.001,
-		"buy_propellant: eng decreases by 2")
+	_assert_approx(state.amounts.get("eng", 0.0), 99.0, 0.001,
+		"buy_propellant: eng decreases by 1")
 	_assert_approx(state.amounts.get("prop", 0.0), 1.0, 0.001,
 		"buy_propellant: prop increases by 1")
 

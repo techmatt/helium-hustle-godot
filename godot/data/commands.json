@@ -36,7 +36,7 @@
     },
     "costs": {
       "cred": 8.0,
-      "eng": 2.0
+      "eng": 1.0
     },
     "production": {
       "reg": 1.0
@@ -52,7 +52,7 @@
     },
     "costs": {
       "cred": 10.0,
-      "eng": 2.0
+      "eng": 1.0
     },
     "production": {
       "ice": 1.0
@@ -68,7 +68,7 @@
     },
     "costs": {
       "cred": 20.0,
-      "eng": 3.0
+      "eng": 1.0
     },
     "production": {
       "ti": 1.0
@@ -84,7 +84,7 @@
     },
     "costs": {
       "cred": 12.0,
-      "eng": 2.0
+      "eng": 1.0
     },
     "production": {
       "prop": 1.0

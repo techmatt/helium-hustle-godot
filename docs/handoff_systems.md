@@ -164,6 +164,18 @@ max_suppression = 0.5, half_point = 50.0
 suppression = max_suppression * (count / (count + half_point))
 ```
 
+### Speculator Bleedover
+When speculator count exceeds `bleedover_threshold` (default 200), non-targeted
+tradeable resources receive partial demand suppression:
+```
+bleedover_fraction = max(0, (count - threshold) / (count - threshold + half_point)) * max_fraction
+bleedover_suppression = direct_suppression * bleedover_fraction
+```
+Default config: threshold 200, half_point 300, max_fraction 0.5. Below threshold,
+no bleedover. At 500 speculators, non-targeted resources lose ~0.11 demand.
+Arbitrage Engine and Disrupt Speculators indirectly protect all resources by
+reducing the count.
+
 ### Demand Display
 Before Market Awareness research: tier labels (LOW/MEDIUM/HIGH/VERY HIGH). After: 
 exact values, sparklines, speculator warning.
