@@ -52,6 +52,13 @@ func _process(delta: float) -> void:
 # ── Build persistent skeleton (called once) ───────────────────────────────────
 
 func _build_structure() -> void:
+	var title_lbl := Label.new()
+	title_lbl.text = "Events"
+	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_lbl.add_theme_font_override("font", _font_rajdhani_bold)
+	title_lbl.add_theme_font_size_override("font_size", 22)
+	add_child(title_lbl)
+
 	_story_container = _make_section_container()
 	add_child(_story_container)
 	_story_header = _make_header_btn("story")
@@ -238,8 +245,12 @@ func _build_event_row(inst: Dictionary, is_completed: bool, st: GameState, em: E
 	btn.add_theme_color_override("font_color", text_color)
 	btn.add_theme_color_override("font_hover_color", text_color)
 
-	btn.pressed.connect(func() -> void: event_row_clicked.emit(event_id))
+	btn.button_down.connect(_on_row_pressed.bind(event_id))
 	return btn
+
+
+func _on_row_pressed(event_id: String) -> void:
+	event_row_clicked.emit(event_id)
 
 
 func _build_notification_row(title: String) -> Label:

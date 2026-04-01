@@ -205,8 +205,12 @@ func _build_event_panel() -> void:
 	ep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(ep)
 	ep.setup(_font_rb, _font_e2r, _font_e2s)
-	ep.event_row_clicked.connect(func(eid: String) -> void: event_row_clicked.emit(eid))
+	ep.event_row_clicked.connect(_on_event_panel_row_clicked)
 	_event_panel = ep
+
+
+func _on_event_panel_row_clicked(eid: String) -> void:
+	event_row_clicked.emit(eid)
 
 
 # ── State management ──────────────────────────────────────────────────────────

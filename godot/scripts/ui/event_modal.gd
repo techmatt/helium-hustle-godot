@@ -7,6 +7,7 @@ var _font_exo2_semibold: FontFile
 
 var _event_id: String = ""
 var _prev_speed_key: String = "1x"
+var _did_pause: bool = false
 
 var _backdrop: ColorRect
 var _panel: PanelContainer
@@ -25,17 +26,21 @@ func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
 	hide()
 
 
-func open(event_id: String) -> void:
+func open(event_id: String, pause_game: bool = true) -> void:
 	_event_id = event_id
 	_populate()
 	show()
-	_prev_speed_key = GameManager.current_speed_key
-	GameManager.set_speed("||")
+	_did_pause = pause_game
+	_backdrop.visible = pause_game
+	if pause_game:
+		_prev_speed_key = GameManager.current_speed_key
+		GameManager.set_speed("||")
 
 
 func close() -> void:
 	hide()
-	GameManager.set_speed(_prev_speed_key)
+	if _did_pause:
+		GameManager.set_speed(_prev_speed_key)
 	modal_closed.emit()
 
 

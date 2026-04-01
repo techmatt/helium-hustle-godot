@@ -41,6 +41,10 @@ all-or-nothing upkeep.
 `GameState.building_stall_status` tracks per-building stall state each tick. Two 
 types: `input_starved` and `output_capped`.
 
+### Building Card Status Row
+Building cards always reserve vertical space for the status row (stall indicators) 
+to prevent height flickering when statuses appear/disappear.
+
 ### Bonus Building Cost Scaling
 Buildings granted free by persistent projects (e.g., Foundation Grant) track 
 `bonus_count` separately. Cost scaling uses `max(0, owned_count - bonus_count)`.
@@ -50,10 +54,24 @@ Buildings are assigned to ideology axes. Aligned buildings get per-rank cost dis
 `pow(0.97, rank)`. Nationalist: Launch Pad, Arbitrage Engine, Microwave Receiver. 
 Humanist: Data Center, Battery. Rationalist: Fabricator, Research Lab.
 
+Ideology alignment labels are hidden on building cards until the Ideologies nav 
+panel is unlocked.
+
 ### Unlock Requirements
 Buildings with a non-empty `requires` field or gated by `enable_building` event 
-effects are visible but not purchasable until requirements are met. GameSimulation 
-enforces this (defense in depth).
+effects are not purchasable until requirements are met. The `requires` field 
+supports `building_id` (own at least 1) and `building_id:N` (own at least N). 
+GameSimulation enforces this (defense in depth).
+
+### Building Visibility (Progressive Disclosure)
+A building is visible if any of these are true: (1) it has no `requires` field, 
+(2) its `requires` condition is currently satisfied, (3) its ID is in 
+`career_state.lifetime_owned_building_ids`. Category headers hide when they 
+contain zero visible buildings. The "Show All Cards" debug toggle overrides 
+visibility gating.
+
+Notable requires gates: Research Lab requires `data_center:2` (player starts 
+with 1). Smelter requires Regolith Excavator. Fabricator requires Smelter.
 
 ---
 
@@ -92,6 +110,14 @@ Uncapped: Credits, Science, Land, Boredom (fixed 0–1000 range). Battery adds e
 cap. Storage Depot adds cap bonuses for physical resources. See `handoff_constants.md` 
 for exact cap values.
 
+### Resource Visibility (Progressive Disclosure)
+Always visible at game start: Boredom, Energy, Processors, Land, Credits, Titanium, 
+Regolith. Other resources become visible when the player owns the building that 
+produces them (this run) or has ever owned it (any prior run, tracked via 
+`career_state.lifetime_owned_building_ids`). Ice → Ice Extractor, He-3 → Refinery, 
+Circuits → Fabricator, Propellant → Electrolysis Plant, Science → Research Lab. 
+Storage Depot filters displayed storage bonuses to only visible resources.
+
 ---
 
 ## Programs & Processors
@@ -112,10 +138,18 @@ pointers reset, processor assignments reset.
 Basic (always available), Trade, Operations, Advanced. Commands beyond Basic require 
 research or building unlocks. See `handoff_constants.md` for the full command list.
 
+### Command Visibility (Progressive Disclosure)
+A command is visible if any of these are true: (1) it has no unlock requirement 
+(Basic category), (2) its unlock requirement is currently satisfied, (3) its ID is 
+in `career_state.lifetime_used_command_ids`. The "Show All Cards" debug toggle 
+overrides visibility gating. Buy Ice is gated on owning an Ice Extractor.
+
 ### Key Design Intent
 Buy commands are intentionally 3-5x the cost of building-based production per unit. 
 They exist for tactical gap-bridging, not as a primary resource strategy. Buy 
-Propellant is an exception early game when Electrolysis is locked.
+Propellant is an exception early game when Electrolysis is locked. Buy Titanium 
+produces 1 titanium per execution, serving as the early-game titanium source before 
+Smelter is unlocked.
 
 ---
 
@@ -146,8 +180,15 @@ commands, resource coupling. ~80% player-influenceable, ~20% from noise and riva
 ### Demand Calculation (per tick)
 ```
 base_demand = 0.5 + perlin_value * 0.45
+
+# For targeted resource:
 raw = base_demand - speculator_suppression - rival_pressure - launch_saturation 
       + promote_effect + coupling_bonus
+
+# For non-targeted resources:
+raw = base_demand - speculator_bleedover - rival_pressure - launch_saturation 
+      + promote_effect + coupling_bonus
+
 demand = clamp(raw * nationalist_multiplier, 0.01, 1.0)
 ```
 
@@ -158,22 +199,22 @@ demand = clamp(raw * nationalist_multiplier, 0.01, 1.0)
 frequency multipliers. Per-resource randomized frequencies in [0.025, 0.07], 
 re-randomized each retirement.
 
-### Speculator Suppression (asymptotic)
+### Speculator Suppression (asymptotic, targeted resource only)
 ```
 max_suppression = 0.5, half_point = 50.0
 suppression = max_suppression * (count / (count + half_point))
 ```
 
-### Speculator Bleedover
-When speculator count exceeds `bleedover_threshold` (default 200), non-targeted
+### Speculator Bleedover (non-targeted resources)
+When speculator count exceeds `bleedover_threshold` (default 200), non-targeted 
 tradeable resources receive partial demand suppression:
 ```
 bleedover_fraction = max(0, (count - threshold) / (count - threshold + half_point)) * max_fraction
 bleedover_suppression = direct_suppression * bleedover_fraction
 ```
-Default config: threshold 200, half_point 300, max_fraction 0.5. Below threshold,
-no bleedover. At 500 speculators, non-targeted resources lose ~0.11 demand.
-Arbitrage Engine and Disrupt Speculators indirectly protect all resources by
+Default config: threshold 200, half_point 300, max_fraction 0.5. Below threshold, 
+no bleedover. At 500 speculators, non-targeted resources lose ~0.11 demand. 
+Arbitrage Engine and Disrupt Speculators indirectly protect all resources by 
 reducing the count.
 
 ### Demand Display
@@ -236,8 +277,9 @@ Checked at end of each tick. Consciousness hook stub called on all boredom reduc
 - Forced at boredom 1000. Current tick finishes processing first.
 - Voluntary via Retirement nav panel (unlocked by Q3).
 - **Persists:** CareerState (lifetime stats, seen_event_ids, completed_quest_ids, 
-  max ideology ranks, lifetime_researched_ids, project progress, achievements, 
-  saved loadouts, career_flags)
+  max ideology ranks, lifetime_researched_ids, lifetime_owned_building_ids, 
+  lifetime_used_command_ids, project progress, achievements, saved loadouts, 
+  career_flags)
 - **Resets:** All resources, buildings (owned/active/bonus counts), research, 
   ideology values, demand state, boredom, day counter, land, personal projects, 
   event instances, triggered milestones, cumulative counters, building stall status, 
@@ -257,9 +299,18 @@ implemented.
 Individual upgrades purchased with science. Session-local — resets on retirement. 
 Four categories; category headers hidden when they contain no visible items.
 
+### Items (12 total)
+**Self-Maintenance:** Dream Protocols, Stress Tolerance, Efficient Dreaming.
+**Overclock Algorithms:** Overclock Protocols, Overclock Boost.
+**Market Analysis:** Market Awareness, Speculator Analysis, Trade Promotion, 
+Shipping Efficiency.
+**Political Influence:** Geopolitical Intelligence (ID: `geopolitical_intelligence`).
+
 ### Effect Types
 - **Unlock effects:** Enable buildings or commands (e.g., Propellant Synthesis 
-  unlocks Electrolysis Plant; Dream Protocols unlocks Dream command)
+  unlocks Electrolysis Plant; Dream Protocols unlocks Dream command; Geopolitical 
+  Intelligence unlocks Fund Nationalist/Humanist/Rationalist commands and enables 
+  Ideologies nav panel)
 - **Passive effects:** Modify gameplay math (Stress Tolerance = -15% boredom rate; 
   Efficient Dreaming = Dream cost 8→5; Overclock Boost = cap 1.5→2.0; Shipping 
   Efficiency = load 5→7)
@@ -271,13 +322,27 @@ Four categories; category headers hidden when they contain no visible items.
 Both stack multiplicatively.
 
 ### Visibility Gating
-Per-item `visible_when` conditions in `research.json`. Supported types: `always`,
-`event_seen`, `event_completed`, `boredom_above`, `research_purchased`,
-`building_count`, `shipments_completed`, `quest_completed`. An item is also visible
-if its ID is in `career_state.lifetime_researched_ids` (purchased in any prior run).
-The "Show All Cards" debug toggle overrides all visibility gating. Category headers
-are hidden when they contain zero visible items. Logic lives in
-`GameManager.is_research_item_visible(item_id)`.
+Per-item `visible_when` conditions in `research.json`. Supported condition types: 
+`always`, `event_seen`, `event_completed`, `boredom_above`, `research_purchased`, 
+`building_count`, `shipments_completed`, `quest_completed`.
+
+| Item | Visible When |
+|------|-------------|
+| Market Awareness | Always (quest target) |
+| Dream Protocols | Boredom > 300 |
+| Stress Tolerance | Dream Protocols purchased |
+| Efficient Dreaming | Dream Protocols purchased |
+| Overclock Protocols | Own >= 5 Regolith Excavators |
+| Overclock Boost | Overclock Protocols purchased |
+| Speculator Analysis | Market Awareness purchased |
+| Trade Promotion | Market Awareness purchased |
+| Shipping Efficiency | >= 10 total shipments (career + current run) |
+| Geopolitical Intelligence | Q7 completed |
+| Propellant Synthesis | event_seen gating (Propellant Discovery event) |
+
+An item is also visible if its ID is in `career_state.lifetime_researched_ids` 
+(purchased in any prior run). The "Show All Cards" debug toggle overrides all 
+visibility gating. Logic lives in `GameManager.is_research_item_visible(item_id)`.
 
 ---
 
@@ -407,9 +472,43 @@ unlock effects re-applied on run start.
 ### Special Events (separate from quest chain)
 - **Propellant Discovery:** Triggers at 4 shipments, makes Propellant Synthesis 
   research visible.
-- **Ideology Unlock:** Triggers when nationalist_lobbying research completed, 
+- **Ideology Unlock:** Triggers when Geopolitical Intelligence research completed, 
   enables Ideologies nav panel.
 - **Boredom Phase events:** Fire on phase transitions.
+
+---
+
+## Progressive Disclosure
+
+### Overview
+Resources, buildings, commands, and research are hidden until the player encounters 
+the context that makes them relevant. Once something has been seen/owned in any run, 
+it stays visible permanently (tracked in CareerState). The "Show All Cards" toggle 
+in Options overrides all visibility gating.
+
+### Resource Visibility
+Always visible: Boredom, Energy, Processors, Land, Credits, Titanium, Regolith. 
+Others unlocked by building ownership (current run or any prior run): Ice → Ice 
+Extractor, He-3 → Refinery, Circuits → Fabricator, Propellant → Electrolysis 
+Plant, Science → Research Lab.
+
+### Building Visibility
+Visible if: no `requires` field, OR `requires` currently satisfied, OR building ID 
+in `career_state.lifetime_owned_building_ids`. Category headers hide when empty.
+
+### Command Visibility
+Visible if: no unlock requirement (Basic), OR unlock currently satisfied, OR 
+command ID in `career_state.lifetime_used_command_ids`.
+
+### Research Visibility
+Per-item `visible_when` conditions. See Research section for full table.
+
+### Ideology Labels
+Hidden on building cards until Ideologies nav panel is unlocked.
+
+### CareerState Tracking
+`lifetime_owned_building_ids` — updated live on purchase (survives quit-without-retire).
+`lifetime_used_command_ids` — updated on command execution.
 
 ---
 
@@ -440,7 +539,8 @@ headless test runner).
 `run_number`, `total_retirements`, `lifetime_credits_earned`, `lifetime_shipments`, 
 `lifetime_days_survived`, `lifetime_buildings_built`, `lifetime_research_completed`, 
 `best_run_days`, `best_run_credits`, `best_run_shipments`, `max_ideology_ranks`, 
-`career_flags`, `lifetime_researched_ids`, `seen_event_ids`, `completed_quest_ids`, 
+`career_flags`, `lifetime_researched_ids`, `lifetime_owned_building_ids`, 
+`lifetime_used_command_ids`, `seen_event_ids`, `completed_quest_ids`, 
 `project_progress`, `completed_projects`, `achievements`, `saved_loadouts`.
 
 All serialized via `to_dict()` / `from_dict()` and survive across retirements and 

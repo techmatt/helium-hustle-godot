@@ -56,9 +56,8 @@ func _ready() -> void:
 	add_child(_program_panel)
 	_program_panel.setup(_right_vbox, _font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
 	_program_panel.program_state_changed.connect(func(): _left_sidebar.update_resource_display())
-	_program_panel.event_row_clicked.connect(func(eid: String): _event_modal.open(eid))
-
 	_build_event_modal()
+	_program_panel.event_row_clicked.connect(_on_event_row_reread)
 	_build_retirement_summary()
 	_setup_status_bar()
 	_switch_mode("Buildings")
@@ -428,6 +427,10 @@ func _build_retirement_summary() -> void:
 func _on_event_triggered(event_id: String) -> void:
 	if GameManager.event_manager.is_event_first_time(event_id, GameManager.state):
 		_event_modal.open(event_id)
+
+
+func _on_event_row_reread(event_id: String) -> void:
+	_event_modal.open(event_id, false)
 
 
 func _on_retirement_started(summary_data: Dictionary) -> void:
