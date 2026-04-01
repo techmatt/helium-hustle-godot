@@ -95,38 +95,36 @@ func _test_production_gated_upkeep() -> void:
 
 
 func _test_input_starvation_skip() -> void:
-	print("--- Input Starvation Skip ---")
+	print("--- Input Starvation: Zero Input (Fraction = 0) ---")
 
-	# Smelter starved of regolith: no production. Residual drain consumes
-	# available eng (up to full upkeep), reg stays at 0.
-	var sm_bdef2 := TF.get_building_def("smelter")
-	var sm_upkeep_eng2: float = float(sm_bdef2.get("upkeep", {}).get("eng", 0.0))
-	var sm_upkeep_reg2: float = float(sm_bdef2.get("upkeep", {}).get("reg", 0.0))
+	# With partial production, fraction = min(available / needed). When any input is 0,
+	# fraction = 0 → no consumption, no production (same as old skip for the zero case).
+
+	# Smelter with reg=0: fraction=0 → no ti, no eng consumed, no reg consumed.
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "smelter")
 	state.amounts["eng"] = 20.0
-	state.amounts["reg"] = 0.0   # starved
+	state.amounts["reg"] = 0.0   # zero → fraction=0
 	state.amounts["ti"] = 0.0
 	sim.tick(state, true)
 	_assert_approx(state.amounts.get("ti", 0.0), 0.0, 0.001,
-		"starvation: smelter skips ti production when reg starved")
-	_assert_approx(state.amounts.get("eng", 0.0), 20.0 - sm_upkeep_eng2, 0.001,
-		"starvation: smelter residual-drains eng upkeep when reg starved")
+		"starvation: smelter produces no ti when reg=0 (fraction=0)")
+	_assert_approx(state.amounts.get("eng", 0.0), 20.0, 0.001,
+		"starvation: smelter consumes no eng when fraction=0")
 
-	# Smelter starved of energy: no production. Residual drain consumes
-	# available reg (up to full upkeep), eng stays at 0.
+	# Smelter with eng=0: fraction=0 → no ti, no reg consumed.
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "smelter")
-	state.amounts["eng"] = 0.0   # starved
+	state.amounts["eng"] = 0.0   # zero → fraction=0
 	state.amounts["reg"] = 20.0
 	state.amounts["ti"] = 0.0
 	sim.tick(state, true)
 	_assert_approx(state.amounts.get("ti", 0.0), 0.0, 0.001,
-		"starvation: smelter skips ti production when eng starved")
-	_assert_approx(state.amounts.get("reg", 0.0), 20.0 - sm_upkeep_reg2, 0.001,
-		"starvation: smelter residual-drains reg upkeep when eng starved")
+		"starvation: smelter produces no ti when eng=0 (fraction=0)")
+	_assert_approx(state.amounts.get("reg", 0.0), 20.0, 0.001,
+		"starvation: smelter consumes no reg when fraction=0")
 
 
 func _test_stall_status_tracking() -> void:

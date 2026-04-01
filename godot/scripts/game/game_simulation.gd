@@ -95,7 +95,7 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	#   Now a producer (solar) correctly sees that consumers (data center)
 	#   already drew down shared resources, and runs when it should.
 
-	var will_produce: Array = []  # each entry: [bdef, count]
+	var will_produce: Array = []  # each entry: [bdef, count, fraction]
 	state.building_stall_status.clear()
 
 	for bdef in _buildings_data:
@@ -111,7 +111,7 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 		if (bdef.upkeep as Dictionary).is_empty():
 			# Free producer — no upkeep decision needed; always eligible.
 			# Stall status recorded in Pass 2.
-			will_produce.append([bdef, count])
+			will_produce.append([bdef, count, 1.0])
 		else:
 			# Skip if every output is already at cap (don't waste upkeep).
 			var prod: Dictionary = bdef.get("production", {})
@@ -129,23 +129,55 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 						"missing_resource": ""
 					}
 					continue
-			if not _can_pay_upkeep(state, bdef, count):
-				if has_prod:
-					var missing_res: String = _get_missing_upkeep_resource(state, bdef, count)
+
+			var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
+
+			if has_prod:
+				# Partial production: fraction = min(available / needed) across all inputs.
+				var fraction: float = 1.0
+				var tightest_res: String = ""
+				for res in bdef.upkeep:
+					var needed: float = float(bdef.upkeep[res]) * count * upkeep_mult
+					if needed > 0.0:
+						var res_fraction: float = state.amounts.get(res, 0.0) / needed
+						if res_fraction < fraction:
+							fraction = res_fraction
+							tightest_res = res
+				fraction = minf(fraction, 1.0)
+
+				if fraction <= 0.0:
 					state.building_stall_status[bdef.short_name] = {
 						"status": "input_starved",
-						"reason": "insufficient " + _get_resource_name(missing_res),
-						"missing_resource": missing_res
+						"reason": "insufficient " + _get_resource_name(tightest_res),
+						"missing_resource": tightest_res
 					}
-				continue
-			var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
-			for res in bdef.upkeep:
-				var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
-				state.amounts[res] = state.amounts.get(res, 0.0) - cost
-				last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
-				if rate_tracker != null:
-					rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
-			will_produce.append([bdef, count])
+					continue
+
+				if fraction < 1.0:
+					state.building_stall_status[bdef.short_name] = {
+						"status": "input_starved",
+						"reason": "insufficient " + _get_resource_name(tightest_res),
+						"missing_resource": tightest_res
+					}
+
+				for res in bdef.upkeep:
+					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult * fraction
+					state.amounts[res] = state.amounts.get(res, 0.0) - cost
+					last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+					if rate_tracker != null:
+						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
+				will_produce.append([bdef, count, fraction])
+			else:
+				# No-production building: all-or-nothing upkeep (Battery, Storage Depot, etc.)
+				if not _can_pay_upkeep(state, bdef, count):
+					continue
+				for res in bdef.upkeep:
+					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
+					state.amounts[res] = state.amounts.get(res, 0.0) - cost
+					last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+					if rate_tracker != null:
+						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
+				will_produce.append([bdef, count, 1.0])
 
 	# Demand update runs BEFORE programs so shipments use fresh demand values
 	demand_system.tick_demand(state)
@@ -153,6 +185,7 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	for entry in will_produce:
 		var bdef: Dictionary = entry[0]
 		var count: int = entry[1]
+		var fraction: float = entry[2]
 		var prod: Dictionary = bdef.get("production", {})
 		if not prod.is_empty():
 			var all_at_cap: bool = true
@@ -168,11 +201,14 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 					"missing_resource": ""
 				}
 				continue
-		state.building_stall_status[bdef.short_name] = {
-			"status": "running",
-			"reason": "",
-			"missing_resource": ""
-		}
+		# Only overwrite stall status to "running" if partial production didn't already
+		# flag it as input_starved.
+		if not state.building_stall_status.has(bdef.short_name):
+			state.building_stall_status[bdef.short_name] = {
+				"status": "running",
+				"reason": "",
+				"missing_resource": ""
+			}
 		var prod_mult: float = 1.0
 		match bdef.short_name:
 			"panel":
@@ -184,18 +220,13 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 			"research_lab":
 				prod_mult = state.get_ideology_bonus("rationalist", 1.0, 1.05)
 		for res in bdef.production:
-			var delta: float = float(bdef.production[res]) * count * prod_mult
+			var delta: float = float(bdef.production[res]) * count * prod_mult * fraction
 			state.amounts[res] = state.amounts.get(res, 0.0) + delta
 			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
 			if rate_tracker != null:
 				rate_tracker.record("building:" + bdef.short_name + ":prod", res, delta)
 			if delta > 0.0:
 				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
-
-	# Residual drain pass — input-starved buildings drain whatever remains of
-	# their upkeep inputs (producing nothing). This prevents scarce resources
-	# from hovering at small nonzero values instead of settling to 0.
-	_residual_drain_pass(state)
 
 	# Advance pad cooldown states
 	for pad: GameState.LaunchPadData in state.pads:
@@ -687,41 +718,12 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 			last_gross_deltas["boredom"] = last_gross_deltas.get("boredom", 0.0) + extra_boredom
 
 
-func _residual_drain_pass(state: GameState) -> void:
-	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
-	for bdef in _buildings_data:
-		var sn: String = bdef.short_name
-		if state.building_stall_status.get(sn, {}).get("status", "") != "input_starved":
-			continue
-		var count: int = state.buildings_active.get(sn, state.buildings_owned.get(sn, 0))
-		if count == 0:
-			continue
-		for res in bdef.upkeep:
-			var full_cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
-			var available: float = state.amounts.get(res, 0.0)
-			var drain: float = minf(available, full_cost)
-			if drain <= 0.0:
-				continue
-			state.amounts[res] = available - drain
-			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - drain
-			if rate_tracker != null:
-				rate_tracker.record("building:" + sn + ":upkeep", res, -drain)
-
-
 func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:
 	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
 	for res in bdef.upkeep:
 		if state.amounts.get(res, 0.0) < float(bdef.upkeep[res]) * count * upkeep_mult:
 			return false
 	return true
-
-
-func _get_missing_upkeep_resource(state: GameState, bdef: Dictionary, count: int) -> String:
-	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
-	for res in bdef.upkeep:
-		if state.amounts.get(res, 0.0) < float(bdef.upkeep[res]) * count * upkeep_mult:
-			return res
-	return ""
 
 
 func _get_resource_name(short_name: String) -> String:

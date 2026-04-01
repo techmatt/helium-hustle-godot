@@ -299,7 +299,7 @@
     "short_name": "fund_nationalist",
     "requires": {
       "type": "research",
-      "value": "ideology_lobbying"
+      "value": "geopolitical_intelligence"
     },
     "costs": {
       "eng": 2.0,
@@ -320,7 +320,7 @@
     "short_name": "fund_humanist",
     "requires": {
       "type": "research",
-      "value": "ideology_lobbying"
+      "value": "geopolitical_intelligence"
     },
     "costs": {
       "eng": 2.0,
@@ -341,7 +341,7 @@
     "short_name": "fund_rationalist",
     "requires": {
       "type": "research",
-      "value": "ideology_lobbying"
+      "value": "geopolitical_intelligence"
     },
     "costs": {
       "eng": 2.0,

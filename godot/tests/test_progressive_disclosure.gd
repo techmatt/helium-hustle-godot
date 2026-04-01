@@ -260,7 +260,7 @@ func _test_show_all_cards_override(gm: Node, gs: Node) -> void:
 	_assert_true(gm.is_command_visible("buy_ice"),
 		"show_all_cards on: buy_ice visible regardless of requires")
 	_assert_true(gm.is_command_visible("fund_nationalist"),
-		"show_all_cards on: fund_nationalist visible without ideology_lobbying")
+		"show_all_cards on: fund_nationalist visible without geopolitical_intelligence")
 
 	# Restore
 	gm.state.buildings_owned = saved_owned

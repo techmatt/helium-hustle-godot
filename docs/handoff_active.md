@@ -7,12 +7,19 @@
 _(Add entries here when making changes directly via Claude Code without a 
 claude.ai design session. Format: date, what changed, one line.)_
 
-- 2026-03-31: Stalled building residual drain — input-starved buildings now consume
-  remaining input resources (producing nothing) so scarce resources drain to 0
-  instead of hovering. Stats panel labels stalled upkeep rows "(stalled)".
-  New `test_residual_drain.gd` suite (6 tests); all 1325 tests passing.
+- 2026-03-31: Partial production replaces input-starvation skip and residual drain.
+  Buildings with insufficient inputs now run at reduced capacity (fraction = min of
+  available/needed across all inputs). All inputs/outputs scale proportionally.
+  Resources naturally drain to zero. Stall flag preserved for UI. No-production
+  buildings (Battery, Storage Depot, Launch Pad, Data Center) unaffected.
+  New `test_partial_production.gd` suite (8 tests); all 1341 tests passing.
 - 2026-03-31: Research passive effects audit — all 4 research effects and 6 project
   modifiers verified working via new `test_passive_effects.gd` suite (~10 new tests).
+- 2026-03-31: Research progressive disclosure — per-item visible_when conditions
+  replace category-based science gating. Items appear when players encounter the
+  relevant problem. Ideology Lobbying renamed to Geopolitical Intelligence (ID:
+  geopolitical_intelligence), gated on Q7 completion. Category headers hide when
+  empty. New test_research_visibility.gd suite (12 tests); all 1396 tests passing.
 - 2026-03-31: Progressive disclosure system — resources/buildings/commands hidden until
   earned; CareerState lifetime tracking; `building_count` requires type; ideology lobbying
   merged to single `ideology_lobbying` research; `show_all_cards` debug toggle; Solar Panel
@@ -45,7 +52,7 @@ claude.ai design session. Format: date, what changed, one line.)_
 - Project system (5 persistent + 5 personal, drain model, modifier framework, 
   all 6 modifiers verified working)
 - Ideology system (3 axes, continuous bonuses, rank 5 projects)
-- Headless test infrastructure (11 suites, 1307 assertions)
+- Headless test infrastructure (13 suites, 1396 assertions)
 - Options panel (light/dark mode, debug: disable boredom, show all cards)
 - Propellant gating (event → research → building unlock chain)
 - Progressive disclosure (resources/buildings/commands hidden until earned; CareerState

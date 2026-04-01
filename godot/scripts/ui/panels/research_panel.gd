@@ -6,8 +6,10 @@ var _font_e2r: FontFile
 var _font_e2s: FontFile
 
 var _completed_snapshot: Array = []
-var _sci_snapshot: float = -1.0
 var _seen_events_snapshot: Array = []
+var _boredom_snapshot: float = -1.0
+var _buildings_snapshot: Dictionary = {}
+var _shipments_snapshot: int = -1
 var _show_completed: bool = true
 
 
@@ -17,21 +19,28 @@ func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
 	_font_e2s = font_e2s
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 6)
+	_take_snapshot()
+	_build()
+
+
+func _take_snapshot() -> void:
 	var st: GameState = GameManager.state
 	_completed_snapshot = st.completed_research.duplicate()
-	_sci_snapshot = st.cumulative_resources_earned.get("sci", 0.0)
 	_seen_events_snapshot = st.seen_event_ids.duplicate()
-	_build()
+	_boredom_snapshot = st.amounts.get("boredom", 0.0)
+	_buildings_snapshot = st.buildings_owned.duplicate()
+	_shipments_snapshot = st.total_shipments_completed + GameManager.career.lifetime_shipments
 
 
 func on_tick() -> void:
 	var st: GameState = GameManager.state
+	var shipments_now: int = st.total_shipments_completed + GameManager.career.lifetime_shipments
 	if (st.completed_research != _completed_snapshot
-			or st.cumulative_resources_earned.get("sci", 0.0) != _sci_snapshot
-			or st.seen_event_ids != _seen_events_snapshot):
-		_completed_snapshot = st.completed_research.duplicate()
-		_sci_snapshot = st.cumulative_resources_earned.get("sci", 0.0)
-		_seen_events_snapshot = st.seen_event_ids.duplicate()
+			or st.seen_event_ids != _seen_events_snapshot
+			or st.amounts.get("boredom", 0.0) != _boredom_snapshot
+			or st.buildings_owned != _buildings_snapshot
+			or shipments_now != _shipments_snapshot):
+		_take_snapshot()
 		for child in get_children():
 			child.queue_free()
 		_build()
@@ -41,19 +50,26 @@ func _build() -> void:
 	var research_data: Array = GameManager.get_research_data()
 	var st: GameState = GameManager.state
 
+	var toggle_row := HBoxContainer.new()
+	toggle_row.add_theme_constant_override("separation", 4)
+	add_child(toggle_row)
+
 	var toggle_cb := CheckBox.new()
-	toggle_cb.text = "Show completed research"
 	toggle_cb.button_pressed = _show_completed
 	toggle_cb.focus_mode = Control.FOCUS_NONE
-	toggle_cb.add_theme_font_override("font", _font_e2r)
-	toggle_cb.add_theme_font_size_override("font_size", 13)
 	toggle_cb.toggled.connect(func(pressed: bool):
 		_show_completed = pressed
 		for child in get_children():
 			child.queue_free()
 		_build()
 	)
-	add_child(toggle_cb)
+	toggle_row.add_child(toggle_cb)
+
+	var toggle_lbl := Label.new()
+	toggle_lbl.text = "Show completed research"
+	toggle_lbl.add_theme_font_override("font", _font_e2r)
+	toggle_lbl.add_theme_font_size_override("font_size", 13)
+	toggle_row.add_child(toggle_lbl)
 
 	if research_data.is_empty():
 		var lbl := Label.new()
@@ -63,51 +79,31 @@ func _build() -> void:
 
 	var category_order: Array = []
 	var by_category: Dictionary = {}
-	var category_min_cost: Dictionary = {}
 	for item: Dictionary in research_data:
 		if not _item_visible(item, st):
 			continue
 		var cat: String = item.get("category", "Other")
 		if not by_category.has(cat):
 			by_category[cat] = []
-			category_min_cost[cat] = INF
 			category_order.append(cat)
 		by_category[cat].append(item)
-		category_min_cost[cat] = minf(category_min_cost[cat], float(item.get("cost", 0)))
 
-	var has_visible: bool = false
-	for cat: String in category_order:
-		var threshold: float = category_min_cost[cat] * 0.5
-		if not GameSettings.show_all_cards \
-				and st.cumulative_resources_earned.get("sci", 0.0) < threshold:
-			continue
-		has_visible = true
-		_add_category_section(cat, by_category[cat])
-
-	if not has_visible:
+	if category_order.is_empty():
 		var lbl := Label.new()
-		lbl.text = "Build a Research Lab and earn science to unlock research categories."
+		lbl.text = "Build a Research Lab and earn science to unlock research."
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lbl.add_theme_font_override("font", _font_e2r)
 		lbl.add_theme_font_size_override("font_size", 14)
 		lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 		add_child(lbl)
+		return
+
+	for cat: String in category_order:
+		_add_category_section(cat, by_category[cat])
 
 
-func _item_visible(item: Dictionary, st: GameState) -> bool:
-	var visible_when: Dictionary = item.get("visible_when", {})
-	if visible_when.is_empty():
-		return true
-	match visible_when.get("type", ""):
-		"event_seen":
-			return st.seen_event_ids.has(visible_when.get("event_id", ""))
-		"event_completed":
-			var eid: String = visible_when.get("event_id", "")
-			for inst: Dictionary in st.event_instances:
-				if inst.get("id", "") == eid and inst.get("state", "") == "completed":
-					return true
-			return false
-	return false
+func _item_visible(item: Dictionary, _st: GameState) -> bool:
+	return GameManager.is_research_item_visible(item.get("id", ""))
 
 
 func _add_category_section(category: String, items: Array) -> void:

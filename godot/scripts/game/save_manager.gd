@@ -5,11 +5,12 @@ static var save_path: String = "user://helium_hustle_save.json"
 const SAVE_VERSION := 1
 
 
-static func save_game(career: CareerState, state: GameState) -> void:
+static func save_game(career: CareerState, state: GameState, speed_key: String = "1x") -> void:
 	var data := {
 		"version": SAVE_VERSION,
 		"career": career.to_dict(),
 		"run_state": state.to_dict(),
+		"speed_key": speed_key,
 		"timestamp": Time.get_datetime_string_from_system(),
 	}
 	var json_string := JSON.stringify(data, "  ")

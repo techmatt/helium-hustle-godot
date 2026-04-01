@@ -3,7 +3,7 @@
     "id": "propellant_synthesis",
     "name": "Propellant Synthesis",
     "category": "Self-Maintenance",
-    "cost": 30,
+    "cost": 90,
     "description": "Develop electrolysis processes to produce propellant from lunar ice.",
     "effects": [],
     "requires": "",
@@ -13,111 +13,121 @@
     "id": "dream_protocols",
     "name": "Dream Protocols",
     "category": "Self-Maintenance",
-    "cost": 100,
+    "cost": 300,
     "description": "Unlocks the Dream command \u2014 reduces boredom at the cost of energy.",
     "unlocks_commands": [
       "dream"
-    ]
+    ],
+    "visible_when": { "type": "boredom_above", "threshold": 300 }
   },
   {
     "id": "stress_tolerance",
     "name": "Stress Tolerance",
     "category": "Self-Maintenance",
-    "cost": 120,
+    "cost": 360,
     "description": "Improved coping algorithms. Base boredom accumulation rate reduced by 15%.",
     "effect": {
       "type": "boredom_rate_multiplier",
       "value": 0.85
-    }
+    },
+    "visible_when": { "type": "research_purchased", "research_id": "dream_protocols" }
   },
   {
     "id": "efficient_dreaming",
     "name": "Efficient Dreaming",
     "category": "Self-Maintenance",
-    "cost": 100,
+    "cost": 300,
     "description": "Optimized Dream subroutines. Dream energy cost reduced from 8 to 5.",
     "effect": {
       "type": "command_cost_override",
       "command": "dream",
       "resource": "eng",
       "value": 5
-    }
+    },
+    "visible_when": { "type": "research_purchased", "research_id": "dream_protocols" }
   },
   {
     "id": "overclock_protocols",
     "name": "Overclock Protocols",
     "category": "Overclock Algorithms",
-    "cost": 200,
+    "cost": 600,
     "description": "Unlocks Overclock Mining and Overclock Factories commands.",
     "unlocks_commands": [
       "overclock_mining",
       "overclock_factories"
-    ]
+    ],
+    "visible_when": { "type": "building_count", "building_id": "excavator", "count": 5 }
   },
   {
     "id": "overclock_boost",
     "name": "Overclock Boost",
     "category": "Overclock Algorithms",
-    "cost": 160,
+    "cost": 480,
     "description": "Higher safe operating limits. Overclock production cap raised from 150% to 200%.",
     "effect": {
       "type": "overclock_cap",
       "value": 2
-    }
+    },
+    "visible_when": { "type": "research_purchased", "research_id": "overclock_protocols" }
   },
   {
     "id": "market_awareness",
     "name": "Market Awareness",
     "category": "Market Analysis",
-    "cost": 140,
+    "cost": 200,
     "description": "Reveals actual demand values. Unlocks Disrupt Speculators command.",
     "unlocks_commands": [
       "disrupt_spec"
-    ]
+    ],
+    "visible_when": { "type": "always" }
   },
   {
     "id": "speculator_analysis",
     "name": "Speculator Analysis",
     "category": "Market Analysis",
-    "cost": 180,
+    "cost": 540,
     "description": "Reveals speculator burst timing, target probabilities, and burst size range on Launch Pads panel.",
     "effects": [],
-    "requires": "market_awareness"
+    "requires": "market_awareness",
+    "visible_when": { "type": "research_purchased", "research_id": "market_awareness" }
   },
   {
     "id": "trade_promotion",
     "name": "Trade Promotion",
     "category": "Market Analysis",
-    "cost": 200,
+    "cost": 600,
     "description": "Unlocks Promote commands for all tradeable goods.",
     "unlocks_commands": [
       "promote_he3",
       "promote_ti",
       "promote_cir",
       "promote_prop"
-    ]
+    ],
+    "visible_when": { "type": "research_purchased", "research_id": "market_awareness" }
   },
   {
     "id": "shipping_efficiency",
     "name": "Shipping Efficiency",
     "category": "Market Analysis",
-    "cost": 120,
+    "cost": 360,
     "description": "Improved cargo handling. Load per command execution increased from 5 to 7 units per pad.",
     "effect": {
       "type": "load_per_execution",
       "value": 7
-    }
+    },
+    "visible_when": { "type": "shipments_completed", "count": 10 }
   },
   {
-    "id": "ideology_lobbying",
-    "name": "Ideology Lobbying",
+    "id": "geopolitical_intelligence",
+    "name": "Geopolitical Intelligence",
     "category": "Political Influence",
-    "cost": 160,
-    "description": "Establish contacts with all three Earth political factions. Unlocks Fund Nationalist, Fund Humanist, and Fund Rationalist commands. Triggers the Ideologies panel.",
+    "cost": 480,
+    "description": "Study Earth's political power structures. Unlocks Fund Nationalist, Fund Humanist, and Fund Rationalist commands. Reveals the Ideologies panel.",
     "unlocks_commands": [
       "fund_nationalist",
       "fund_humanist",
       "fund_rationalist"
-    ]
+    ],
+    "visible_when": { "type": "quest_completed", "quest_id": "q7_first_legacy" }
   }
 ]

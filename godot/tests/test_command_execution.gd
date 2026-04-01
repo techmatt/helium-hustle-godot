@@ -137,7 +137,7 @@ func _test_command_fund_ideology() -> void:
 
 	# Fund Nationalists: nationalist +1.0, humanist -0.5, rationalist -0.5
 	var sim := TF.create_fresh_sim()
-	var state := TF.fresh_state_with_research(sim, ["ideology_lobbying"])
+	var state := TF.fresh_state_with_research(sim, ["geopolitical_intelligence"])
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	state.ideology_values = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -151,7 +151,7 @@ func _test_command_fund_ideology() -> void:
 
 	# Fund Humanists: humanist +1.0, nationalist -0.5, rationalist -0.5
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state_with_research(sim, ["ideology_lobbying"])
+	state = TF.fresh_state_with_research(sim, ["geopolitical_intelligence"])
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	state.ideology_values = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -165,7 +165,7 @@ func _test_command_fund_ideology() -> void:
 
 	# Fund Rationalists: rationalist +1.0, nationalist -0.5, humanist -0.5
 	sim = TF.create_fresh_sim()
-	state = TF.fresh_state_with_research(sim, ["ideology_lobbying"])
+	state = TF.fresh_state_with_research(sim, ["geopolitical_intelligence"])
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	state.ideology_values = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -236,13 +236,13 @@ func _test_command_requires_gating() -> void:
 	_assert_approx(state.amounts.get("boredom", 0.0), 500.0, 0.001,
 		"gating: dream does not reduce boredom without dream_protocols")
 
-	# Fund Nationalist requires ideology_lobbying.
+	# Fund Nationalist requires geopolitical_intelligence.
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	state.amounts["cred"] = 100.0
 	state.amounts["eng"] = 100.0
 	_assert_false(sim.is_command_executable(state, "fund_nationalist"),
-		"gating: fund_nationalist is not executable without ideology_lobbying")
+		"gating: fund_nationalist is not executable without geopolitical_intelligence")
 
 	# Overclock Mining requires overclock_protocols.
 	sim = TF.create_fresh_sim()

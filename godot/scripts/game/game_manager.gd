@@ -77,6 +77,7 @@ func _ready() -> void:
 			career = CareerState.from_dict((save_data as Dictionary).get("career", {}))
 			state = GameState.from_dict((save_data as Dictionary).get("run_state", {}))
 			_restore_from_save()
+			current_speed_key = (save_data as Dictionary).get("speed_key", "1x") as String
 		else:
 			career = CareerState.new()
 			state = GameState.new()
@@ -102,7 +103,7 @@ func _ready() -> void:
 	add_child(_autosave_timer)
 	_autosave_timer.start()
 
-	set_speed("1x")
+	set_speed(current_speed_key)
 
 
 func _notification(what: int) -> void:
@@ -315,6 +316,47 @@ func get_research_data() -> Array:
 	return _research_data
 
 
+func is_research_item_visible(item_id: String) -> bool:
+	if GameSettings.show_all_cards:
+		return true
+	if career.lifetime_researched_ids.has(item_id):
+		return true
+	var item: Dictionary = {}
+	for rd: Dictionary in _research_data:
+		if rd.get("id", "") == item_id:
+			item = rd
+			break
+	if item.is_empty():
+		return false
+	var visible_when: Dictionary = item.get("visible_when", {})
+	if visible_when.is_empty():
+		return true
+	match visible_when.get("type", ""):
+		"always":
+			return true
+		"event_seen":
+			return state.seen_event_ids.has(visible_when.get("event_id", ""))
+		"event_completed":
+			var eid: String = visible_when.get("event_id", "")
+			for inst: Dictionary in state.event_instances:
+				if inst.get("id", "") == eid and inst.get("state", "") == "completed":
+					return true
+			return false
+		"boredom_above":
+			return state.amounts.get("boredom", 0.0) > float(visible_when.get("threshold", 0))
+		"research_purchased":
+			return state.completed_research.has(visible_when.get("research_id", ""))
+		"building_count":
+			var bid: String = visible_when.get("building_id", "")
+			return state.buildings_owned.get(bid, 0) >= int(visible_when.get("count", 1))
+		"shipments_completed":
+			var total: int = state.total_shipments_completed + career.lifetime_shipments
+			return total >= int(visible_when.get("count", 1))
+		"quest_completed":
+			return career.completed_quest_ids.has(visible_when.get("quest_id", ""))
+	return false
+
+
 func purchase_research(research_id: String) -> void:
 	if sim.can_purchase_research(state, research_id):
 		sim.purchase_research(state, research_id)
@@ -491,7 +533,7 @@ func start_new_run() -> void:
 
 	set_speed("1x")
 	tick_completed.emit()
-	SaveManager.save_game(career, state)
+	SaveManager.save_game(career, state, current_speed_key)
 
 
 func _apply_career_flags_to_run_state() -> void:
@@ -509,7 +551,7 @@ func _autosave() -> void:
 	if skip_save_load:
 		return
 	if state != null and sim != null:
-		SaveManager.save_game(career, state)
+		SaveManager.save_game(career, state, current_speed_key)
 
 
 func set_save_path(path: String) -> void:
@@ -521,6 +563,7 @@ func save_to_dict() -> Dictionary:
 		"version": SaveManager.SAVE_VERSION,
 		"career": career.to_dict(),
 		"run_state": state.to_dict(),
+		"speed_key": current_speed_key,
 		"timestamp": Time.get_datetime_string_from_system(),
 	}
 
@@ -529,6 +572,7 @@ func load_from_dict(data: Dictionary) -> void:
 	career = CareerState.from_dict(data.get("career", {}))
 	state = GameState.from_dict(data.get("run_state", {}))
 	_restore_from_save()
+	set_speed(data.get("speed_key", "1x") as String)
 
 
 func _fire_startup_events() -> void:

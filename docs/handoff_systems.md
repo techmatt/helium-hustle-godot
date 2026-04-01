@@ -27,18 +27,15 @@ Buildings with production outputs skip upkeep on ticks where ALL their produced
 resources are at storage cap. Buildings with no production (Battery, Storage Depot, 
 Launch Pad, Data Center) always pay upkeep.
 
-### Input-Starvation Skip
-Buildings with production outputs skip their entire tick (no production, no upkeep) 
-if any upkeep input resource has a current stockpile below the building's per-tick 
-consumption. Buildings with no production outputs are exempt. Stacks with output-at-cap.
-
-### Residual Drain (Post-Stall Cleanup)
-After the main building loop, a second pass iterates over input-starved buildings
-in JSON row order. Each stalled building drains min(available, upkeep) of each
-upkeep resource, producing nothing. This ensures scarce resources settle to 0
-rather than hovering at small nonzero values. Output-capped buildings are exempt.
-Drain is recorded via `ResourceRateTracker` under the same `building:*:upkeep`
-source key; the Stats panel labels stalled upkeep rows with "(stalled)".
+### Partial Production (Input-Constrained)
+Buildings with insufficient upkeep resources run at reduced capacity rather than
+skipping entirely. Capacity fraction = min(available_i / needed_i) across all
+upkeep resources. All inputs consumed and outputs produced are scaled by this
+fraction. A fraction of 0 (zero stockpile of any input) means no activity.
+Buildings running below 100% are flagged `input_starved` in `building_stall_status`.
+Output-capped buildings and no-production buildings (Battery, Storage Depot, Launch
+Pad, Data Center) are unaffected — the former skip entirely, the latter pay
+all-or-nothing upkeep.
 
 ### Building Stall Tracking
 `GameState.building_stall_status` tracks per-building stall state each tick. Two 
@@ -246,8 +243,7 @@ implemented.
 
 ### Overview
 Individual upgrades purchased with science. Session-local — resets on retirement. 
-Four categories with visibility gating at 50% of cheapest item's cost in cumulative 
-science. Exception: Propellant Synthesis uses `event_seen` gating.
+Four categories; category headers hidden when they contain no visible items.
 
 ### Effect Types
 - **Unlock effects:** Enable buildings or commands (e.g., Propellant Synthesis 
@@ -262,9 +258,14 @@ science. Exception: Propellant Synthesis uses `event_seen` gating.
   (checks `lifetime_researched_ids` in CareerState)
 Both stack multiplicatively.
 
-### Research Visibility Override
-Research items can have a `visible_when` field with type `event_seen` that checks 
-`career_state.seen_event_ids`. Used by Propellant Synthesis.
+### Visibility Gating
+Per-item `visible_when` conditions in `research.json`. Supported types: `always`,
+`event_seen`, `event_completed`, `boredom_above`, `research_purchased`,
+`building_count`, `shipments_completed`, `quest_completed`. An item is also visible
+if its ID is in `career_state.lifetime_researched_ids` (purchased in any prior run).
+The "Show All Cards" debug toggle overrides all visibility gating. Category headers
+are hidden when they contain zero visible items. Logic lives in
+`GameManager.is_research_item_visible(item_id)`.
 
 ---
 

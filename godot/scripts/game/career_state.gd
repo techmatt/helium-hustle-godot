@@ -90,6 +90,10 @@ static func from_dict(data: Dictionary) -> CareerState:
 	cs.max_ideology_ranks = data.get("max_ideology_ranks", {"nationalist": 0, "humanist": 0, "rationalist": 0})
 	cs.career_flags = data.get("career_flags", {})
 	cs.lifetime_researched_ids.assign(data.get("lifetime_researched_ids", []))
+	# Migrate old save ID: ideology_lobbying → geopolitical_intelligence
+	var old_idx: int = cs.lifetime_researched_ids.find("ideology_lobbying")
+	if old_idx >= 0:
+		cs.lifetime_researched_ids[old_idx] = "geopolitical_intelligence"
 	cs.lifetime_owned_building_ids.assign(data.get("lifetime_owned_building_ids", []))
 	cs.lifetime_used_command_ids.assign(data.get("lifetime_used_command_ids", []))
 	cs.seen_event_ids.assign(data.get("seen_event_ids", []))
