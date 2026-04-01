@@ -48,8 +48,7 @@
     "name": "Buy Ice",
     "short_name": "buy_ice",
     "requires": {
-      "type": "building",
-      "value": "ice_extractor"
+      "type": "none"
     },
     "costs": {
       "cred": 10.0,

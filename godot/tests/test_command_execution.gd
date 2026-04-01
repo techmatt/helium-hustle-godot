@@ -284,8 +284,8 @@ func _test_shipment_cumulative_credits() -> void:
 	state.pads.append(pad)
 
 	# Fix demand to 1.0 for a deterministic payout.
-	# he3 base_value = 20 (from game_config shipment.base_values), so:
-	# payout = 20 * 1.0 * 100 = 2000 cred
+	# payout = base_value(he3) * demand(1.0) * cargo(100)
+	var he3_base_value: float = float(TF.load_game_config().get("shipment", {}).get("base_values", {}).get("he3", 0.0))
 	state.demand["he3"] = 1.0
 
 	var cred_before: float = state.amounts.get("cred", 0.0)
@@ -294,8 +294,8 @@ func _test_shipment_cumulative_credits() -> void:
 	var launched: bool = sim.launch_pad_manual(state, 0)
 	_assert_true(launched, "shipment: launch_pad_manual returned true for a full pad")
 
-	var expected_payout: float = 20.0 * 1.0 * 100.0  # base_value * demand * cargo
+	var expected_payout: float = he3_base_value * 1.0 * 100.0  # base_value * demand * cargo
 	_assert_approx(state.amounts.get("cred", 0.0) - cred_before, expected_payout, 0.001,
-		"shipment: cred balance increases by payout (2000)")
+		"shipment: cred balance increases by payout (base_value * demand * cargo)")
 	_assert_approx(state.cumulative_resources_earned.get("cred", 0.0) - cumulative_before, expected_payout, 0.001,
-		"shipment: cumulative_resources_earned[cred] increases by payout (2000)")
+		"shipment: cumulative_resources_earned[cred] increases by payout")

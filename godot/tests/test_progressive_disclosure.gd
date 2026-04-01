@@ -189,6 +189,9 @@ func _test_storage_depot_visible_resources(gm: Node) -> void:
 	gm.state.buildings_owned.clear()
 	gm.career.lifetime_owned_building_ids.clear()
 
+	var saved_cmds: Array = gm.career.lifetime_used_command_ids.duplicate()
+	gm.career.lifetime_used_command_ids.clear()
+
 	# Without ice_extractor: ice should not be in visible resources
 	var visible: Array = gm.get_visible_resources()
 	_assert_false(visible.has("ice"),
@@ -203,6 +206,7 @@ func _test_storage_depot_visible_resources(gm: Node) -> void:
 	# Restore
 	gm.state.buildings_owned = saved_owned
 	gm.career.lifetime_owned_building_ids.assign(saved_lifetime)
+	gm.career.lifetime_used_command_ids.assign(saved_cmds)
 
 
 # ── Buy Ice command gated on ice_extractor ────────────────────────────────────
@@ -217,12 +221,12 @@ func _test_buy_ice_command_gating() -> void:
 	state.amounts["cred"] = 9999.0
 	state.amounts["eng"] = 9999.0
 
-	# Without ice_extractor — should not be executable
+	# buy_ice has no prerequisites — executable regardless of ice_extractor
 	state.buildings_owned.erase("ice_extractor")
-	_assert_false(sim.is_command_executable(state, "buy_ice"),
-		"buy_ice: not executable without ice_extractor")
+	_assert_true(sim.is_command_executable(state, "buy_ice"),
+		"buy_ice: executable without ice_extractor (no prerequisites)")
 
-	# With ice_extractor owned — should be executable
+	# Also executable with ice_extractor owned
 	state.buildings_owned["ice_extractor"] = 1
 	state.buildings_active["ice_extractor"] = 1
 	_assert_true(sim.is_command_executable(state, "buy_ice"),
@@ -245,8 +249,9 @@ func _test_show_all_cards_override(gm: Node, gs: Node) -> void:
 	# Without override: smelter hidden (no excavator)
 	_assert_false(gm.is_building_visible("smelter"),
 		"show_all_cards off: smelter hidden without excavator")
-	_assert_false(gm.is_command_visible("buy_ice"),
-		"show_all_cards off: buy_ice hidden without ice_extractor")
+	# buy_ice has no prerequisites — always visible
+	_assert_true(gm.is_command_visible("buy_ice"),
+		"show_all_cards off: buy_ice always visible (no prerequisites)")
 
 	# With override: everything visible
 	gs.show_all_cards = true

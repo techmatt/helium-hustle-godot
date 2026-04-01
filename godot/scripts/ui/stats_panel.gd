@@ -38,7 +38,7 @@ var _font_e2s: FontFile
 # resource_id → {card: PanelContainer, net_lbl: Label, body: VBoxContainer}
 var _cards: Dictionary = {}
 var _flow: HFlowContainer = null
-var _instant_mode: bool = false  # false = moving average, true = instantaneous
+var _instant_mode: bool = true  # false = moving average, true = instantaneous
 
 
 func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
@@ -72,7 +72,7 @@ func _build_mode_selector() -> void:
 	var opt := OptionButton.new()
 	opt.add_item("20-tick average", 0)
 	opt.add_item("Instantaneous", 1)
-	opt.selected = 0
+	opt.selected = 1
 	opt.add_theme_font_override("font", _font_e2r)
 	opt.add_theme_font_size_override("font_size", 13)
 	opt.item_selected.connect(func(idx: int): _instant_mode = (idx == 1))
@@ -319,10 +319,15 @@ func _make_source_label(source_key: String, buildings_data: Array, state: GameSt
 			if parts.size() < 3:
 				return source_key
 			var bname: String = parts[1]
-			var _kind: String = parts[2]
+			var kind: String = parts[2]
 			var count: int = state.buildings_active.get(bname, state.buildings_owned.get(bname, 0))
 			var display: String = _get_building_display_name(bname, buildings_data)
-			return "%d× %s" % [count, display]
+			var label: String = "%d× %s" % [count, display]
+			if kind == "upkeep":
+				var stall: Dictionary = state.building_stall_status.get(bname, {})
+				if stall.get("status", "") == "input_starved":
+					label += " (stalled)"
+			return label
 		"program":
 			if parts.size() < 2:
 				return source_key

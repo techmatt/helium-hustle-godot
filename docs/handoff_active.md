@@ -7,6 +7,10 @@
 _(Add entries here when making changes directly via Claude Code without a 
 claude.ai design session. Format: date, what changed, one line.)_
 
+- 2026-03-31: Stalled building residual drain — input-starved buildings now consume
+  remaining input resources (producing nothing) so scarce resources drain to 0
+  instead of hovering. Stats panel labels stalled upkeep rows "(stalled)".
+  New `test_residual_drain.gd` suite (6 tests); all 1325 tests passing.
 - 2026-03-31: Research passive effects audit — all 4 research effects and 6 project
   modifiers verified working via new `test_passive_effects.gd` suite (~10 new tests).
 - 2026-03-31: Progressive disclosure system — resources/buildings/commands hidden until

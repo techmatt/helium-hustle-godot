@@ -192,6 +192,11 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 			if delta > 0.0:
 				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 
+	# Residual drain pass — input-starved buildings drain whatever remains of
+	# their upkeep inputs (producing nothing). This prevents scarce resources
+	# from hovering at small nonzero values instead of settling to 0.
+	_residual_drain_pass(state)
+
 	# Advance pad cooldown states
 	for pad: GameState.LaunchPadData in state.pads:
 		if pad.status == GameState.PAD_LAUNCHING:
@@ -680,6 +685,27 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		if extra_boredom != 0.0:
 			state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + extra_boredom
 			last_gross_deltas["boredom"] = last_gross_deltas.get("boredom", 0.0) + extra_boredom
+
+
+func _residual_drain_pass(state: GameState) -> void:
+	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
+	for bdef in _buildings_data:
+		var sn: String = bdef.short_name
+		if state.building_stall_status.get(sn, {}).get("status", "") != "input_starved":
+			continue
+		var count: int = state.buildings_active.get(sn, state.buildings_owned.get(sn, 0))
+		if count == 0:
+			continue
+		for res in bdef.upkeep:
+			var full_cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
+			var available: float = state.amounts.get(res, 0.0)
+			var drain: float = minf(available, full_cost)
+			if drain <= 0.0:
+				continue
+			state.amounts[res] = available - drain
+			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - drain
+			if rate_tracker != null:
+				rate_tracker.record("building:" + sn + ":upkeep", res, -drain)
 
 
 func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:

@@ -8,13 +8,13 @@
       "type": "none"
     },
     "land": 1,
-    "cost_scaling": 1.2,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 20.0,
-      "ti": 10.0
+      "ti": 6.0
     },
     "production": {
-      "eng": 6.0
+      "eng": 5.0
     },
     "upkeep": {},
     "effects": [],
@@ -31,7 +31,7 @@
       "label": "Q1 — Boot Sequence"
     },
     "land": 1,
-    "cost_scaling": 1.25,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 35.0
     },
@@ -54,7 +54,7 @@
       "value": "propellant_synthesis"
     },
     "land": 1,
-    "cost_scaling": 1.25,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 25.0,
       "reg": 10.0
@@ -78,7 +78,7 @@
       "value": "excavator"
     },
     "land": 1,
-    "cost_scaling": 1.25,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 40.0,
       "reg": 20.0
@@ -103,7 +103,7 @@
       "value": "excavator"
     },
     "land": 2,
-    "cost_scaling": 1.25,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 60.0,
       "reg": 30.0,
@@ -129,7 +129,7 @@
       "value": "smelter"
     },
     "land": 2,
-    "cost_scaling": 1.3,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 100.0,
       "ti": 20.0,
@@ -155,7 +155,7 @@
       "value": "propellant_synthesis"
     },
     "land": 1,
-    "cost_scaling": 1.25,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 50.0,
       "ice": 16.0
@@ -181,7 +181,7 @@
       "label": "First Extraction (Q2)"
     },
     "land": 3,
-    "cost_scaling": 1.3,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 150.0,
       "ti": 30.0
@@ -205,7 +205,7 @@
       "label": "2 Data Centers"
     },
     "land": 2,
-    "cost_scaling": 1.3,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 120.0,
       "cir": 5.0
@@ -230,9 +230,9 @@
       "value": "fabricator"
     },
     "land": 2,
-    "cost_scaling": 1.35,
+    "cost_scaling": 1.5,
     "costs": {
-      "cred": 200.0,
+      "cred": 150.0,
       "cir": 8.0,
       "ti": 20.0
     },
@@ -259,7 +259,7 @@
       "type": "none"
     },
     "land": 1,
-    "cost_scaling": 1.35,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 60.0,
       "ti": 6.0
@@ -285,7 +285,7 @@
       "type": "none"
     },
     "land": 1,
-    "cost_scaling": 1.25,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 50.0,
       "reg": 20.0
@@ -342,7 +342,7 @@
       "value": "market_analysis"
     },
     "land": 1,
-    "cost_scaling": 1.3,
+    "cost_scaling": 1.5,
     "costs": {
       "cred": 180.0,
       "cir": 6.0,

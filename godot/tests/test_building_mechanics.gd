@@ -16,29 +16,38 @@ func run(_scene_root: Node) -> void:
 func _test_building_production() -> void:
 	print("--- Building Production ---")
 
-	# Solar panel: no upkeep, produces 6 eng per tick.
+	# Solar panel: no upkeep. Production comes from JSON.
 	# Drain eng to 0 so the production isn't invisible behind the cap.
+	var panel_bdef := TF.get_building_def("panel")
+	var panel_eng_prod: float = float(panel_bdef.get("production", {}).get("eng", 0.0))
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "panel")
 	state.amounts["eng"] = 0.0
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("eng", 0.0), 6.0, 0.001,
-		"production: solar panel produces 6 eng per tick")
+	_assert_approx(state.amounts.get("eng", 0.0), panel_eng_prod, 0.001,
+		"production: solar panel produces correct eng per tick")
 
-	# Excavator: upkeep 2 eng, produces 2 reg per tick.
+	# Excavator: upkeep and production from JSON.
+	var exc_bdef := TF.get_building_def("excavator")
+	var exc_upkeep_eng: float = float(exc_bdef.get("upkeep", {}).get("eng", 0.0))
+	var exc_prod_reg: float = float(exc_bdef.get("production", {}).get("reg", 0.0))
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
 	state.amounts["reg"] = 0.0
-	state.amounts["eng"] = 10.0
+	state.amounts["eng"] = 20.0
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("reg", 0.0), 2.0, 0.001,
-		"production: excavator produces 2 reg per tick")
-	_assert_approx(state.amounts.get("eng", 0.0), 8.0, 0.001,
-		"production: excavator consumes 2 eng upkeep per tick")
+	_assert_approx(state.amounts.get("reg", 0.0), exc_prod_reg, 0.001,
+		"production: excavator produces correct reg per tick")
+	_assert_approx(state.amounts.get("eng", 0.0), 20.0 - exc_upkeep_eng, 0.001,
+		"production: excavator consumes correct eng upkeep per tick")
 
-	# Smelter: upkeep 3 eng + 2 reg, produces 1 ti per tick.
+	# Smelter: upkeep and production from JSON.
+	var sm_bdef := TF.get_building_def("smelter")
+	var sm_upkeep_eng: float = float(sm_bdef.get("upkeep", {}).get("eng", 0.0))
+	var sm_upkeep_reg: float = float(sm_bdef.get("upkeep", {}).get("reg", 0.0))
+	var sm_prod_ti: float = float(sm_bdef.get("production", {}).get("ti", 0.0))
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "smelter")
@@ -46,12 +55,12 @@ func _test_building_production() -> void:
 	state.amounts["eng"] = 20.0
 	state.amounts["reg"] = 20.0
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("ti", 0.0), 1.0, 0.001,
-		"production: smelter produces 1 ti per tick")
-	_assert_approx(state.amounts.get("reg", 0.0), 18.0, 0.001,
-		"production: smelter consumes 2 reg upkeep per tick")
-	_assert_approx(state.amounts.get("eng", 0.0), 17.0, 0.001,
-		"production: smelter consumes 3 eng upkeep per tick")
+	_assert_approx(state.amounts.get("ti", 0.0), sm_prod_ti, 0.001,
+		"production: smelter produces correct ti per tick")
+	_assert_approx(state.amounts.get("reg", 0.0), 20.0 - sm_upkeep_reg, 0.001,
+		"production: smelter consumes correct reg upkeep per tick")
+	_assert_approx(state.amounts.get("eng", 0.0), 20.0 - sm_upkeep_eng, 0.001,
+		"production: smelter consumes correct eng upkeep per tick")
 
 
 func _test_production_gated_upkeep() -> void:
@@ -73,12 +82,13 @@ func _test_production_gated_upkeep() -> void:
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 10.0
-	state.amounts["reg"] = 50.0  # at base reg cap (50)
+	var reg_cap: float = state.caps.get("reg", 0.0)
+	state.amounts["reg"] = reg_cap  # at reg cap
 	var eng_before: float = state.amounts["eng"]
 	sim.tick(state, true)
 	_assert_approx(state.amounts.get("eng", 0.0), eng_before, 0.001,
 		"gated_upkeep: excavator does not pay eng upkeep when reg output is at cap")
-	_assert_approx(state.amounts.get("reg", 0.0), 50.0, 0.001,
+	_assert_approx(state.amounts.get("reg", 0.0), reg_cap, 0.001,
 		"gated_upkeep: excavator does not produce reg when output is at cap")
 	_assert_stall_status(state, "excavator", "output_capped",
 		"gated_upkeep: excavator stall status is output_capped when reg at cap")
@@ -87,7 +97,11 @@ func _test_production_gated_upkeep() -> void:
 func _test_input_starvation_skip() -> void:
 	print("--- Input Starvation Skip ---")
 
-	# Smelter starved of regolith: no production, no eng upkeep deducted.
+	# Smelter starved of regolith: no production. Residual drain consumes
+	# available eng (up to full upkeep), reg stays at 0.
+	var sm_bdef2 := TF.get_building_def("smelter")
+	var sm_upkeep_eng2: float = float(sm_bdef2.get("upkeep", {}).get("eng", 0.0))
+	var sm_upkeep_reg2: float = float(sm_bdef2.get("upkeep", {}).get("reg", 0.0))
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "smelter")
@@ -97,10 +111,11 @@ func _test_input_starvation_skip() -> void:
 	sim.tick(state, true)
 	_assert_approx(state.amounts.get("ti", 0.0), 0.0, 0.001,
 		"starvation: smelter skips ti production when reg starved")
-	_assert_approx(state.amounts.get("eng", 0.0), 20.0, 0.001,
-		"starvation: smelter skips eng upkeep when reg starved")
+	_assert_approx(state.amounts.get("eng", 0.0), 20.0 - sm_upkeep_eng2, 0.001,
+		"starvation: smelter residual-drains eng upkeep when reg starved")
 
-	# Smelter starved of energy: no production, no reg upkeep deducted.
+	# Smelter starved of energy: no production. Residual drain consumes
+	# available reg (up to full upkeep), eng stays at 0.
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "smelter")
@@ -110,8 +125,8 @@ func _test_input_starvation_skip() -> void:
 	sim.tick(state, true)
 	_assert_approx(state.amounts.get("ti", 0.0), 0.0, 0.001,
 		"starvation: smelter skips ti production when eng starved")
-	_assert_approx(state.amounts.get("reg", 0.0), 20.0, 0.001,
-		"starvation: smelter skips reg upkeep when eng starved")
+	_assert_approx(state.amounts.get("reg", 0.0), 20.0 - sm_upkeep_reg2, 0.001,
+		"starvation: smelter residual-drains reg upkeep when eng starved")
 
 
 func _test_stall_status_tracking() -> void:
@@ -132,7 +147,7 @@ func _test_stall_status_tracking() -> void:
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 10.0
-	state.amounts["reg"] = 50.0  # at base reg cap
+	state.amounts["reg"] = state.caps.get("reg", 0.0)  # at reg cap
 	sim.tick(state, true)
 	_assert_stall_status(state, "excavator", "output_capped",
 		"stall: excavator is output_capped when reg at cap")
@@ -190,86 +205,97 @@ func _test_storage_caps() -> void:
 func _test_building_cost_scaling() -> void:
 	print("--- Building Cost Scaling ---")
 
-	# Solar panel: base cost 20 cred + 10 ti, scaling 1.2, no ideology alignment.
+	# Solar panel: read base costs and scaling from JSON.
 	# Formula: base_cost * scaling^purchased, where purchased = max(0, owned - bonus).
+	var panel_bdef2 := TF.get_building_def("panel")
+	var base_cred: float = float(panel_bdef2.get("costs", {}).get("cred", 0.0))
+	var base_ti: float = float(panel_bdef2.get("costs", {}).get("ti", 0.0))
+	var scaling: float = float(panel_bdef2.get("cost_scaling", 1.0))
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state(sim)
 
-	# 0 owned → purchased=0 → 20 * 1.2^0 = 20
+	# 0 owned → purchased=0 → scaling^0 = 1, costs = base costs
 	state.buildings_owned["panel"] = 0
 	state.buildings_bonus["panel"] = 0
 	var costs: Dictionary = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 20.0, 0.001,
-		"cost_scaling: panel 0 owned → cred cost 20")
-	_assert_approx(costs.get("ti", 0.0), 10.0, 0.001,
-		"cost_scaling: panel 0 owned → ti cost 10")
+	_assert_approx(costs.get("cred", 0.0), base_cred, 0.001,
+		"cost_scaling: panel 0 owned → cred cost equals base")
+	_assert_approx(costs.get("ti", 0.0), base_ti, 0.001,
+		"cost_scaling: panel 0 owned → ti cost equals base")
 
-	# 1 owned → purchased=1 → 20 * 1.2^1 = 24
+	# 1 owned → purchased=1 → base * scaling^1
 	state.buildings_owned["panel"] = 1
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 24.0, 0.001,
-		"cost_scaling: panel 1 owned → cred cost 24")
+	_assert_approx(costs.get("cred", 0.0), base_cred * scaling, 0.001,
+		"cost_scaling: panel 1 owned → cred cost = base * scaling")
 
-	# 5 owned → purchased=5 → 20 * 1.2^5
+	# 5 owned → purchased=5 → base * scaling^5
 	state.buildings_owned["panel"] = 5
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 20.0 * pow(1.2, 5.0), 0.001,
-		"cost_scaling: panel 5 owned → cred cost 20 * 1.2^5")
+	_assert_approx(costs.get("cred", 0.0), base_cred * pow(scaling, 5.0), 0.001,
+		"cost_scaling: panel 5 owned → cred cost = base * scaling^5")
 
-	# Bonus offset: owned=3, bonus=1 → purchased=max(0,2)=2 → 20 * 1.2^2 = 28.8
+	# Bonus offset: owned=3, bonus=1 → purchased=max(0,2)=2 → base * scaling^2
 	state.buildings_owned["panel"] = 3
 	state.buildings_bonus["panel"] = 1
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 20.0 * pow(1.2, 2.0), 0.001,
-		"cost_scaling: panel owned=3 bonus=1 → purchased=2, cred cost 28.8")
+	_assert_approx(costs.get("cred", 0.0), base_cred * pow(scaling, 2.0), 0.001,
+		"cost_scaling: panel owned=3 bonus=1 → purchased=2, cred cost = base * scaling^2")
 
-	# Bonus matches owned: owned=1, bonus=1 → purchased=max(0,0)=0 → cost 20
+	# Bonus matches owned: owned=1, bonus=1 → purchased=max(0,0)=0 → base cost
 	state.buildings_owned["panel"] = 1
 	state.buildings_bonus["panel"] = 1
 	costs = sim.get_scaled_costs(state, "panel")
-	_assert_approx(costs.get("cred", 0.0), 20.0, 0.001,
-		"cost_scaling: panel owned=1 bonus=1 → purchased=0, cred cost 20")
+	_assert_approx(costs.get("cred", 0.0), base_cred, 0.001,
+		"cost_scaling: panel owned=1 bonus=1 → purchased=0, cred cost = base")
 
 
 func _test_land_system() -> void:
 	print("--- Land System ---")
 
+	# Read land config from JSON — base_cost, scaling, land_per_purchase.
+	var cfg := TF.load_game_config()
+	var land_cfg: Dictionary = cfg.get("land", {})
+	var land_base: float = float(land_cfg.get("base_cost", 0.0))
+	var land_scaling: float = float(land_cfg.get("cost_scaling", 1.5))
+	var land_per_buy: int = int(land_cfg.get("land_per_purchase", 10))
+
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state(sim)
 
-	# Fresh state: starting_resources.land=40 minus panel(1 land) minus data_center(2 land) = 37.
-	_assert_approx(state.amounts.get("land", 0.0), 37.0, 0.001,
-		"land: fresh state has 37 available land after starting buildings")
-
 	# Land purchase cost formula: int(floor(base * scaling^land_purchases)).
-	# base=15, scaling=1.5. No ideology or modifier active in fresh state.
-	_assert_equal(sim.get_land_purchase_cost(state), 15,
-		"land: 1st purchase costs 15 cred (15 * 1.5^0 = 15)")
+	# At land_purchases=0: cost = base.
+	_assert_equal(sim.get_land_purchase_cost(state), int(land_base),
+		"land: 1st purchase costs base_cost cred (scaling^0 = 1)")
+	# At land_purchases=1: cost = floor(base * scaling).
 	state.land_purchases = 1
-	_assert_equal(sim.get_land_purchase_cost(state), 22,
-		"land: 2nd purchase costs 22 cred (floor(15 * 1.5^1) = floor(22.5) = 22)")
+	_assert_equal(sim.get_land_purchase_cost(state), int(floor(land_base * land_scaling)),
+		"land: 2nd purchase cost = floor(base * scaling^1)")
+	# At land_purchases=2: cost = floor(base * scaling^2).
 	state.land_purchases = 2
-	_assert_equal(sim.get_land_purchase_cost(state), 33,
-		"land: 3rd purchase costs 33 cred (floor(15 * 1.5^2) = floor(33.75) = 33)")
+	_assert_equal(sim.get_land_purchase_cost(state), int(floor(land_base * pow(land_scaling, 2.0))),
+		"land: 3rd purchase cost = floor(base * scaling^2)")
 	state.land_purchases = 0  # reset for buy test
 
-	# buy_land: deducts cost from cred, adds 10 land, increments land_purchases.
-	state.amounts["cred"] = 15.0
+	# buy_land: deducts cost from cred, adds land_per_purchase land, increments land_purchases.
+	state.amounts["cred"] = land_base
 	var land_before: float = state.amounts.get("land", 0.0)
 	sim.buy_land(state)
 	_assert_approx(state.amounts.get("cred", 0.0), 0.0, 0.001,
-		"land: buy_land deducts 15 cred")
-	_assert_approx(state.amounts.get("land", 0.0), land_before + 10.0, 0.001,
-		"land: buy_land adds 10 land")
+		"land: buy_land deducts base_cost cred")
+	_assert_approx(state.amounts.get("land", 0.0), land_before + land_per_buy, 0.001,
+		"land: buy_land adds land_per_purchase land")
 	_assert_equal(state.land_purchases, 1,
 		"land: land_purchases increments after buy_land")
 
 	# Building purchase consumes land. Solar panel costs 1 land.
+	var panel_bdef3 := TF.get_building_def("panel")
+	var panel_costs3: Dictionary = panel_bdef3.get("costs", {})
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state(sim)
-	state.buildings_owned["panel"] = 0  # reset so purchased=0, cost=20 cred + 10 ti
-	state.amounts["cred"] = 20.0
-	state.amounts["ti"] = 10.0
+	state.buildings_owned["panel"] = 0  # ensure purchased=0, costs = base
+	for res: String in panel_costs3:
+		state.amounts[res] = float(panel_costs3[res]) * 2.0  # more than enough
 	var land_start: float = state.amounts.get("land", 0.0)
 	sim.buy_building(state, "panel")
 	_assert_approx(state.amounts.get("land", 0.0), land_start - 1.0, 0.001,

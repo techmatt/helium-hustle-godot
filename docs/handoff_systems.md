@@ -32,6 +32,14 @@ Buildings with production outputs skip their entire tick (no production, no upke
 if any upkeep input resource has a current stockpile below the building's per-tick 
 consumption. Buildings with no production outputs are exempt. Stacks with output-at-cap.
 
+### Residual Drain (Post-Stall Cleanup)
+After the main building loop, a second pass iterates over input-starved buildings
+in JSON row order. Each stalled building drains min(available, upkeep) of each
+upkeep resource, producing nothing. This ensures scarce resources settle to 0
+rather than hovering at small nonzero values. Output-capped buildings are exempt.
+Drain is recorded via `ResourceRateTracker` under the same `building:*:upkeep`
+source key; the Stats panel labels stalled upkeep rows with "(stalled)".
+
 ### Building Stall Tracking
 `GameState.building_stall_status` tracks per-building stall state each tick. Two 
 types: `input_starved` and `output_capped`.

@@ -114,41 +114,47 @@ func _test_extractor_output_mult() -> void:
 func _test_solar_output_mult() -> void:
 	print("--- solar_output_mult ---")
 
-	# Panel baseline: 6 eng/tick with no modifier.
+	var panel_bdef := TF.get_building_def("panel")
+	var panel_eng_prod: float = float(panel_bdef.get("production", {}).get("eng", 0.0))
+
+	# Panel baseline: no modifier, produces exactly what JSON says.
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "panel")
 	state.amounts["eng"] = 0.0
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("eng", 0.0), 6.0, 0.001,
-		"solar_output_mult: panel baseline 6 eng (mult=1.0)")
+	_assert_approx(state.amounts.get("eng", 0.0), panel_eng_prod, 0.001,
+		"solar_output_mult: panel baseline production correct (mult=1.0)")
 
-	# Panel with modifier 1.15: 6 * 1.15 = 6.9 eng.
+	# Panel with modifier 1.15: production * 1.15.
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "panel")
 	state.amounts["eng"] = 0.0
 	state.active_modifiers["solar_output_mult"] = 1.15
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("eng", 0.0), 6.9, 0.001,
-		"solar_output_mult: panel produces 6.9 eng with modifier 1.15")
+	_assert_approx(state.amounts.get("eng", 0.0), panel_eng_prod * 1.15, 0.001,
+		"solar_output_mult: panel production scales by modifier 1.15")
 
 
 # G: building_upkeep_mult — all building upkeep costs
 func _test_building_upkeep_mult() -> void:
 	print("--- building_upkeep_mult ---")
 
-	# Excavator baseline upkeep: 2 eng/tick.
+	var exc_bdef := TF.get_building_def("excavator")
+	var exc_upkeep_eng: float = float(exc_bdef.get("upkeep", {}).get("eng", 0.0))
+
+	# Excavator baseline upkeep from JSON.
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 100.0
 	state.amounts["reg"] = 0.0
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("eng", 0.0), 98.0, 0.001,
-		"building_upkeep_mult: excavator baseline upkeep 2 eng (mult=1.0)")
+	_assert_approx(state.amounts.get("eng", 0.0), 100.0 - exc_upkeep_eng, 0.001,
+		"building_upkeep_mult: excavator baseline upkeep correct (mult=1.0)")
 
-	# Excavator with modifier 0.90: upkeep = 2 * 0.90 = 1.8 eng → 100 - 1.8 = 98.2.
+	# Excavator with modifier 0.90: upkeep = base * 0.90.
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
@@ -156,8 +162,8 @@ func _test_building_upkeep_mult() -> void:
 	state.amounts["reg"] = 0.0
 	state.active_modifiers["building_upkeep_mult"] = 0.90
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("eng", 0.0), 98.2, 0.001,
-		"building_upkeep_mult: excavator upkeep 1.8 eng with modifier 0.90 (100 - 1.8 = 98.2)")
+	_assert_approx(state.amounts.get("eng", 0.0), 100.0 - exc_upkeep_eng * 0.90, 0.001,
+		"building_upkeep_mult: excavator upkeep scales by modifier 0.90")
 
 
 # H: promote_effectiveness_mult — Promote command demand accumulator
@@ -214,21 +220,25 @@ func _test_speculator_burst_interval_mult() -> void:
 # J: land_cost_mult — land purchase cost, stacks with Nationalist ideology
 func _test_land_cost_mult() -> void:
 	print("--- land_cost_mult ---")
+	var land_cfg2: Dictionary = TF.load_game_config().get("land", {})
+	var land_base2: float = float(land_cfg2.get("base_cost", 0.0))
+	var land_scaling2: float = float(land_cfg2.get("cost_scaling", 1.5))
+	var raw_at_4: float = land_base2 * pow(land_scaling2, 4.0)
+
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state(sim)
 	state.land_purchases = 4
 
-	# Base: floor(15 * 1.5^4) = floor(75.9375) = 75 cred.
-	_assert_equal(sim.get_land_purchase_cost(state), 75,
-		"land_cost_mult: base cost at land_purchases=4 is 75 cred")
+	# Base at land_purchases=4: floor(base * scaling^4).
+	_assert_equal(sim.get_land_purchase_cost(state), int(floor(raw_at_4)),
+		"land_cost_mult: base cost at land_purchases=4 = floor(base * scaling^4)")
 
-	# With modifier 0.85: floor(75.9375 * 0.85) = floor(64.5469) = 64.
+	# With modifier 0.85: floor(raw * 0.85).
 	state.active_modifiers["land_cost_mult"] = 0.85
-	_assert_equal(sim.get_land_purchase_cost(state), 64,
-		"land_cost_mult: cost 64 with modifier 0.85 (floor(75.9375 * 0.85))")
+	_assert_equal(sim.get_land_purchase_cost(state), int(floor(raw_at_4 * 0.85)),
+		"land_cost_mult: modifier 0.85 multiplies raw cost before floor")
 
-	# With modifier 0.85 + Nationalist rank 1 (ideology=70 → pow(0.97, 1)=0.97):
-	# floor(75.9375 * 0.85 * 0.97) = floor(75.9375 * 0.8245) = floor(62.623) = 62.
+	# With modifier 0.85 + Nationalist rank 1 (ideology=70 → pow(0.97, 1)=0.97), stacks multiplicatively.
 	state.ideology_values["nationalist"] = 70.0
-	_assert_equal(sim.get_land_purchase_cost(state), 62,
-		"land_cost_mult: cost 62 with modifier 0.85 + Nationalist rank 1 (stacks multiplicatively)")
+	_assert_equal(sim.get_land_purchase_cost(state), int(floor(raw_at_4 * 0.85 * 0.97)),
+		"land_cost_mult: modifier and Nationalist rank 1 stack multiplicatively")

@@ -85,6 +85,14 @@ static func fresh_state_isolated(sim: GameSimulation) -> GameState:
 	return state
 
 
+# Returns the building definition dict for the given short_name, or {} if not found.
+static func get_building_def(short_name: String) -> Dictionary:
+	for bdef: Dictionary in load_buildings_data():
+		if bdef.short_name == short_name:
+			return bdef
+	return {}
+
+
 # Sets buildings_owned and buildings_active to count for the given short_name.
 # Use this to inject a building into a test state without going through buy_building.
 static func add_building(state: GameState, short_name: String, count: int = 1) -> void:

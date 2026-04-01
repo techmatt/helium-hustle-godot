@@ -189,6 +189,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 	var add_btn := Button.new()
 	add_btn.text = "Add"
 	add_btn.focus_mode = Control.FOCUS_NONE
+	add_btn.custom_minimum_size = Vector2(70, 0)
 	add_btn.add_theme_font_override("font", _font_e2s)
 	add_btn.add_theme_font_size_override("font_size", 15)
 	add_btn.disabled = is_locked
