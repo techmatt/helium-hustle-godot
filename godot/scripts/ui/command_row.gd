@@ -33,6 +33,12 @@ func _fill_color_partial() -> Color:
 func _grip_color() -> Color:
 	return Color(0.50, 0.50, 0.50) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.50)
 
+const _RES_NAMES: Dictionary = {
+	"eng": "Energy", "reg": "Regolith", "ice": "Ice", "he3": "Helium-3",
+	"cred": "Credits", "ti": "Titanium", "prop": "Propellant",
+	"sci": "Science", "cir": "Circuits", "boredom": "Boredom", "land": "Land",
+}
+
 var _entry_index: int = 0
 var _cmd_name: String = ""
 var _repeat_count: int = 1
@@ -55,11 +61,35 @@ func setup(
 	repeat_count: int,
 	font_r: FontFile,
 	font_s: FontFile,
+	costs: Dictionary = {},
+	production: Dictionary = {},
 ) -> void:
 	_entry_index = entry_idx
 	_cmd_name = cmd_name
 	_repeat_count = repeat_count
 	_build_ui(font_r, font_s)
+	tooltip_text = _build_tooltip(costs, production)
+
+
+func _build_tooltip(costs: Dictionary, production: Dictionary) -> String:
+	var parts: Array = []
+	if costs.is_empty():
+		parts.append("Cost: none")
+	else:
+		var cost_strs: Array = []
+		for k: String in costs:
+			cost_strs.append("%s %s" % [_fmt(costs[k]), _RES_NAMES.get(k, k)])
+		parts.append("Cost: " + ", ".join(cost_strs))
+	if not production.is_empty():
+		var prod_strs: Array = []
+		for k: String in production:
+			prod_strs.append("%s %s" % [_fmt(production[k]), _RES_NAMES.get(k, k)])
+		parts.append("Produces: " + ", ".join(prod_strs))
+	return "\n".join(parts)
+
+
+func _fmt(v: float) -> String:
+	return str(int(v)) if v == floorf(v) else ("%.1f" % v)
 
 
 func refresh(

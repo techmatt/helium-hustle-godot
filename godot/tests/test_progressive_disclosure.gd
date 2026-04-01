@@ -23,10 +23,12 @@ func _test_resource_visibility(gm: Node) -> void:
 	# Save state
 	var saved_owned: Dictionary = gm.state.buildings_owned.duplicate()
 	var saved_lifetime: Array = gm.career.lifetime_owned_building_ids.duplicate()
+	var saved_cmds: Array = gm.career.lifetime_used_command_ids.duplicate()
 
-	# Fresh state: no extra buildings owned, no lifetime buildings
+	# Fresh state: no extra buildings owned, no lifetime buildings, no prior commands
 	gm.state.buildings_owned.clear()
 	gm.career.lifetime_owned_building_ids.clear()
+	gm.career.lifetime_used_command_ids.clear()
 
 	var visible: Array = gm.get_visible_resources()
 
@@ -35,7 +37,7 @@ func _test_resource_visibility(gm: Node) -> void:
 	for res: String in always_visible:
 		_assert_true(visible.has(res), "resource visibility: %s always visible" % res)
 
-	# Gated resources must NOT be visible without their building
+	# Gated resources must NOT be visible without their building or a prior buy command
 	for res: String in ["ice", "he3", "cir", "prop", "sci"]:
 		_assert_false(visible.has(res), "resource visibility: %s hidden without building" % res)
 
@@ -49,10 +51,24 @@ func _test_resource_visibility(gm: Node) -> void:
 	gm.career.lifetime_owned_building_ids.append("refinery")
 	visible = gm.get_visible_resources()
 	_assert_true(visible.has("he3"), "resource visibility: he3 visible via lifetime refinery ownership")
+	gm.career.lifetime_owned_building_ids.clear()
+
+	# Running buy_ice makes ice visible (even without ice_extractor)
+	gm.career.lifetime_used_command_ids.append("buy_ice")
+	visible = gm.get_visible_resources()
+	_assert_true(visible.has("ice"), "resource visibility: ice visible after buy_ice run")
+	gm.career.lifetime_used_command_ids.clear()
+
+	# Running buy_propellant makes prop visible
+	gm.career.lifetime_used_command_ids.append("buy_propellant")
+	visible = gm.get_visible_resources()
+	_assert_true(visible.has("prop"), "resource visibility: prop visible after buy_propellant run")
+	gm.career.lifetime_used_command_ids.clear()
 
 	# Restore
 	gm.state.buildings_owned = saved_owned
 	gm.career.lifetime_owned_building_ids.assign(saved_lifetime)
+	gm.career.lifetime_used_command_ids.assign(saved_cmds)
 
 
 # ── Building visibility ───────────────────────────────────────────────────────
@@ -62,19 +78,31 @@ func _test_building_visibility(gm: Node, gs: Node) -> void:
 
 	var saved_owned: Dictionary = gm.state.buildings_owned.duplicate()
 	var saved_lifetime: Array = gm.career.lifetime_owned_building_ids.duplicate()
+	var saved_unlocked: Array = gm.state.unlocked_buildings.duplicate()
 	var saved_show_all: bool = gs.show_all_cards
 
 	gm.state.buildings_owned.clear()
 	gm.career.lifetime_owned_building_ids.clear()
+	gm.state.unlocked_buildings.clear()
 	gs.show_all_cards = false
 
 	# Always-visible buildings (no requires)
 	_assert_true(gm.is_building_visible("panel"), "building visibility: panel always visible")
-	_assert_true(gm.is_building_visible("excavator"), "building visibility: excavator always visible")
-	_assert_true(gm.is_building_visible("ice_extractor"), "building visibility: ice_extractor always visible")
 	_assert_true(gm.is_building_visible("battery"), "building visibility: battery always visible")
 	_assert_true(gm.is_building_visible("storage_depot"), "building visibility: storage_depot always visible")
 	_assert_true(gm.is_building_visible("data_center"), "building visibility: data_center always visible")
+
+	# Excavator requires Q1 — hidden without quest unlock
+	_assert_false(gm.is_building_visible("excavator"), "building visibility: excavator hidden without Q1")
+	gm.state.unlocked_buildings.append("excavator")
+	_assert_true(gm.is_building_visible("excavator"), "building visibility: excavator visible after Q1 unlock")
+	gm.state.unlocked_buildings.erase("excavator")
+
+	# Ice Extractor requires propellant_synthesis research — hidden without it
+	_assert_false(gm.is_building_visible("ice_extractor"), "building visibility: ice_extractor hidden without propellant_synthesis")
+	gm.state.completed_research.append("propellant_synthesis")
+	_assert_true(gm.is_building_visible("ice_extractor"), "building visibility: ice_extractor visible with propellant_synthesis")
+	gm.state.completed_research.erase("propellant_synthesis")
 
 	# Smelter requires excavator — hidden until excavator is owned
 	_assert_false(gm.is_building_visible("smelter"), "building visibility: smelter hidden without excavator")
@@ -96,6 +124,7 @@ func _test_building_visibility(gm: Node, gs: Node) -> void:
 	# Restore
 	gm.state.buildings_owned = saved_owned
 	gm.career.lifetime_owned_building_ids.assign(saved_lifetime)
+	gm.state.unlocked_buildings.assign(saved_unlocked)
 	gs.show_all_cards = saved_show_all
 
 

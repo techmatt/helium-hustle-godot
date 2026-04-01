@@ -41,10 +41,10 @@
     "fuel_per_pad": 20,
     "load_per_execution": 5,
     "base_values": {
-      "he3": 20,
-      "ti": 12,
-      "cir": 30,
-      "prop": 8
+      "he3": 10,
+      "ti": 6,
+      "cir": 15,
+      "prop": 4
     }
   },
   "demand": {
@@ -80,7 +80,7 @@
     {"id": "fringe9",  "name": "FRINGE-9", "target_resource": "prop", "dump_interval_min": 150, "dump_interval_max": 250, "demand_hit": 0.3}
   ],
   "land": {
-    "base_cost": 15,
+    "base_cost": 200,
     "cost_scaling": 1.5,
     "land_per_purchase": 10
   },

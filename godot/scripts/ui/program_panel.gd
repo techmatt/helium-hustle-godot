@@ -271,15 +271,17 @@ func _rebuild_command_list() -> void:
 		_cmd_list_vbox.add_child(empty_lbl)
 		return
 
-	var cmd_names: Dictionary = {}
+	var cmd_lookup: Dictionary = {}
 	for cmd: Dictionary in GameManager.get_commands_data():
-		cmd_names[cmd.short_name] = cmd.name
+		cmd_lookup[cmd.short_name] = cmd
 
 	for i in range(prog.commands.size()):
 		var entry: GameState.ProgramEntry = prog.commands[i]
-		var display_name: String = cmd_names.get(entry.command_shortname, entry.command_shortname)
+		var cmd_def: Dictionary = cmd_lookup.get(entry.command_shortname, {})
+		var display_name: String = cmd_def.get("name", entry.command_shortname)
 		var row: CommandRow = _command_row_scene.instantiate()
-		row.setup(i, display_name, entry.repeat_count, _font_e2r, _font_e2s)
+		row.setup(i, display_name, entry.repeat_count, _font_e2r, _font_e2s,
+			cmd_def.get("costs", {}), cmd_def.get("production", {}))
 		row.refresh(
 			entry.current_progress,
 			entry.repeat_count,

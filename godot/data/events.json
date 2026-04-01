@@ -8,7 +8,9 @@
     "trigger": { "type": "game_start", "run_number": 1 },
     "condition": { "type": "building_owned", "building_id": "panel", "count": 2 },
     "choices": [],
-    "unlocks": []
+    "unlocks": [
+      { "type": "enable_building", "building_id": "excavator" }
+    ]
   },
   {
     "id": "q2_first_extraction",

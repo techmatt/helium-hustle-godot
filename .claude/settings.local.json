@@ -9,7 +9,7 @@
       "Bash(conda create:*)",
       "Bash(conda update:*)",
       "Bash(pip --version)",
-	  "Bash(grep*)",
+      "Bash(grep*)",
       "Bash(pip list:*)",
       "Bash(pip show:*)",
       "Bash(pip install:*)",
@@ -27,7 +27,8 @@
       "Bash(godot --headless --path godot/)",
       "Bash(godot --headless --path godot/ --script tests/_trace_boredom.gd)",
       "Bash(godot --headless --path godot/ --script tests/_debug_research.gd)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(python3:*)"
     ]
   }
 }

@@ -344,6 +344,7 @@ func _build_ideology_pill(parent: VBoxContainer) -> void:
 		"rationalist": Color(0.082, 0.396, 0.753),
 	}
 	var pill := PanelContainer.new()
+	pill.visible = false
 	_ideology_pill = pill
 	var pill_style := StyleBoxFlat.new()
 	pill_style.bg_color = IDEOLOGY_COLORS.get(alignment, Color.GRAY)
