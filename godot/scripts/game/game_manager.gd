@@ -137,6 +137,8 @@ func _initialize_state() -> void:
 
 
 func set_speed(speed_key: String) -> void:
+	if speed_key == "1":
+		speed_key = "1x"  # migrate old saves that stored "1" before the rename
 	current_speed_key = speed_key
 	var tps: float = SPEED_MAP.get(speed_key, 1.0)
 	if tps <= 0.0:

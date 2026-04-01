@@ -254,7 +254,7 @@ func _build_speed_section() -> void:
 			btn.text = speed
 			btn.toggle_mode = true
 			btn.button_group = grp
-			if speed == "1x":
+			if speed == GameManager.current_speed_key:
 				btn.button_pressed = true
 			btn.add_theme_font_override("font", _font_e2s)
 			btn.add_theme_font_size_override("font_size", 17)
@@ -270,7 +270,7 @@ func _build_speed_section() -> void:
 			btn.text = speed
 			btn.toggle_mode = true
 			btn.button_group = grp
-			if speed == "1x":
+			if speed == GameManager.current_speed_key:
 				btn.button_pressed = true
 			btn.add_theme_font_override("font", _font_e2s)
 			btn.add_theme_font_size_override("font_size", 17)

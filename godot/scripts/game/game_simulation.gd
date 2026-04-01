@@ -5,6 +5,8 @@ var rate_tracker: ResourceRateTracker = null
 
 var _resources_data: Array = []
 var _buildings_data: Array = []
+var _buildings_map: Dictionary = {}   # {short_name: bdef}
+var _resource_names: Dictionary = {}  # {short_name: display_name}
 var _commands_data: Dictionary = {}   # {short_name: command_dict}
 var _research_data: Dictionary = {}   # {id: research_item_dict}
 var _milestones: Array = []           # milestone definitions from game_config
@@ -36,6 +38,12 @@ var _land_starting: int = 40
 func init(resources_data: Array, buildings_data: Array, commands_data: Array, game_config: Dictionary = {}, research_data: Array = []) -> void:
 	_resources_data = resources_data
 	_buildings_data = buildings_data
+	_buildings_map = {}
+	for bdef in _buildings_data:
+		_buildings_map[bdef.short_name] = bdef
+	_resource_names = {}
+	for rdef in _resources_data:
+		_resource_names[rdef.short_name] = rdef.get("name", rdef.short_name)
 	for cmd in commands_data:
 		_commands_data[cmd.short_name] = cmd
 	for item in research_data:
@@ -75,14 +83,27 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 		rate_tracker.begin_tick()
 	recalculate_caps(state)
 
-	# Boredom accumulation
+	_tick_boredom(state, debug_no_boredom)
+	_tick_buildings(state)
+	demand_system.tick_demand(state)
+	_tick_pad_cooldowns(state)
+	execute_programs(state)
+	_tick_rivals_and_speculators(state)
+	_check_milestones(state)
+	_clamp(state)
+	_tick_overclock_states(state)
+	state.current_day += 1
+
+
+func _tick_boredom(state: GameState, debug_no_boredom: bool) -> void:
 	var boredom_rate: float = 0.0
 	if not debug_no_boredom:
 		boredom_rate = _get_boredom_rate(state.current_day)
 		boredom_rate *= _get_boredom_multiplier(state)
-		state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + boredom_rate
-	last_gross_deltas["boredom"] = boredom_rate
+	_apply_delta(state, "boredom", boredom_rate)
 
+
+func _tick_buildings(state: GameState) -> void:
 	# Two-pass building tick so producers see post-consumption resource levels.
 	#
 	# Pass 1 — upkeep only.
@@ -94,8 +115,12 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	# Pass 2 — production only, using the post-upkeep resource levels.
 	#   Now a producer (solar) correctly sees that consumers (data center)
 	#   already drew down shared resources, and runs when it should.
+	var will_produce: Array = _tick_building_upkeep(state)
+	_tick_building_production(state, will_produce)
 
-	var will_produce: Array = []  # each entry: [bdef, count, fraction]
+
+func _tick_building_upkeep(state: GameState) -> Array:
+	var will_produce: Array = []
 	state.building_stall_status.clear()
 
 	for bdef in _buildings_data:
@@ -162,8 +187,7 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 
 				for res in bdef.upkeep:
 					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult * fraction
-					state.amounts[res] = state.amounts.get(res, 0.0) - cost
-					last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+					_apply_delta(state, res, -cost)
 					if rate_tracker != null:
 						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
 				will_produce.append([bdef, count, fraction])
@@ -173,15 +197,15 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 					continue
 				for res in bdef.upkeep:
 					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
-					state.amounts[res] = state.amounts.get(res, 0.0) - cost
-					last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+					_apply_delta(state, res, -cost)
 					if rate_tracker != null:
 						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
 				will_produce.append([bdef, count, 1.0])
 
-	# Demand update runs BEFORE programs so shipments use fresh demand values
-	demand_system.tick_demand(state)
+	return will_produce
 
+
+func _tick_building_production(state: GameState, will_produce: Array) -> void:
 	for entry in will_produce:
 		var bdef: Dictionary = entry[0]
 		var count: int = entry[1]
@@ -221,14 +245,14 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 				prod_mult = state.get_ideology_bonus("rationalist", 1.0, 1.05)
 		for res in bdef.production:
 			var delta: float = float(bdef.production[res]) * count * prod_mult * fraction
-			state.amounts[res] = state.amounts.get(res, 0.0) + delta
-			last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
+			_apply_delta(state, res, delta)
 			if rate_tracker != null:
 				rate_tracker.record("building:" + bdef.short_name + ":prod", res, delta)
 			if delta > 0.0:
 				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 
-	# Advance pad cooldown states
+
+func _tick_pad_cooldowns(state: GameState) -> void:
 	for pad: GameState.LaunchPadData in state.pads:
 		if pad.status == GameState.PAD_LAUNCHING:
 			pad.status = GameState.PAD_COOLDOWN
@@ -240,17 +264,14 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 				pad.status = GameState.PAD_EMPTY
 				pad.cooldown_ticks = 0
 
-	execute_programs(state)
 
-	# Rival dumps and speculator burst check happen after shipments,
-	# modifying state for next tick's demand calculation.
+func _tick_rivals_and_speculators(state: GameState) -> void:
 	var rival_notifs: Array = demand_system.tick_rivals(state)
 	pending_rival_notifications.append_array(rival_notifs)
 	demand_system.tick_speculators(state)
 
-	_check_milestones(state)
-	_clamp(state)
-	# Decrement active overclock states (after production benefits this tick)
+
+func _tick_overclock_states(state: GameState) -> void:
 	var oc_i: int = state.overclock_states.size() - 1
 	while oc_i >= 0:
 		var oc: Dictionary = state.overclock_states[oc_i]
@@ -258,7 +279,6 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 		if oc["ticks"] <= 0:
 			state.overclock_states.remove_at(oc_i)
 		oc_i -= 1
-	state.current_day += 1
 
 
 func execute_programs(state: GameState) -> void:
@@ -557,6 +577,68 @@ func _effect_launch_pads(state: GameState) -> void:
 		pad.status = GameState.PAD_LAUNCHING
 
 
+func _effect_boredom_add(state: GameState, effect: Dictionary, command_shortname: String) -> void:
+	var boredom_val: float = float(effect.get("value", 0.0))
+	# Dream effectiveness: humanist ideology bonus amplifies boredom reduction
+	if command_shortname == "dream" and boredom_val < 0.0:
+		boredom_val *= state.get_ideology_bonus("humanist", 1.0, 1.05)
+	_apply_delta(state, "boredom", boredom_val)
+
+
+func _effect_demand_nudge(state: GameState, effect: Dictionary) -> void:
+	var res: String = effect.get("resource", "")
+	if res in GameState.TRADEABLE_RESOURCES:
+		var half_pt: float = demand_system.get_config("speculator_half_point")
+		var effectiveness: float = 1.0
+		if state.speculator_target == res and state.speculator_count > 0.0:
+			var damp: float = demand_system.get_config("promote_speculator_dampening")
+			effectiveness = 1.0 - damp * (state.speculator_count / (state.speculator_count + half_pt))
+		var base_eff: float = float(effect.get("value", demand_system.get_config("promote_base_effect")))
+		base_eff *= state.get_modifier("promote_effectiveness_mult")
+		state.demand_promote[res] = state.demand_promote.get(res, 0.0) + base_eff * effectiveness
+
+
+func _effect_spec_reduce(state: GameState) -> void:
+	var reduce: float = randf_range(demand_system.get_config("disrupt_speculators_min"), demand_system.get_config("disrupt_speculators_max"))
+	state.speculator_count = maxf(0.0, state.speculator_count - reduce)
+	if not state.flags.get("used_disrupt_speculators", false):
+		state.flags["used_disrupt_speculators"] = true
+
+
+func _effect_ideology_push(state: GameState, effect: Dictionary) -> void:
+	var push_axis: String = effect.get("axis", "")
+	var all_axes: Array = ["nationalist", "humanist", "rationalist"]
+	if push_axis in all_axes:
+		state.ideology_values[push_axis] = state.ideology_values.get(push_axis, 0.0) + 1.0
+		for other_axis: String in all_axes:
+			if other_axis != push_axis:
+				state.ideology_values[other_axis] = state.ideology_values.get(other_axis, 0.0) - 0.5
+
+
+func _effect_overclock(state: GameState, effect: Dictionary) -> void:
+	var oc_target: String = effect.get("target", "")
+	var oc_bonus: float = float(effect.get("bonus", 0.0))
+	var oc_base_dur: int = int(effect.get("duration", 5))
+	var rationalist_mult: float = state.get_ideology_bonus("rationalist", 1.0, 1.03)
+	var oc_duration: int = int(round(float(oc_base_dur) * rationalist_mult))
+	state.overclock_states.append({"target": oc_target, "bonus": oc_bonus, "ticks": oc_duration})
+
+
+func _apply_delta(state: GameState, res: String, delta: float) -> void:
+	state.amounts[res] = state.amounts.get(res, 0.0) + delta
+	last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
+
+
+func _get_research_effects(state: GameState, effect_type: String) -> Array:
+	var results: Array = []
+	for id: String in state.completed_research:
+		if _research_data.has(id):
+			var eff: Dictionary = _research_data[id].get("effect", {})
+			if eff.get("type", "") == effect_type:
+				results.append(eff)
+	return results
+
+
 func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: float) -> void:
 	var record := GameState.LaunchRecord.new()
 	record.resource_type = pad.resource_type
@@ -647,8 +729,7 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 	var costs: Dictionary = _get_effective_costs(state, cmd)
 	for res in costs:
 		var cost: float = float(costs[res])
-		state.amounts[res] = state.amounts.get(res, 0.0) - cost
-		last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) - cost
+		_apply_delta(state, res, -cost)
 		prog_delta[res] = prog_delta.get(res, 0.0) - cost
 	# Note: some commands (e.g. Sell Cloud Compute) put "boredom" directly in
 	# their production dict to get a simple additive change. Others (e.g. Dream)
@@ -656,8 +737,7 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 	# the two for the same command — only one path applies ideology modifiers.
 	for res in cmd.production:
 		var delta: float = float(cmd.production[res])
-		state.amounts[res] = state.amounts.get(res, 0.0) + delta
-		last_gross_deltas[res] = last_gross_deltas.get(res, 0.0) + delta
+		_apply_delta(state, res, delta)
 		prog_delta[res] = prog_delta.get(res, 0.0) + delta
 		if delta > 0.0:
 			state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
@@ -668,43 +748,15 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 			"launch_full_pads":
 				_effect_launch_pads(state)
 			"boredom_add":
-				var boredom_val: float = float(effect.get("value", 0.0))
-				# Dream effectiveness: humanist ideology bonus amplifies boredom reduction
-				if short_name == "dream" and boredom_val < 0.0:
-					boredom_val *= state.get_ideology_bonus("humanist", 1.0, 1.05)
-				state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + boredom_val
-				last_gross_deltas["boredom"] = last_gross_deltas.get("boredom", 0.0) + boredom_val
+				_effect_boredom_add(state, effect, short_name)
 			"demand_nudge":
-				var res: String = effect.get("resource", "")
-				if res in GameState.TRADEABLE_RESOURCES:
-					var half_pt: float = demand_system.get_config("speculator_half_point")
-					var effectiveness: float = 1.0
-					if state.speculator_target == res and state.speculator_count > 0.0:
-						var damp: float = demand_system.get_config("promote_speculator_dampening")
-						effectiveness = 1.0 - damp * (state.speculator_count / (state.speculator_count + half_pt))
-					var base_eff: float = float(effect.get("value", demand_system.get_config("promote_base_effect")))
-					base_eff *= state.get_modifier("promote_effectiveness_mult")
-					state.demand_promote[res] = state.demand_promote.get(res, 0.0) + base_eff * effectiveness
+				_effect_demand_nudge(state, effect)
 			"spec_reduce":
-				var reduce: float = randf_range(demand_system.get_config("disrupt_speculators_min"), demand_system.get_config("disrupt_speculators_max"))
-				state.speculator_count = maxf(0.0, state.speculator_count - reduce)
-				if not state.flags.get("used_disrupt_speculators", false):
-					state.flags["used_disrupt_speculators"] = true
+				_effect_spec_reduce(state)
 			"ideology_push":
-				var push_axis: String = effect.get("axis", "")
-				var all_axes: Array = ["nationalist", "humanist", "rationalist"]
-				if push_axis in all_axes:
-					state.ideology_values[push_axis] = state.ideology_values.get(push_axis, 0.0) + 1.0
-					for other_axis: String in all_axes:
-						if other_axis != push_axis:
-							state.ideology_values[other_axis] = state.ideology_values.get(other_axis, 0.0) - 0.5
+				_effect_ideology_push(state, effect)
 			"overclock":
-				var oc_target: String = effect.get("target", "")
-				var oc_bonus: float = float(effect.get("bonus", 0.0))
-				var oc_base_dur: int = int(effect.get("duration", 5))
-				var rationalist_mult: float = state.get_ideology_bonus("rationalist", 1.0, 1.03)
-				var oc_duration: int = int(round(float(oc_base_dur) * rationalist_mult))
-				state.overclock_states.append({"target": oc_target, "bonus": oc_bonus, "ticks": oc_duration})
+				_effect_overclock(state, effect)
 	# AI Consciousness Act: add extra boredom per execution for affected commands
 	if state.flags.get("ai_consciousness_active", false):
 		const AI_CONSCIOUSNESS_BOREDOM: Dictionary = {
@@ -714,8 +766,7 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		}
 		var extra_boredom: float = float(AI_CONSCIOUSNESS_BOREDOM.get(short_name, 0.0))
 		if extra_boredom != 0.0:
-			state.amounts["boredom"] = state.amounts.get("boredom", 0.0) + extra_boredom
-			last_gross_deltas["boredom"] = last_gross_deltas.get("boredom", 0.0) + extra_boredom
+			_apply_delta(state, "boredom", extra_boredom)
 
 
 func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:
@@ -727,10 +778,7 @@ func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:
 
 
 func _get_resource_name(short_name: String) -> String:
-	for rdef in _resources_data:
-		if rdef.short_name == short_name:
-			return rdef.get("name", short_name)
-	return short_name
+	return _resource_names.get(short_name, short_name)
 
 
 func _get_research_cost(state: GameState, research_id: String) -> float:
@@ -775,12 +823,8 @@ func _get_boredom_rate(day: int) -> float:
 
 func _get_boredom_multiplier(state: GameState) -> float:
 	var mult: float = 1.0
-	for id: String in state.completed_research:
-		if not _research_data.has(id):
-			continue
-		var effect: Dictionary = _research_data[id].get("effect", {})
-		if effect.get("type", "") == "boredom_rate_multiplier":
-			mult *= float(effect.get("value", 1.0))
+	for eff in _get_research_effects(state, "boredom_rate_multiplier"):
+		mult *= float(eff.get("value", 1.0))
 	# Humanist ideology: passive boredom growth bonus
 	mult *= state.get_ideology_bonus("humanist", 1.0, 0.97)
 	# AI Consciousness Act: permanent -15% base boredom rate
@@ -791,23 +835,15 @@ func _get_boredom_multiplier(state: GameState) -> float:
 
 func _get_effective_costs(state: GameState, cmd: Dictionary) -> Dictionary:
 	var costs: Dictionary = cmd.get("costs", {}).duplicate()
-	for id: String in state.completed_research:
-		if not _research_data.has(id):
-			continue
-		var effect: Dictionary = _research_data[id].get("effect", {})
-		if effect.get("type", "") == "command_cost_override":
-			if effect.get("command", "") == cmd.get("short_name", ""):
-				costs[effect.get("resource", "")] = float(effect.get("value", 0))
+	for eff in _get_research_effects(state, "command_cost_override"):
+		if eff.get("command", "") == cmd.get("short_name", ""):
+			costs[eff.get("resource", "")] = float(eff.get("value", 0))
 	return costs
 
 
 func _get_load_per_execution(state: GameState, default_load: int) -> int:
-	for id: String in state.completed_research:
-		if not _research_data.has(id):
-			continue
-		var effect: Dictionary = _research_data[id].get("effect", {})
-		if effect.get("type", "") == "load_per_execution":
-			return int(effect.get("value", default_load))
+	for eff in _get_research_effects(state, "load_per_execution"):
+		return int(eff.get("value", default_load))
 	return default_load
 
 
@@ -895,17 +931,10 @@ func _get_overclock_mult(state: GameState, target: String) -> float:
 		if oc.get("target", "") == target:
 			mult *= 1.0 + float(oc.get("bonus", 0.0))
 	var cap: float = 1.5  # base cap: 150%
-	for id: String in state.completed_research:
-		if not _research_data.has(id):
-			continue
-		var effect: Dictionary = _research_data[id].get("effect", {})
-		if effect.get("type", "") == "overclock_cap":
-			cap = float(effect.get("value", cap))
+	for eff in _get_research_effects(state, "overclock_cap"):
+		cap = float(eff.get("value", cap))
 	return minf(mult, cap)
 
 
 func _get_bdef(short_name: String) -> Variant:
-	for bdef in _buildings_data:
-		if bdef.short_name == short_name:
-			return bdef
-	return null
+	return _buildings_map.get(short_name, null)
