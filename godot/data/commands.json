@@ -292,7 +292,7 @@
         "value": 0.05
       }
     ],
-    "description": "Directly reduces speculator pressure. Cheap but costs processor cycles."
+    "description": "Removes 1–3 speculators per execution. Costs processor cycles."
   },
   {
     "name": "Fund Nationalists",

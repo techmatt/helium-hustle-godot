@@ -101,27 +101,67 @@ func _tick_boredom(state: GameState, debug_no_boredom: bool) -> void:
 		boredom_rate = _get_boredom_rate(state.current_day)
 		boredom_rate *= _get_boredom_multiplier(state)
 	_apply_delta(state, "boredom", boredom_rate)
+	if rate_tracker != null and boredom_rate != 0.0:
+		var phase_idx: int = _get_boredom_phase_index(state.current_day)
+		rate_tracker.record("boredom_phase:" + str(phase_idx), "boredom", boredom_rate)
 
 
 func _tick_buildings(state: GameState) -> void:
-	# Two-pass building tick so producers see post-consumption resource levels.
+	# Three-pass building tick.
 	#
-	# Pass 1 — upkeep only.
-	#   Buildings WITH upkeep: pay now if output isn't already all-at-cap and
-	#   upkeep is affordable. Add to will_produce list.
-	#   Buildings with NO upkeep (e.g. solar panels): always added to
-	#   will_produce — they cost nothing to run; let Pass 2 decide.
+	# Pass 0 — free producers (solar panels, etc.) run first.
+	#   Buildings with no upkeep and non-empty production apply their output
+	#   immediately, so consumers see a full energy stockpile in Pass 1.
+	#   Free producers always run regardless of output cap — they have no upkeep
+	#   to save by skipping, and skipping would starve downstream consumers mid-tick.
+	#   Any excess output is clamped to cap at the end of the tick.
 	#
-	# Pass 2 — production only, using the post-upkeep resource levels.
-	#   Now a producer (solar) correctly sees that consumers (data center)
-	#   already drew down shared resources, and runs when it should.
+	# Pass 1 — upkeep only (consumer buildings).
+	#   Each building with upkeep computes fraction = available/needed and
+	#   deducts its share of resources. Buildings with no upkeep are skipped
+	#   here (already handled in Pass 0).
+	#
+	# Pass 2 — production only, using post-upkeep resource levels.
+	#   Consumer buildings apply production scaled by their Pass-1 fraction.
+	state.building_stall_status.clear()
+	_tick_free_producers(state)
 	var will_produce: Array = _tick_building_upkeep(state)
 	_tick_building_production(state, will_produce)
 
 
+func _tick_free_producers(state: GameState) -> void:
+	for bdef in _buildings_data:
+		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
+		if owned == 0:
+			continue
+		if not (bdef.upkeep as Dictionary).is_empty():
+			continue
+		var count: int = state.buildings_active.get(bdef.short_name, owned)
+		if count == 0:
+			continue
+		var prod: Dictionary = bdef.get("production", {})
+		if prod.is_empty():
+			# No-upkeep, no-production building (battery, storage_depot, etc.)
+			state.building_stall_status[bdef.short_name] = {
+				"status": "running", "reason": "", "missing_resource": ""
+			}
+			continue
+		state.building_stall_status[bdef.short_name] = {
+			"status": "running", "reason": "", "missing_resource": ""
+		}
+		var prod_mult: float = 1.0
+		match bdef.short_name:
+			"panel":
+				prod_mult = state.get_modifier("solar_output_mult")
+		for res in prod:
+			var delta: float = float(prod[res]) * count * prod_mult
+			_apply_delta(state, res, delta)
+			if rate_tracker != null:
+				rate_tracker.record("building:" + bdef.short_name + ":production", res, delta)
+
+
 func _tick_building_upkeep(state: GameState) -> Array:
 	var will_produce: Array = []
-	state.building_stall_status.clear()
 
 	for bdef in _buildings_data:
 		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
@@ -134,9 +174,7 @@ func _tick_building_upkeep(state: GameState) -> Array:
 		var has_prod: bool = not (bdef.get("production", {}) as Dictionary).is_empty()
 
 		if (bdef.upkeep as Dictionary).is_empty():
-			# Free producer — no upkeep decision needed; always eligible.
-			# Stall status recorded in Pass 2.
-			will_produce.append([bdef, count, 1.0])
+			continue  # Already handled by _tick_free_producers
 		else:
 			# Skip if every output is already at cap (don't waste upkeep).
 			var prod: Dictionary = bdef.get("production", {})
@@ -819,6 +857,16 @@ func _get_boredom_rate(day: int) -> float:
 		else:
 			break
 	return rate
+
+
+func _get_boredom_phase_index(day: int) -> int:
+	var phase: int = 1
+	for i: int in range(_boredom_curve.size()):
+		if day >= _boredom_curve[i][0]:
+			phase = i + 1
+		else:
+			break
+	return phase
 
 
 func _get_boredom_multiplier(state: GameState) -> float:

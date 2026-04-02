@@ -335,6 +335,8 @@ func _make_source_label(source_key: String, buildings_data: Array, state: GameSt
 	if parts.is_empty():
 		return source_key
 	match parts[0]:
+		"boredom_phase":
+			return "Phase " + (parts[1] if parts.size() > 1 else "?")
 		"building":
 			if parts.size() < 3:
 				return source_key

@@ -66,15 +66,16 @@ func _test_building_production() -> void:
 func _test_production_gated_upkeep() -> void:
 	print("--- Production Gated Upkeep ---")
 
-	# Solar panel is a free producer (no upkeep). When its only output (eng) is
-	# at cap, Pass 2 marks it output_capped and skips production entirely.
+	# Solar panel is a free producer (no upkeep). It always runs regardless of
+	# output cap — skipping it saves nothing and would starve downstream consumers.
+	# Excess output is clamped at end of tick.
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "panel")
 	state.amounts["eng"] = 100.0  # at eng cap
 	sim.tick(state, true)
-	_assert_stall_status(state, "panel", "output_capped",
-		"gated_upkeep: solar panel stalls output_capped when eng at cap")
+	_assert_stall_status(state, "panel", "running",
+		"gated_upkeep: solar panel runs (status=running) even when eng is at cap")
 
 	# Excavator: when reg is at cap, the output-capped check fires in Pass 1
 	# before upkeep is paid — so upkeep is NOT deducted and production is skipped.

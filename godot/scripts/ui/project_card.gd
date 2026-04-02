@@ -24,8 +24,18 @@ var _rate_labels: Dictionary = {}
 var _progress_bars: Dictionary = {}
 # Per-resource progress labels (resource_id → Label showing "x/y")
 var _progress_labels: Dictionary = {}
-# Per-resource minus/plus buttons (resource_id → [Button, Button])
-var _stepper_buttons: Dictionary = {}
+# Per-resource row background styles (resource_id → StyleBoxFlat) for green tinting
+var _row_styles: Dictionary = {}
+# Per-resource stepper containers (resource_id → HBoxContainer) for show/hide
+var _stepper_containers: Dictionary = {}
+
+# Hold-to-repeat state
+var _hold_res: String = ""
+var _hold_dir: float = 0.0
+var _hold_timer: float = 0.0
+var _hold_active: bool = false
+const HOLD_DELAY: float = 0.40
+const HOLD_INTERVAL: float = 0.075
 
 
 func setup(pdef: Dictionary, font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
@@ -43,11 +53,20 @@ func refresh() -> void:
 	var is_complete: bool = pm.is_project_complete(st, pid)
 	var costs: Dictionary = _pdef.get("costs", {})
 	var invested: Dictionary = st.project_invested.get(pid, {})
+	var dark: bool = GameSettings.is_dark_mode
 
 	for res: String in costs:
 		var total_needed: float = float(costs[res])
 		var current: float = minf(float(invested.get(res, 0.0)), total_needed)
 		var frac: float = current / total_needed if total_needed > 0.0 else 1.0
+		var row_done: bool = frac >= 1.0 or is_complete
+
+		if _row_styles.has(res):
+			var rs: StyleBoxFlat = _row_styles[res]
+			if row_done:
+				rs.bg_color = Color(0.20, 0.40, 0.20, 0.35) if dark else Color(0.50, 0.86, 0.50, 0.30)
+			else:
+				rs.bg_color = Color(0, 0, 0, 0)
 
 		if _progress_bars.has(res):
 			var bar: ProgressBar = _progress_bars[res]
@@ -64,11 +83,12 @@ func refresh() -> void:
 			var rate: float = pm.get_project_rate(st, pid, res)
 			_rate_labels[res].text = "%d" % int(rate)
 
-		if _stepper_buttons.has(res):
-			var btns: Array = _stepper_buttons[res]
-			var funded: bool = frac >= 1.0 or is_complete
-			btns[0].disabled = funded  # minus
-			btns[1].disabled = funded  # plus
+		if _stepper_containers.has(res):
+			var sc: HBoxContainer = _stepper_containers[res]
+			sc.visible = not row_done
+			if row_done and _hold_res == res:
+				_hold_res = ""
+				_hold_active = false
 
 
 func _build() -> void:
@@ -143,11 +163,23 @@ func _build() -> void:
 	vbox.add_child(reward_lbl)
 
 
-func _build_resource_row(res: String, total_needed: float) -> HBoxContainer:
+func _build_resource_row(res: String, total_needed: float) -> PanelContainer:
 	var dark: bool = GameSettings.is_dark_mode
-	var pid: String = _pdef.id
+
+	# Row wrapper with tintable background
+	var wrap := PanelContainer.new()
+	var row_style := StyleBoxFlat.new()
+	row_style.bg_color = Color(0, 0, 0, 0)
+	row_style.content_margin_left   = 0
+	row_style.content_margin_right  = 0
+	row_style.content_margin_top    = 2
+	row_style.content_margin_bottom = 2
+	wrap.add_theme_stylebox_override("panel", row_style)
+	_row_styles[res] = row_style
+
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
+	wrap.add_child(row)
 
 	# Resource name label
 	var res_lbl := Label.new()
@@ -184,13 +216,16 @@ func _build_resource_row(res: String, total_needed: float) -> HBoxContainer:
 	row.add_child(prog_lbl)
 	_progress_labels[res] = prog_lbl
 
-	# Stepper: − [rate] +
+	# Stepper group: − [rate] +
+	var stepper_box := HBoxContainer.new()
+	stepper_box.add_theme_constant_override("separation", 2)
+	row.add_child(stepper_box)
+	_stepper_containers[res] = stepper_box
+
 	var minus_btn := _make_stepper_btn("−")
-	minus_btn.pressed.connect(func() -> void:
-		var cur: float = GameManager.project_manager.get_project_rate(GameManager.state, pid, res)
-		GameManager.set_project_rate(pid, res, cur - 1.0)
-	)
-	row.add_child(minus_btn)
+	minus_btn.button_down.connect(_on_stepper_down.bind(res, -1.0))
+	minus_btn.button_up.connect(_on_stepper_up)
+	stepper_box.add_child(minus_btn)
 
 	var rate_lbl := Label.new()
 	rate_lbl.text = "0"
@@ -198,18 +233,41 @@ func _build_resource_row(res: String, total_needed: float) -> HBoxContainer:
 	rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rate_lbl.add_theme_font_override("font", _font_e2s)
 	rate_lbl.add_theme_font_size_override("font_size", 13)
-	row.add_child(rate_lbl)
+	stepper_box.add_child(rate_lbl)
 	_rate_labels[res] = rate_lbl
 
 	var plus_btn := _make_stepper_btn("+")
-	plus_btn.pressed.connect(func() -> void:
-		var cur: float = GameManager.project_manager.get_project_rate(GameManager.state, pid, res)
-		GameManager.set_project_rate(pid, res, cur + 1.0)
-	)
-	row.add_child(plus_btn)
+	plus_btn.button_down.connect(_on_stepper_down.bind(res, 1.0))
+	plus_btn.button_up.connect(_on_stepper_up)
+	stepper_box.add_child(plus_btn)
 
-	_stepper_buttons[res] = [minus_btn, plus_btn]
-	return row
+	return wrap
+
+
+func _process(delta: float) -> void:
+	if not _hold_active:
+		return
+	_hold_timer -= delta
+	if _hold_timer <= 0.0:
+		_step_rate(_hold_res, _hold_dir)
+		_hold_timer = HOLD_INTERVAL
+
+
+func _on_stepper_down(res: String, dir: float) -> void:
+	_step_rate(res, dir)
+	_hold_res = res
+	_hold_dir = dir
+	_hold_timer = HOLD_DELAY
+	_hold_active = true
+
+
+func _on_stepper_up() -> void:
+	_hold_active = false
+
+
+func _step_rate(res: String, dir: float) -> void:
+	var cur: float = GameManager.project_manager.get_project_rate(GameManager.state, _pdef.id, res)
+	GameManager.set_project_rate(_pdef.id, res, cur + dir)
 
 
 func _make_stepper_btn(symbol: String) -> Button:

@@ -355,7 +355,13 @@ func is_research_item_visible(item_id: String) -> bool:
 			var total: int = state.total_shipments_completed + career.lifetime_shipments
 			return total >= int(visible_when.get("count", 1))
 		"quest_completed":
-			return career.completed_quest_ids.has(visible_when.get("quest_id", ""))
+			var qid: String = visible_when.get("quest_id", "")
+			if career.completed_quest_ids.has(qid):
+				return true
+			for inst: Dictionary in state.event_instances:
+				if inst.get("id", "") == qid and inst.get("state", "") == "completed":
+					return true
+			return false
 	return false
 
 

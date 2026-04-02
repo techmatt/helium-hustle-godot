@@ -22,7 +22,7 @@ GameSettings="*res://scripts/game/game_settings.gd"
 
 [display]
 
-window/size/viewport_width=1666
+window/size/viewport_width=1800
 window/size/viewport_height=1009
 window/size/mode=2
 

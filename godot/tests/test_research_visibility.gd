@@ -30,6 +30,7 @@ func _save_state(gm: Node) -> Dictionary:
 		"lifetime_shipments": gm.career.lifetime_shipments,
 		"completed_quest_ids": gm.career.completed_quest_ids.duplicate(),
 		"lifetime_researched_ids": gm.career.lifetime_researched_ids.duplicate(),
+		"event_instances": gm.state.event_instances.duplicate(true),
 	}
 
 
@@ -41,6 +42,7 @@ func _restore_state(gm: Node, saved: Dictionary) -> void:
 	gm.career.lifetime_shipments = saved["lifetime_shipments"]
 	gm.career.completed_quest_ids.assign(saved["completed_quest_ids"])
 	gm.career.lifetime_researched_ids.assign(saved["lifetime_researched_ids"])
+	gm.state.event_instances.assign(saved["event_instances"])
 
 
 # 1. Fresh start: only Market Awareness visible
@@ -203,13 +205,27 @@ func _test_quest_gate(gm: Node) -> void:
 
 	gm.career.lifetime_researched_ids.clear()
 	gm.career.completed_quest_ids.clear()
+	gm.state.event_instances.clear()
 
 	_assert_false(gm.is_research_item_visible("geopolitical_intelligence"),
 		"quest gate: geopolitical_intelligence not visible without Q7")
 
+	# Via career (prior-run retirement path)
 	gm.career.completed_quest_ids.append("q7_first_legacy")
 	_assert_true(gm.is_research_item_visible("geopolitical_intelligence"),
-		"quest gate: geopolitical_intelligence visible after Q7 completed")
+		"quest gate: geopolitical_intelligence visible after Q7 in career")
+
+	# Via current-run event_instances (same run Q7 was completed — before retirement)
+	gm.career.completed_quest_ids.clear()
+	gm.state.event_instances.append({"id": "q7_first_legacy", "state": "completed"})
+	_assert_true(gm.is_research_item_visible("geopolitical_intelligence"),
+		"quest gate: geopolitical_intelligence visible when Q7 completed in current run")
+
+	# Incomplete instance does not count
+	gm.state.event_instances.clear()
+	gm.state.event_instances.append({"id": "q7_first_legacy", "state": "active"})
+	_assert_false(gm.is_research_item_visible("geopolitical_intelligence"),
+		"quest gate: geopolitical_intelligence not visible when Q7 only active (not completed)")
 
 	_restore_state(gm, saved)
 

@@ -25,6 +25,7 @@ var _font_rb: FontFile
 var _font_e2r: FontFile
 var _font_e2s: FontFile
 
+var _card_style: StyleBoxFlat
 var _resource_opt: OptionButton
 var _launch_btn: Button
 var _cargo_fill: ColorRect
@@ -51,19 +52,19 @@ func setup(pad_idx: int, font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFi
 func _build_ui() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-	var card_style := StyleBoxFlat.new()
-	card_style.bg_color = Color(1.0, 1.0, 1.0) if not GameSettings.is_dark_mode else Color(0.12, 0.12, 0.16)
-	card_style.corner_radius_top_left     = 6
-	card_style.corner_radius_top_right    = 6
-	card_style.corner_radius_bottom_left  = 6
-	card_style.corner_radius_bottom_right = 6
+	_card_style = StyleBoxFlat.new()
+	_card_style.bg_color = Color(1.0, 1.0, 1.0) if not GameSettings.is_dark_mode else Color(0.12, 0.12, 0.16)
+	_card_style.corner_radius_top_left     = 6
+	_card_style.corner_radius_top_right    = 6
+	_card_style.corner_radius_bottom_left  = 6
+	_card_style.corner_radius_bottom_right = 6
 	if not GameSettings.is_dark_mode:
-		card_style.border_width_left   = 1
-		card_style.border_width_right  = 1
-		card_style.border_width_top    = 1
-		card_style.border_width_bottom = 1
-		card_style.border_color = Color(0.78, 0.78, 0.78)
-	add_theme_stylebox_override("panel", card_style)
+		_card_style.border_width_left   = 1
+		_card_style.border_width_right  = 1
+		_card_style.border_width_top    = 1
+		_card_style.border_width_bottom = 1
+		_card_style.border_color = Color(0.78, 0.78, 0.78)
+	add_theme_stylebox_override("panel", _card_style)
 
 	var margin := MarginContainer.new()
 	margin.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -116,6 +117,7 @@ func _build_ui() -> void:
 		_resource_opt.add_theme_color_override("font_hover_color", black)
 		_resource_opt.add_theme_color_override("font_pressed_color", black)
 		_resource_opt.add_theme_color_override("font_focus_color", black)
+	_resource_opt.add_item("None (disabled)")
 	for res: String in TRADEABLE:
 		_resource_opt.add_item(RESOURCE_DISPLAY[res])
 	_resource_opt.item_selected.connect(_on_resource_selected)
@@ -191,15 +193,20 @@ func _build_ui() -> void:
 func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 	_updating_ui = true
 
-	# Sync dropdown
-	var res_idx: int = TRADEABLE.find(pad_data.resource_type)
-	if res_idx >= 0 and _resource_opt.selected != res_idx:
-		_resource_opt.selected = res_idx
+	# Sync dropdown (index 0 = "none", indices 1-N = TRADEABLE)
+	var opt_idx: int
+	if pad_data.resource_type == "none":
+		opt_idx = 0
+	else:
+		var res_idx: int = TRADEABLE.find(pad_data.resource_type)
+		opt_idx = res_idx + 1 if res_idx >= 0 else 1
+	if _resource_opt.selected != opt_idx:
+		_resource_opt.selected = opt_idx
 
 	# Bar fill color
 	_cargo_fill.color = RESOURCE_COLORS.get(pad_data.resource_type, Color.WHITE)
 
-	# Mute card if disabled or in cooldown
+	# Mute card if inactive or in cooldown
 	var status: int = pad_data.status
 	var cargo: float = pad_data.cargo_loaded
 
@@ -209,6 +216,22 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 		modulate = Color(1, 1, 1, 0.65)
 	else:
 		modulate = Color(1, 1, 1, 1.0)
+
+	# Card background: red tint when disabled (none), normal otherwise
+	var dark: bool = GameSettings.is_dark_mode
+	if pad_data.resource_type == "none":
+		_card_style.bg_color = Color(0.40, 0.20, 0.20, 0.35) if dark else Color(0.86, 0.50, 0.50, 0.30)
+	else:
+		_card_style.bg_color = Color(0.12, 0.12, 0.16) if dark else Color(1.0, 1.0, 1.0)
+
+	if pad_data.resource_type == "none":
+		_set_bar_fill(0.0)
+		_cargo_label.text = ""
+		_value_label.text = ""
+		_status_label.text = "Disabled — not loading"
+		_set_launch_btn(false, "")
+		_updating_ui = false
+		return
 
 	match status:
 		GameState.PAD_EMPTY:
@@ -297,9 +320,12 @@ func _set_launch_btn(enabled: bool, _hint: String) -> void:
 
 
 func _on_resource_selected(index: int) -> void:
-	if _updating_ui or index < 0 or index >= TRADEABLE.size():
+	if _updating_ui:
 		return
-	GameManager.set_pad_resource(_pad_idx, TRADEABLE[index])
+	if index == 0:
+		GameManager.set_pad_resource(_pad_idx, "none")
+	elif index - 1 < TRADEABLE.size():
+		GameManager.set_pad_resource(_pad_idx, TRADEABLE[index - 1])
 
 
 func _on_launch_pressed() -> void:
