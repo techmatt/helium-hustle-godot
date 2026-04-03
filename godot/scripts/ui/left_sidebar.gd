@@ -28,13 +28,13 @@ const NAV_ITEMS: Array = [
 	["Adversaries", Color(0.80, 0.20, 0.20)],
 	["Stats",       Color(0.40, 0.80, 0.80)],
 	["Story",       Color(0.95, 0.80, 0.10)],
-	["Retire",      Color(0.60, 0.30, 0.80)],
+	["Retirement",  Color(0.60, 0.30, 0.80)],
 	["Options",     Color(0.60, 0.60, 0.65)],
 	["Exit",        Color(0.50, 0.15, 0.15)],
 ]
 
 const HIDDEN_NAV_PANELS: Dictionary = {
-	"retirement":  "Retire",
+	"retirement":  "Retirement",
 	"projects":    "Projects",
 	"ideologies":  "Ideologies",
 }

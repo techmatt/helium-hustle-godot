@@ -28,6 +28,11 @@ var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
 var _run_peak_power: float = 0.0  # per-run max energy produced by buildings in a single tick
 
+# Snapshots of career high-water marks at the start of this run, captured before any
+# live updates occur. Used by the retire panel to detect "NEW" career records.
+var run_start_career_peak_power: float = 0.0
+var run_start_career_ideology_scores: Dictionary = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
+
 # When true: skip reading/writing the save file on startup and during autosave.
 # Set this before _ready() runs to prevent the initial load, or set it in _process()
 # to block the autosave timer. Tests set it to protect the player's real save file.
@@ -145,6 +150,8 @@ func _notification(what: int) -> void:
 
 
 func _restore_from_save() -> void:
+	run_start_career_peak_power = career.peak_power_production
+	run_start_career_ideology_scores = career.max_ideology_scores.duplicate()
 	event_manager.reapply_career_unlocks(state, career)
 	event_manager.on_game_start(state, career)  # sets _career reference; won't re-trigger fired events
 	_apply_career_flags_to_run_state()
@@ -154,6 +161,8 @@ func _restore_from_save() -> void:
 
 
 func _initialize_state() -> void:
+	run_start_career_peak_power = career.peak_power_production
+	run_start_career_ideology_scores = career.max_ideology_scores.duplicate()
 	for sn in _game_config.starting_resources:
 		state.amounts[sn] = float(_game_config.starting_resources[sn])
 	for sn in _game_config.starting_buildings:
@@ -368,6 +377,10 @@ func get_research_data() -> Array:
 	return _research_data
 
 
+func get_run_peak_power() -> float:
+	return _run_peak_power
+
+
 func is_research_item_visible(item_id: String) -> bool:
 	if GameSettings.show_all_cards:
 		return true
@@ -475,6 +488,7 @@ func _on_tick() -> void:
 			"cargo": shipment.get("cargo", 0.0),
 			"demand": shipment.demand,
 			"revenue": shipment.revenue,
+			"spec": state.speculator_count,
 		})
 		var newly: Array[String] = achievement_manager.check_shipment_conditions(
 			state, career, float(shipment.revenue), float(shipment.demand)
@@ -643,6 +657,8 @@ func start_new_run() -> void:
 	var boredom_resilience_mult: float = pow(0.995, career.best_run_days / 400.0)
 	state.set_modifier("boredom_resilience_mult", boredom_resilience_mult)
 
+	run_start_career_peak_power = career.peak_power_production
+	run_start_career_ideology_scores = career.max_ideology_scores.duplicate()
 	_run_peak_power = 0.0
 
 	# Transfer event history from career so prior events are marked seen

@@ -28,77 +28,86 @@ func start_run(run_number: int, career: CareerState, state: GameState, demand_sy
 	log_event("run_start", {
 		"run_number": run_number,
 		"career_retirements": career.total_retirements,
-		"career_credits": career.lifetime_credits_earned,
+		"career_credits": roundi(career.lifetime_credits_earned),
 		"completed_projects": career.completed_projects.duplicate(),
 		"achievements": career.achievements.duplicate(),
 	})
 
 
 # Write a single JSONL entry. tick is taken from the stored state reference.
+# Rounds all numeric leaf values before serializing.
 func log_event(type: String, data: Dictionary) -> void:
 	if GameManager.skip_save_load or _file == null:
 		return
 	var tick: int = _state_ref.current_day if _state_ref != null else 0
-	_file.store_line(JSON.stringify({"tick": tick, "type": type, "data": data}))
+	_file.store_line(JSON.stringify({"tick": tick, "type": type, "data": _round_dict(data)}))
 
 
-# Write a full resource/building/ideology snapshot entry.
+# Write a compact resource/building/ideology snapshot entry.
 func log_snapshot(state: GameState, demand_system: DemandSystem) -> void:
 	if GameManager.skip_save_load or _file == null:
 		return
 
-	var resources_dict: Dictionary = {}
-	for res: String in ["boredom", "eng", "proc", "land", "cred", "ti", "reg", "ice", "he3", "cir", "prop", "sci"]:
+	# ── Resources: [current, cap, rate] — omit if current=0 and rate=0 ────────
+	var res_dict: Dictionary = {}
+	var uncapped := {"cred": true, "sci": true, "land": true, "boredom": true}
+	for res: String in ["eng", "proc", "land", "cred", "ti", "reg", "ice", "he3", "cir", "prop", "sci", "boredom"]:
+		var current: float = state.amounts.get(res, 0.0)
+		var rate: float = GameManager.rate_tracker.get_net_instant(res) if GameManager.rate_tracker != null else 0.0
+		if absf(current) < 0.05 and absf(rate) < 0.05:
+			continue
 		var cap_val: float = state.caps.get(res, INF)
-		resources_dict[res] = {
-			"current": state.amounts.get(res, 0.0),
-			"cap": cap_val if cap_val != INF else -1.0,
-			"net_rate": GameManager.rate_tracker.get_net_instant(res) if GameManager.rate_tracker != null else 0.0,
-		}
+		var cap_out: int = -1 if (cap_val == INF or uncapped.has(res)) else roundi(cap_val)
+		res_dict[res] = [roundi(current), cap_out, snappedf(rate, 0.1)]
 
-	var buildings_dict: Dictionary = {}
+	# ── Buildings ─────────────────────────────────────────────────────────────
+	var bldg_dict: Dictionary = {}
 	for bsn: String in state.buildings_owned:
 		var count: int = state.buildings_owned[bsn]
 		if count > 0:
-			buildings_dict[bsn] = count
+			bldg_dict[bsn] = count
 
-	var processors_assigned: Array = []
-	for prog: GameState.ProgramData in state.programs:
-		processors_assigned.append(prog.processors_assigned)
-
-	var ideology_dict: Dictionary = {}
-	for axis: String in ["nationalist", "humanist", "rationalist"]:
-		ideology_dict[axis] = {
-			"value": state.ideology_values.get(axis, 0.0),
-			"rank": state.get_ideology_rank(axis),
-		}
-
+	# ── Demand: only nonzero tradeable resources, rounded to 1 decimal ────────
 	var demand_dict: Dictionary = {}
 	for res: String in GameState.TRADEABLE_RESOURCES:
-		demand_dict[res] = state.demand.get(res, 0.0)
+		var d: float = snappedf(state.demand.get(res, 0.0), 0.1)
+		if absf(d) >= 0.05:
+			demand_dict[res] = d
 
-	log_event("snapshot", {
-		"resources": resources_dict,
-		"credits": {
-			"current": state.amounts.get("cred", 0.0),
-			"cumulative_this_run": state.cumulative_resources_earned.get("cred", 0.0),
-		},
-		"boredom": {
-			"current": state.amounts.get("boredom", 0.0),
-			"rate": GameManager.rate_tracker.get_net_instant("boredom") if GameManager.rate_tracker != null else 0.0,
-		},
-		"buildings": buildings_dict,
-		"demand": demand_dict,
-		"speculators": {
-			"count": state.speculator_count,
-			"target": state.speculator_target,
-		},
-		"ideology": ideology_dict,
-		"processors": {
-			"total": state.total_processors,
-			"assigned": processors_assigned,
-		},
-	})
+	# ── Build snapshot data ───────────────────────────────────────────────────
+	var data: Dictionary = {}
+	data["res"] = res_dict
+	if not bldg_dict.is_empty():
+		data["bldg"] = bldg_dict
+	if not demand_dict.is_empty():
+		data["demand"] = demand_dict
+
+	# Speculators: only if count > 0
+	if state.speculator_count >= 0.5:
+		data["spec"] = [roundi(state.speculator_count), state.speculator_target]
+
+	# Processors: only if any assigned
+	if state.total_processors > 0:
+		var assignments: Array = []
+		for prog: GameState.ProgramData in state.programs:
+			assignments.append(prog.processors_assigned)
+		data["proc"] = [state.total_processors, assignments]
+
+	# Ideology: compact abbrev → raw score, omit axes at 0, omit block if all zero
+	var ideo_dict: Dictionary = {}
+	var abbrevs := {"nationalist": "nat", "humanist": "hum", "rationalist": "rat"}
+	for axis: String in ["humanist", "nationalist", "rationalist"]:
+		var val: float = state.ideology_values.get(axis, 0.0)
+		if absf(val) >= 0.5:
+			ideo_dict[abbrevs[axis]] = roundi(val)
+	if not ideo_dict.is_empty():
+		data["ideo"] = ideo_dict
+
+	# Research: flat array, omit if empty
+	if not state.completed_research.is_empty():
+		data["research"] = state.completed_research.duplicate()
+
+	log_event("snapshot", data)
 
 
 # Called on retirement and app close. Writes a final snapshot then closes the file.
@@ -126,9 +135,34 @@ func check_ideology_changes(state: GameState) -> void:
 				"axis": axis,
 				"old_rank": prev_rank,
 				"new_rank": current_rank,
-				"value": state.ideology_values.get(axis, 0.0),
+				"value": roundi(state.ideology_values.get(axis, 0.0)),
 			})
 			_prev_ideology_ranks[axis] = current_rank
+
+
+# Recursively round all numeric leaf values in a dictionary.
+# Floats that are effectively integers round to int; others snap to 0.1.
+func _round_dict(d: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for k in d:
+		out[k] = _round_value(d[k])
+	return out
+
+
+func _round_value(v: Variant) -> Variant:
+	if v is float:
+		# If it's effectively an integer value, store as int
+		if absf(v - roundf(v)) < 0.001:
+			return roundi(v)
+		return snappedf(v, 0.1)
+	if v is Dictionary:
+		return _round_dict(v)
+	if v is Array:
+		var out: Array = []
+		for item in v:
+			out.append(_round_value(item))
+		return out
+	return v
 
 
 func _get_logs_dir() -> String:
