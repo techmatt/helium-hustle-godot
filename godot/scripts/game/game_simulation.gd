@@ -14,7 +14,12 @@ var pending_program_events: Array = []   # populated during tick, read by GameMa
 var pending_milestone_triggers: Array = []  # {id, label, boredom_reduction} — read by GameManager
 var pending_rival_notifications: Array = []  # {tick, rival_name, resource, message}
 var pending_executed_commands: Array[String] = []  # short_names of successfully executed commands this tick
+var pending_shipments: Array = []  # {resource: String, revenue: float, demand: float} — read by GameManager
 var last_gross_deltas: Dictionary = {}  # pre-clamp net change per resource this tick
+
+# Per-tick production/consumption totals (gross, reset each tick, read by AchievementManager)
+var tick_produced: Dictionary = {}  # resource → float (gross amount produced by buildings this tick)
+var tick_consumed: Dictionary = {}  # resource → float (gross amount consumed by buildings + programs this tick)
 
 # Shipment constants (set from game_config in init)
 var _pad_cargo_capacity: float = 100.0
@@ -78,7 +83,10 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	pending_milestone_triggers.clear()
 	pending_rival_notifications.clear()
 	pending_executed_commands.clear()
+	pending_shipments.clear()
 	last_gross_deltas.clear()
+	tick_produced.clear()
+	tick_consumed.clear()
 	if rate_tracker != null:
 		rate_tracker.begin_tick()
 	recalculate_caps(state)
@@ -156,6 +164,8 @@ func _tick_free_producers(state: GameState) -> void:
 		for res in prod:
 			var delta: float = float(prod[res]) * count * prod_mult
 			_apply_delta(state, res, delta)
+			if delta > 0.0:
+				tick_produced[res] = tick_produced.get(res, 0.0) + delta
 			if rate_tracker != null:
 				rate_tracker.record("building:" + bdef.short_name + ":production", res, delta)
 
@@ -226,6 +236,8 @@ func _tick_building_upkeep(state: GameState) -> Array:
 				for res in bdef.upkeep:
 					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult * fraction
 					_apply_delta(state, res, -cost)
+					if cost > 0.0:
+						tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
 					if rate_tracker != null:
 						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
 				will_produce.append([bdef, count, fraction])
@@ -236,6 +248,8 @@ func _tick_building_upkeep(state: GameState) -> Array:
 				for res in bdef.upkeep:
 					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
 					_apply_delta(state, res, -cost)
+					if cost > 0.0:
+						tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
 					if rate_tracker != null:
 						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
 				will_produce.append([bdef, count, 1.0])
@@ -275,7 +289,9 @@ func _tick_building_production(state: GameState, will_produce: Array) -> void:
 		match bdef.short_name:
 			"panel":
 				prod_mult = state.get_modifier("solar_output_mult")
-			"excavator", "ice_extractor":
+			"excavator":
+				prod_mult = state.get_modifier("extractor_output_mult") * state.get_modifier("excavator_output_mult") * _get_overclock_mult(state, "extraction")
+			"ice_extractor":
 				prod_mult = state.get_modifier("extractor_output_mult") * _get_overclock_mult(state, "extraction")
 			"smelter", "refinery", "fabricator", "electrolysis":
 				prod_mult = _get_overclock_mult(state, "processing")
@@ -287,6 +303,7 @@ func _tick_building_production(state: GameState, will_produce: Array) -> void:
 			if rate_tracker != null:
 				rate_tracker.record("building:" + bdef.short_name + ":prod", res, delta)
 			if delta > 0.0:
+				tick_produced[res] = tick_produced.get(res, 0.0) + delta
 				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 
 
@@ -371,6 +388,8 @@ func execute_programs(state: GameState) -> void:
 				rate_tracker.record("program:" + str(prog_idx), res, prog_delta[res])
 
 
+const _STORAGE_CAP_MULT_RESOURCES: Array = ["reg", "ice", "he3", "ti", "cir", "prop"]
+
 func recalculate_caps(state: GameState) -> void:
 	for rdef in _resources_data:
 		var sn: String = rdef.short_name
@@ -389,6 +408,13 @@ func recalculate_caps(state: GameState) -> void:
 		for effect in bdef.effects:
 			if effect.prefix == "store":
 				state.caps[effect.resource] = state.caps.get(effect.resource, 0.0) + float(effect.value) * count
+
+	# Apply storage_cap_mult achievement modifier to physical resources (not energy, not uncapped)
+	var cap_mult: float = state.get_modifier("storage_cap_mult")
+	if cap_mult != 1.0:
+		for sn: String in _STORAGE_CAP_MULT_RESOURCES:
+			if state.caps.has(sn) and state.caps[sn] != INF:
+				state.caps[sn] *= cap_mult
 
 
 func is_building_locked(state: GameState, short_name: String) -> bool:
@@ -545,9 +571,9 @@ func launch_pad_manual(state: GameState, pad_idx: int) -> bool:
 		return false
 	state.amounts["prop"] -= _launch_fuel_cost
 	var live_demand: float = state.demand.get(pad.resource_type, _demand_baseline)
-	var payout: float = _trade_values.get(pad.resource_type, 1.0) * live_demand * pad.cargo_loaded
+	var payout: float = _trade_values.get(pad.resource_type, 1.0) * live_demand * pad.cargo_loaded * state.get_modifier("shipment_credit_mult")
 	state.amounts["cred"] = state.amounts.get("cred", 0.0) + payout
-	_record_launch(state, pad, payout)
+	_record_launch(state, pad, payout, live_demand)
 	pad.status = GameState.PAD_LAUNCHING
 	return true
 
@@ -573,8 +599,8 @@ func set_pad_resource(state: GameState, pad_idx: int, resource_type: String) -> 
 
 
 func _effect_load_pads(state: GameState, load_amount: int) -> void:
-	var effective_load: int = _get_load_per_execution(state, load_amount)
-	var remaining: float = float(effective_load)
+	var base_load: int = _get_load_per_execution(state, load_amount)
+	var remaining: float = float(base_load) * state.get_modifier("cargo_capacity_mult")
 	var active_count: int = state.buildings_active.get("launch_pad", state.buildings_owned.get("launch_pad", 0))
 	for res: String in state.loading_priority:
 		if remaining <= 0.0:
@@ -609,9 +635,9 @@ func _effect_launch_pads(state: GameState) -> void:
 			continue
 		state.amounts["prop"] -= _launch_fuel_cost
 		var live_demand: float = state.demand.get(pad.resource_type, _demand_baseline)
-		var payout: float = _trade_values.get(pad.resource_type, 1.0) * live_demand * pad.cargo_loaded
+		var payout: float = _trade_values.get(pad.resource_type, 1.0) * live_demand * pad.cargo_loaded * state.get_modifier("shipment_credit_mult")
 		state.amounts["cred"] = state.amounts.get("cred", 0.0) + payout
-		_record_launch(state, pad, payout)
+		_record_launch(state, pad, payout, live_demand)
 		pad.status = GameState.PAD_LAUNCHING
 
 
@@ -677,7 +703,8 @@ func _get_research_effects(state: GameState, effect_type: String) -> Array:
 	return results
 
 
-func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: float) -> void:
+func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: float, demand: float = 0.0) -> void:
+	pending_shipments.append({"resource": pad.resource_type, "revenue": payout, "demand": demand})
 	var record := GameState.LaunchRecord.new()
 	record.resource_type = pad.resource_type
 	record.quantity = pad.cargo_loaded
@@ -769,6 +796,8 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		var cost: float = float(costs[res])
 		_apply_delta(state, res, -cost)
 		prog_delta[res] = prog_delta.get(res, 0.0) - cost
+		if cost > 0.0:
+			tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
 	# Note: some commands (e.g. Sell Cloud Compute) put "boredom" directly in
 	# their production dict to get a simple additive change. Others (e.g. Dream)
 	# use a "boredom_add" effect below to support ideology scaling. Don't mix

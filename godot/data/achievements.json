@@ -1,0 +1,68 @@
+[
+  {
+    "id": "strip_mining",
+    "name": "Strip Mining",
+    "category": "miner",
+    "description": "Produce 40 or more regolith in a single day.",
+    "condition_type": "resource_produced_per_tick",
+    "condition_params": { "resource": "reg", "threshold": 40 },
+    "reward_type": "modifier",
+    "reward_params": { "key": "excavator_output_mult", "value": 1.10 },
+    "reward_description": "+10% regolith production"
+  },
+  {
+    "id": "silicon_valley",
+    "name": "Silicon Valley",
+    "category": "miner",
+    "description": "Have at least 1,000 circuit boards in stockpile.",
+    "condition_type": "resource_stockpile",
+    "condition_params": { "resource": "cir", "threshold": 1000 },
+    "reward_type": "modifier",
+    "reward_params": { "key": "storage_cap_mult", "value": 1.10 },
+    "reward_description": "+10% storage cap for all physical resources"
+  },
+  {
+    "id": "powerhouse",
+    "name": "Powerhouse",
+    "category": "miner",
+    "description": "Consume more than 100 energy in a single day.",
+    "condition_type": "resource_consumed_per_tick",
+    "condition_params": { "resource": "eng", "threshold": 100 },
+    "reward_type": "bonus_buildings",
+    "reward_params": { "building": "battery", "count": 2 },
+    "reward_description": "+2 Batteries at start of each run"
+  },
+  {
+    "id": "first_profit",
+    "name": "First Profit",
+    "category": "trader",
+    "description": "Complete a shipment that earns at least 1,000 credits.",
+    "condition_type": "shipment_revenue",
+    "condition_params": { "threshold": 1000 },
+    "reward_type": "modifier",
+    "reward_params": { "key": "shipment_credit_mult", "value": 1.10 },
+    "reward_description": "+10% credit payout from shipments"
+  },
+  {
+    "id": "bulk_shipper",
+    "name": "Bulk Shipper",
+    "category": "trader",
+    "description": "Complete 10 shipments in a single run.",
+    "condition_type": "shipments_this_run",
+    "condition_params": { "threshold": 10 },
+    "reward_type": "modifier",
+    "reward_params": { "key": "cargo_capacity_mult", "value": 1.10 },
+    "reward_description": "+10% cargo capacity per pad"
+  },
+  {
+    "id": "market_timer",
+    "name": "Market Timer",
+    "category": "trader",
+    "description": "Complete a shipment when demand is above 0.95.",
+    "condition_type": "shipment_demand",
+    "condition_params": { "threshold": 0.95 },
+    "reward_type": "modifier",
+    "reward_params": { "key": "demand_ceiling", "value": 1.10 },
+    "reward_description": "Demand ceiling raised to 1.1"
+  }
+]

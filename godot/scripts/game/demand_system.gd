@@ -144,7 +144,8 @@ func tick_demand(state: GameState) -> void:
 			- state.demand_launch.get(res, 0.0)
 			+ state.demand_promote.get(res, 0.0)
 			+ coupling_bonus)
-		state.demand[res] = clampf(raw * nationalist_mult, min_d, max_d)
+		var effective_ceiling: float = max_d * state.get_modifier("demand_ceiling", 1.0)
+		state.demand[res] = clampf(raw * nationalist_mult, min_d, effective_ceiling)
 
 		# Record history for sparklines
 		var hist: Array = state.demand_history.get(res, [])

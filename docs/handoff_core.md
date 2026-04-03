@@ -13,12 +13,16 @@ Read this document and any companion documents provided. The handoff is split in
 - **handoff_constants.md** — auto-generated reference of all game numbers (buildings, 
   commands, research, projects, events, config). Regenerated from JSON ground truth 
   via `python docs/generate_constants.py`. **Do not hand-edit this file.**
+- **handoff_achievements.md** — achievement system design: categories, specific 
+  achievements, conditions, rewards, and the Story panel UI spec. Attach when 
+  working on achievements, the Story panel, or quest display.
 
 Not all files will be attached every session. If you need information that would be 
 in a missing file, ask for it. For example:
 - Balancing or tuning work → ask for `handoff_constants.md`
 - New feature design → ask for `handoff_systems.md` (or the relevant section)
 - Prioritization or status → ask for `handoff_active.md`
+- Achievement design or Story panel → ask for `handoff_achievements.md`
 
 The **"Helium Hustle Game Design"** doc in Google Drive (ID: 
 `134ThxsDfcZb1z880Y3z2_cnCmaX9z0WA_e3IbE_QQtM`) provides the full creative vision 
@@ -36,6 +40,10 @@ relevant to a file's scope, it must be present in that file.
 **Session end protocol:** At the end of a design session on claude.ai, produce 
 updated versions of whichever handoff files were modified. The user will save them 
 and attach them to the next session.
+
+**Claude Code prompt convention:** When producing prompts for Claude Code, export 
+them as `.md` files (downloadable) rather than pasting inline in conversation. This 
+makes them easy to feed directly to Claude Code.
 
 ---
 
@@ -75,6 +83,7 @@ godot/
     research.json          ← GROUND TRUTH for research definitions
     events.json            ← GROUND TRUTH for event definitions
     projects.json          ← GROUND TRUTH for project definitions
+    achievements.json      ← GROUND TRUTH for achievement definitions
     game_config.json       ← GROUND TRUTH for starting state, boredom, shipment, demand, etc.
   scenes/
     main_ui.tscn           ← Main scene (three-column layout)
@@ -90,6 +99,7 @@ godot/
       demand_system.gd     ← class_name DemandSystem — demand/speculator/rival logic
       game_manager.gd      ← autoload singleton, owns state + sim
       event_manager.gd     ← class_name EventManager — event logic, no UI
+      achievement_manager.gd ← class_name AchievementManager — achievement logic, no UI
       resource_rate_tracker.gd ← class_name ResourceRateTracker — per-source rate tracking
       career_state.gd      ← class_name CareerState — cross-run persistent data
       save_manager.gd      ← class_name SaveManager — disk save/load utility
@@ -121,14 +131,18 @@ docs/
   handoff_core.md          ← this file
   handoff_systems.md       ← system mechanical specs
   handoff_active.md        ← status, priorities, changelog
+  handoff_achievements.md  ← achievement system design and Story panel spec
   handoff_constants.md     ← auto-generated constants reference
   generate_constants.py    ← script to regenerate handoff_constants.md
-  program_system_spec.md   ← full program system UI spec (4 stages)
   project_system_spec.md   ← project system implementation spec
   quest_system_revision.md ← quest chain revision spec
   optimizer_design.md      ← optimizer architecture spec (scenario-based approach)
-  tech_spec.md             ← MVP technical spec (OUT OF DATE)
 ```
+
+**Deleted files (no longer in repo):**
+- `docs/tech_spec.md` — original MVP spec, fully superseded by handoff files.
+- `docs/program_system_spec.md` — fully implemented, spec now lives in 
+  `handoff_systems.md`.
 
 ---
 
@@ -163,18 +177,25 @@ inherently need them (circuit production, demand floats, etc.).
 
 - Game logic (GameState, GameSimulation) has no UI references — designed for 
   headless simulation support (which now exists in both `sim/` and `godot/tests/`).
-- Tick order: Boredom → Buildings (energy net first, then resources; production-
+- Tick order: Boredom → Buildings (producers first, then consumers; production-
   gated upkeep and input-starvation skip applied) → Demand Update → Programs → 
   Projects → Shipments (using current demand, apply launch saturation hits) → 
   Speculator Revenue Tracking → Speculator/Rival Burst Check → Clamp → Events → 
-  Ideology max rank update → Advance day.
-- Buildings process in JSON row order (Solar Panel first).
+  Achievement checks → Ideology max rank update → Advance day.
+- Building processing order: buildings with no upkeep (pure producers like Solar 
+  Panel) process before buildings with upkeep. This ensures producers feed the 
+  stockpile before consumers draw from it.
 - Building production/upkeep uses `active_count` (not `owned_count`). Only active 
   buildings produce, consume, and grant effects.
+- **Production-gated skip only applies to buildings with upkeep.** Buildings with 
+  no upkeep costs (pure producers) always produce, even if their output is at cap. 
+  There is no input to save by skipping, and skipping starves downstream consumers.
 - **DemandSystem is a separate class** (`demand_system.gd`), extracted from 
   GameSimulation. Owns all demand config, Perlin noise, speculator/rival logic.
 - **ProjectManager is a separate class** (`project_manager.gd`). Owns project 
   definitions, unlock checks, drain processing, completion logic.
+- **AchievementManager is a separate class** (`achievement_manager.gd`). Owns 
+  achievement definitions, condition checking, reward application.
 - **GameSettings is an autoload singleton** (`game_settings.gd`). Owns display 
   preferences (dark mode) and debug flags (no boredom). Emits `theme_changed` 
   signal for UI retheming.
@@ -185,6 +206,10 @@ inherently need them (circuit production, demand floats, etc.).
 - **Tick parameter decoupling.** Currently `GameSimulation.tick()` takes 
   `(state, debug_no_boredom)`. As more per-tick parameters are needed, consider 
   passing a tick-params dictionary or config object.
+- **Bonus buildings don't inflate costs.** Buildings granted by persistent projects 
+  or achievements track `bonus_count` separately. Cost scaling uses 
+  `max(0, owned_count - bonus_count)`. This applies to Foundation Grant, 
+  achievement rewards, and any future bonus building sources.
 
 ---
 
@@ -200,8 +225,8 @@ inherently need them (circuit production, demand floats, etc.).
 ## Testing
 
 ### Overview
-10 test suites with ~240+ assertions covering all core game systems. Tests run 
-headlessly without launching the full game UI.
+Test suites with assertions covering all core game systems including achievements. 
+Tests run headlessly without launching the full game UI.
 
 ### How to Run
 ```
@@ -266,6 +291,8 @@ python sim/trace.py 38                               # trace tables
   directly to Claude Code. Log them in the changelog section of `handoff_active.md`.
 - **Design decisions** (new systems, mechanic changes, balancing) go through 
   claude.ai first.
+- **Claude Code prompts** are exported as `.md` files from claude.ai, not pasted 
+  inline. This makes them easy to feed directly to Claude Code.
 
 ### Rule of Thumb
 If the change could affect another system's balance or design assumptions, discuss 

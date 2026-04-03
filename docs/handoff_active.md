@@ -4,8 +4,20 @@
 
 ## Changes Since Last Design Session
 
-_(Add entries here when making changes directly via Claude Code without a 
-claude.ai design session. Format: date, what changed, one line.)_
+- 2026-04-02: Events panel header added ("Events" title matching center panel style)
+- 2026-04-02: Click-to-reread events implemented (click any event entry to open 
+  EventModal without pausing)
+- 2026-04-02: Building processing order fixed (producers before consumers)
+- 2026-04-02: Production-gated skip fixed (no-upkeep buildings always produce)
+- 2026-04-02: Boredom rate now shown in Stats panel as a line item
+- 2026-04-02: `tech_spec.md` and `program_system_spec.md` deleted from repo 
+  (fully superseded by handoff files)
+- 2026-04-02: Story panel implemented (Primary Objectives + Achievements sections)
+- 2026-04-02: Achievement system implemented (6 initial achievements: 3 Miner, 
+  3 Trader, with condition checking, rewards, persistence)
+- 2026-04-02: Completed quests migrated from Events panel to Story panel
+- 2026-04-02: New modifier keys added: `excavator_output_mult`, `storage_cap_mult`, 
+  `shipment_credit_mult`, `cargo_capacity_mult`, `demand_ceiling`
 
 ---
 
@@ -15,31 +27,38 @@ claude.ai design session. Format: date, what changed, one line.)_
 - UI skeleton (three-column layout, light/dark mode)
 - Resource tick loop (GameState, GameSimulation, GameManager)
 - Building system (purchase, enable/disable, sell, stall tracking, cost scaling, 
-  bonus buildings, ideology discounts, unlock gating, partial production)
+  bonus buildings, ideology discounts, unlock gating, partial production, 
+  producers-first processing order, no-upkeep buildings always produce)
 - Program/processor system (5 tabs, command queues, execution model, 20 commands)
 - Launch pad / shipment system (per-pad cards, loading, cooldown, recent launches)
 - Speed controls (pause through 200x)
 - Storage caps & display
-- Boredom system (phase curve, milestone reductions, consciousness stub)
+- Boredom system (phase curve, milestone reductions, consciousness stub, Stats 
+  panel rate display)
 - Research system (12 items, 4 categories, per-item visibility gating, cost 
   modifiers, all passive effects verified working)
 - Event system (triggers, conditions, unlock effects, persistence, dynamic 
-  notifications)
+  notifications, Events panel header, click-to-reread modals)
 - Quest system (Q1–Q8 + Q_END, progress indicators)
-- Stats panel (per-resource breakdown, stall indicators)
-- Demand system (Perlin noise, 6 forces, DemandSystem class, speculator bleedover)
+- Stats panel (per-resource breakdown, stall indicators, boredom rate)
+- Demand system (Perlin noise, 6 forces, DemandSystem class, speculator bleedover, 
+  configurable demand ceiling)
 - Speculators & rival AIs (bursts, decay, targeting, Arbitrage Engine, bleedover)
 - Retirement system (forced/voluntary, summary screen, CareerState)
 - Save/load persistence (single file, autosave, version 1)
 - Project system (5 persistent + 5 personal, drain model, modifier framework, 
   all 6 modifiers verified working)
 - Ideology system (3 axes, continuous bonuses, rank 5 projects)
-- Headless test infrastructure (14 suites, ~1410 assertions)
+- Headless test infrastructure (14+ suites, assertions covering all systems)
 - Options panel (light/dark mode, debug: disable boredom, show all cards)
 - Propellant gating (event → research → building unlock chain)
 - Progressive disclosure (resources, buildings, commands, research phased in based 
   on progression; CareerState lifetime tracking; ideology labels hidden until 
   unlocked; building card status row reserves space)
+- Story panel (Primary Objectives section with quest chain display, Achievements 
+  section with collapsible categories)
+- Achievement system (6 achievements in 2 categories, tick-based and event-driven 
+  condition checking, modifier and bonus building rewards, CareerState persistence)
 
 ### Python Optimizer (`sim/`)
 - Scenario-based architecture
@@ -58,8 +77,8 @@ claude.ai design session. Format: date, what changed, one line.)_
 2. **Milestone boredom reduction tuning** — current values provisional
 
 ### Important for Arc 1 Completeness
-3. **Achievement system** — design pass needed before implementation (implicit 
-   tutorial function)
+3. **More achievements** — Programmer category, additional Miner/Trader, Scholar, 
+   Diplomat, Veteran, Anomaly categories (see `handoff_achievements.md` for design)
 4. **Narrative writing pass** — replace placeholder quest text
 5. **Save/load programs** — loadout system for saving/loading program configs
 6. **Block/Skip toggle** — per-program entry option

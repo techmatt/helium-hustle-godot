@@ -144,7 +144,13 @@ func _rebuild_items() -> void:
 	var em: EventManager = GameManager.event_manager
 	var story: Array = em.get_active_events("story", st)
 	var ongoing: Array = em.get_active_events("ongoing", st)
-	var completed: Array = em.get_completed_events(st)
+	var all_completed: Array = em.get_completed_events(st)
+	# Completed story/quest events now live in the Story panel — exclude them here
+	var completed: Array = []
+	for inst: Dictionary in all_completed:
+		var def: Dictionary = em.get_event_def(inst.get("id", ""))
+		if def.get("category", "") != "story":
+			completed.append(inst)
 
 	_fill_items(_story_container, _story_header, _story_items,
 		"Story", story, false, _story_expanded, st, em)

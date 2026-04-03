@@ -12,8 +12,8 @@ why, and what it interacts with. For exact numbers (costs, rates, thresholds), s
 `base_cost × pow(scaling, purchased_count) × ideology_cost_mult`
 
 Where `purchased_count = max(0, owned_count - bonus_count)` — free buildings from 
-persistent projects don't inflate cost curves. `ideology_cost_mult = pow(0.97, rank)` 
-for buildings with an aligned ideology axis.
+persistent projects or achievements don't inflate cost curves. 
+`ideology_cost_mult = pow(0.97, rank)` for buildings with an aligned ideology axis.
 
 ### Enable/Disable
 Each building type tracks `active_count` and `owned_count`. Only active buildings 
@@ -22,10 +22,17 @@ produce, consume, and grant effects. Disabled buildings still occupy land.
 ### Sell
 Sell 1 or Sell All (double-click confirmation). Refunds land only, no credit refund.
 
+### Building Processing Order
+Buildings with no upkeep costs (pure producers like Solar Panel) process before 
+buildings with upkeep costs. This ensures producers feed the stockpile before 
+consumers draw from it.
+
 ### Production-Gated Upkeep
-Buildings with production outputs skip upkeep on ticks where ALL their produced 
-resources are at storage cap. Buildings with no production (Battery, Storage Depot, 
-Launch Pad, Data Center) always pay upkeep.
+Buildings with production outputs **and upkeep costs** skip upkeep on ticks where 
+ALL their produced resources are at storage cap. Buildings with no upkeep (pure 
+producers like Solar Panel) always produce — there is no input to save by skipping, 
+and skipping would starve downstream consumers. Buildings with no production 
+(Battery, Storage Depot, Launch Pad, Data Center) always pay upkeep.
 
 ### Partial Production (Input-Constrained)
 Buildings with insufficient upkeep resources run at reduced capacity rather than
@@ -46,8 +53,11 @@ Building cards always reserve vertical space for the status row (stall indicator
 to prevent height flickering when statuses appear/disappear.
 
 ### Bonus Building Cost Scaling
-Buildings granted free by persistent projects (e.g., Foundation Grant) track 
-`bonus_count` separately. Cost scaling uses `max(0, owned_count - bonus_count)`.
+Buildings granted free by persistent projects (e.g., Foundation Grant) or 
+achievements (e.g., Powerhouse) track `bonus_count` separately. Cost scaling uses 
+`max(0, owned_count - bonus_count)`. Bonus buildings are granted on run start, 
+with `owned_count`, `active_count`, and `bonus_count` all incremented. Storage 
+caps are recalculated after granting.
 
 ### Building Alignment
 Buildings are assigned to ideology axes. Aligned buildings get per-rank cost discount 
@@ -107,8 +117,9 @@ trade good + launch fuel).
 ### Storage & Caps
 Capped resources: Energy, Regolith, Ice, He-3, Titanium, Circuit Boards, Propellant. 
 Uncapped: Credits, Science, Land, Boredom (fixed 0–1000 range). Battery adds energy 
-cap. Storage Depot adds cap bonuses for physical resources. See `handoff_constants.md` 
-for exact cap values.
+cap. Storage Depot adds cap bonuses for physical resources. The `storage_cap_mult` 
+achievement modifier (from Silicon Valley) multiplies caps for all capped physical 
+resources except Energy. See `handoff_constants.md` for exact cap values.
 
 ### Resource Visibility (Progressive Disclosure)
 Always visible at game start: Boredom, Energy, Processors, Land, Credits, Titanium, 
@@ -157,9 +168,12 @@ Smelter is unlocked.
 
 ### Mechanics
 - One resource per launch pad. Load Launch Pads command costs 2 energy, loads 5 units 
-  (7 with Shipping Efficiency research) per enabled pad. Launch Full Pads launches 
-  all full active pads, each costing 20 propellant.
-- Payout: `base_value × demand × cargo_loaded`.
+  (7 with Shipping Efficiency research) per enabled pad. The `cargo_capacity_mult` 
+  achievement modifier (from Bulk Shipper) multiplies cargo loaded per execution.
+  Launch Full Pads launches all full active pads, each costing 20 propellant.
+- Payout: `base_value × demand × cargo_loaded × shipment_credit_mult`. The 
+  `shipment_credit_mult` modifier defaults to 1.0, increased by the First Profit 
+  achievement.
 - 10-tick cooldown after launch.
 - Loading priority: reorderable list of 4 tradeable goods.
 
@@ -173,9 +187,11 @@ Electrolysis unlock feel meaningful, but not so painful that launching is unprof
 ## Demand System
 
 ### Overview
-Per-resource continuous demand float in [0.01, 1.0]. Six forces: Perlin noise 
-(exogenous), speculator suppression, rival AI dumps, shipment saturation, Promote 
-commands, resource coupling. ~80% player-influenceable, ~20% from noise and rivals.
+Per-resource continuous demand float in [0.01, demand_ceiling]. The demand ceiling 
+defaults to 1.0 and can be raised by the Market Timer achievement to 1.1. Six 
+forces: Perlin noise (exogenous), speculator suppression, rival AI dumps, shipment 
+saturation, Promote commands, resource coupling. ~80% player-influenceable, ~20% 
+from noise and rivals.
 
 ### Demand Calculation (per tick)
 ```
@@ -189,10 +205,11 @@ raw = base_demand - speculator_suppression - rival_pressure - launch_saturation
 raw = base_demand - speculator_bleedover - rival_pressure - launch_saturation 
       + promote_effect + coupling_bonus
 
-demand = clamp(raw * nationalist_multiplier, 0.01, 1.0)
+demand = clamp(raw * nationalist_multiplier, 0.01, demand_ceiling)
 ```
 
 `nationalist_multiplier = pow(1.05, nationalist_rank)`.
+`demand_ceiling = get_modifier("demand_ceiling", 1.0)`.
 
 ### Noise
 1D gradient noise with quintic interpolation. 4-octave fractal sum with irrational 
@@ -259,6 +276,10 @@ forced retirement. Phase transitions determined by day counter using boredom cur
 - **AI Consciousness Act** project: ×0.85 (permanent via career flag)
 
 All three applied in `_get_boredom_multiplier()`.
+
+### Boredom in Stats Panel
+The Stats panel shows the current boredom accumulation rate as a line item in the 
+Boredom resource card, displaying the effective rate after all multipliers.
 
 ### Dream Command
 Reduces boredom by 2.0 per execution. Humanist ideology boosts effectiveness via 
@@ -418,23 +439,67 @@ Keyed dictionary in GameState: `active_modifiers`. Systems query via
 | Key | Default | Source | Application Point |
 |-----|---------|--------|-------------------|
 | extractor_output_mult | 1.0 | Deep Core Survey | Excavator + Ice Extractor production |
+| excavator_output_mult | 1.0 | Strip Mining achievement | Regolith Excavator only |
 | solar_output_mult | 1.0 | Grid Recalibration | Solar Panel production |
 | building_upkeep_mult | 1.0 | Predictive Maintenance | All building upkeep |
 | promote_effectiveness_mult | 1.0 | Market Cornering | Promote base effect |
 | speculator_burst_interval_mult | 1.0 | Speculator Dossier | Burst interval range |
 | land_cost_mult | 1.0 | Lunar Cartography | Land purchase cost |
+| storage_cap_mult | 1.0 | Silicon Valley achievement | Physical resource caps (not Energy) |
+| shipment_credit_mult | 1.0 | First Profit achievement | Shipment credit payout |
+| cargo_capacity_mult | 1.0 | Bulk Shipper achievement | Cargo loaded per pad per execution |
+| demand_ceiling | 1.0 | Market Timer achievement | Demand clamp upper bound |
 
 Personal project modifiers cleared on retirement. Persistent project modifiers 
-re-applied on run start from CareerState.
+and achievement modifiers re-applied on run start from CareerState.
+
+---
+
+## Achievements
+
+Achievement system design and specific achievement definitions are in 
+`handoff_achievements.md`. This section covers how achievements integrate with 
+other systems.
+
+### Overview
+Achievements are optional accomplishments with permanent rewards. Defined in 
+`achievements.json`. Managed by AchievementManager. Completed achievement IDs 
+stored in `CareerState.achievements`. Rewards re-applied on every run start.
+
+### Reward Types
+- **`modifier`** — adds a key to `active_modifiers` (see Modifier Framework table).
+- **`bonus_buildings`** — grants free buildings on run start using the bonus_count 
+  mechanism (same as Foundation Grant).
+
+### Condition Checking
+- Tick-based conditions checked at end of tick (after clamp, before advance day).
+- Event-driven conditions (shipment revenue, shipment demand) checked at moment of 
+  shipment completion.
+- Per-tick production and consumption totals tracked transiently for conditions 
+  that need "produced X in a single tick" or "consumed X in a single tick."
+
+### Completion Notification
+Dynamic notification in the Events panel when an achievement is completed.
+
+For full achievement list with conditions and rewards, see `handoff_achievements.md`.
 
 ---
 
 ## Events & Quests
 
 ### Event System
-EventManager (pure logic) + EventPanel + EventModal. Three collapsible sections: 
-Story, Ongoing, Completed. Events defined in events.json. First-time events 
-auto-open modal and pause; previously-seen events appear silently.
+EventManager (pure logic) + EventPanel + EventModal. The Event Panel has a header 
+"Events" matching center panel header style. Three collapsible sections: Story, 
+Ongoing, Completed. Events defined in events.json. First-time events auto-open 
+modal and pause; previously-seen events appear silently. Clicking any event entry 
+in the Events panel opens the EventModal with that event's text (does not pause).
+
+### Event Panel — Completed Quest Migration
+Completed quest events no longer appear in the Events panel's Completed section. 
+They are displayed in the Story panel's Primary Objectives section instead. The 
+active quest still appears in the Events panel under Story (1) as an at-a-glance 
+reminder. Non-quest events (boredom phases, Propellant Discovery, Ideology Unlock, 
+etc.) remain in the Events panel as before.
 
 ### Trigger Types
 `game_start` (optional `run_number` filter), `quest_complete`, `boredom_phase`, 
@@ -475,6 +540,29 @@ unlock effects re-applied on run start.
 - **Ideology Unlock:** Triggers when Geopolitical Intelligence research completed, 
   enables Ideologies nav panel.
 - **Boredom Phase events:** Fire on phase transitions.
+
+---
+
+## Story Panel
+
+### Overview
+The "Story" nav button (left sidebar, renamed from "Achievements") opens a center 
+panel with two sections: Primary Objectives and Achievements.
+
+### Primary Objectives
+Displays the quest chain (Q1–Q_END) as a vertical list. Completed quests show 
+checkmark, name, one-sentence summary, and what they unlocked. The active quest 
+shows highlighted with condition text and progress indicator. Future quests beyond 
+the active one are completely hidden.
+
+Clicking a completed quest opens the EventModal with the full original event text 
+(does not pause the game).
+
+### Achievements Section
+Below Primary Objectives. Shows overall completion counter. Collapsible category 
+sections (currently Miner and Trader), each with their own completion count. 
+Individual achievements show name, condition, reward, and completion status. See 
+`handoff_achievements.md` for the full achievement list.
 
 ---
 

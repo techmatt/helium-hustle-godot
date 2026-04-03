@@ -1,6 +1,7 @@
 extends Node
 
 const SaveManager := preload("res://scripts/game/save_manager.gd")
+const AchievementManager := preload("res://scripts/game/achievement_manager.gd")
 
 const DEBUG_PROGRAM_TEST: bool = false
 const DEBUG_UI: bool = false
@@ -21,6 +22,7 @@ var sim: GameSimulation
 var rate_tracker: ResourceRateTracker
 var event_manager: EventManager
 var project_manager: ProjectManager
+var achievement_manager: AchievementManager
 var career: CareerState = CareerState.new()
 var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
@@ -36,6 +38,7 @@ signal program_cycle_reset(program_index: int)
 signal milestone_triggered(milestone_id: String, label: String, boredom_reduction: float)
 signal retirement_started(summary_data: Dictionary)
 signal project_completed_notification(project_name: String)
+signal achievement_unlocked(achievement_id: String)
 
 var _timer: Timer
 var _autosave_timer: Timer
@@ -44,6 +47,7 @@ var _buildings_data: Array = []
 var _commands_data: Array = []
 var _research_data: Array = []
 var _projects_data: Array = []
+var _achievements_data: Array = []
 
 
 func _ready() -> void:
@@ -54,6 +58,7 @@ func _ready() -> void:
 	_research_data = _load_json("res://data/research.json")
 	var events_data: Array = _load_json("res://data/events.json")
 	_projects_data = _load_json("res://data/projects.json")
+	_achievements_data = _load_json("res://data/achievements.json")
 
 	sim = GameSimulation.new()
 	sim.init(resources_data, _buildings_data, _commands_data, _game_config, _research_data)
@@ -65,6 +70,9 @@ func _ready() -> void:
 
 	project_manager = ProjectManager.new()
 	project_manager.init(_projects_data, _game_config)
+
+	achievement_manager = AchievementManager.new()
+	achievement_manager.init(_achievements_data)
 
 	if skip_save_load:
 		career = CareerState.new()
@@ -404,6 +412,19 @@ func _on_tick() -> void:
 	for notif in project_manager.pending_completion_notifications:
 		event_manager.push_notification("Project Complete: " + notif.name, state.current_day)
 		project_completed_notification.emit(notif.name)
+	# Check shipment-based achievements
+	for shipment in sim.pending_shipments:
+		var newly: Array[String] = achievement_manager.check_shipment_conditions(
+			state, career, float(shipment.revenue), float(shipment.demand)
+		)
+		for aid: String in newly:
+			_unlock_achievement(aid)
+	# Check tick-based achievements
+	var tick_new: Array[String] = achievement_manager.check_tick_conditions(
+		state, career, sim.tick_produced, sim.tick_consumed
+	)
+	for aid: String in tick_new:
+		_unlock_achievement(aid)
 	# Update career max ideology ranks
 	for axis: String in ["nationalist", "humanist", "rationalist"]:
 		var current_rank: int = state.get_ideology_rank(axis)
@@ -522,6 +543,9 @@ func start_new_run() -> void:
 	for pid: String in career.project_progress:
 		state.project_invested[pid] = (career.project_progress[pid] as Dictionary).duplicate()
 
+	# Apply achievement rewards from prior runs
+	achievement_manager.apply_all_rewards(state, career, _buildings_data)
+
 	# First processor always starts assigned to program slot 0
 	state.programs[0].processors_assigned = 1
 
@@ -542,6 +566,21 @@ func start_new_run() -> void:
 	set_speed("1x")
 	tick_completed.emit()
 	SaveManager.save_game(career, state, current_speed_key)
+
+
+func _unlock_achievement(achievement_id: String) -> void:
+	if career.achievements.has(achievement_id):
+		return
+	career.achievements.append(achievement_id)
+	achievement_manager.apply_reward(state, achievement_id, _buildings_data)
+	sim.recalculate_caps(state)
+	var def: Dictionary = achievement_manager.get_def(achievement_id)
+	var notif: String = "Achievement Unlocked: %s — %s" % [
+		def.get("name", achievement_id),
+		def.get("reward_description", "")
+	]
+	event_manager.push_notification(notif, state.current_day)
+	achievement_unlocked.emit(achievement_id)
 
 
 func _apply_career_flags_to_run_state() -> void:

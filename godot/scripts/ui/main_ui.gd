@@ -161,6 +161,13 @@ func _switch_mode(mode: String) -> void:
 			_buildings_scroll.add_child(p)
 			_current_center_panel = p
 
+		"Story":
+			var p := StoryPanel.new()
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			p.event_row_clicked.connect(_on_event_row_reread)
+			_buildings_scroll.add_child(p)
+			_current_center_panel = p
+
 		"Options":
 			var p := OptionsPanel.new()
 			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)

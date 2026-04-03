@@ -147,6 +147,33 @@ func get_event_def(event_id: String) -> Dictionary:
 	return _def_map.get(event_id, {})
 
 
+# Returns story-category quest defs in chain order (root first, following quest_complete links).
+func get_quest_chain() -> Array:
+	var chain: Array = []
+	# Find the root quest: story category, triggered by game_start
+	var current_id: String = ""
+	for def in _event_defs:
+		if def.get("category", "") == "story" and def.get("trigger", {}).get("type", "") == "game_start":
+			chain.append(def)
+			current_id = def.get("id", "")
+			break
+	# Follow quest_complete links
+	while not current_id.is_empty():
+		var found: bool = false
+		for def in _event_defs:
+			if def.get("category", "") != "story":
+				continue
+			var trigger: Dictionary = def.get("trigger", {})
+			if trigger.get("type", "") == "quest_complete" and trigger.get("quest_id", "") == current_id:
+				chain.append(def)
+				current_id = def.get("id", "")
+				found = true
+				break
+		if not found:
+			break
+	return chain
+
+
 func reapply_career_unlocks(state: GameState, career: CareerState) -> void:
 	for def in _event_defs:
 		var eid: String = def.get("id", "")
