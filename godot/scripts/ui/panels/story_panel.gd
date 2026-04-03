@@ -8,7 +8,10 @@ var _font_e2r: FontFile
 var _font_e2s: FontFile
 
 # Primary Objectives section
-var _objectives_items: VBoxContainer = null
+var _active_items: VBoxContainer = null
+var _completed_header_btn: Button = null
+var _completed_items: VBoxContainer = null
+var _completed_expanded: bool = false
 
 # Achievements section
 var _achievements_header_lbl: Label = null
@@ -44,9 +47,38 @@ func _build() -> void:
 
 	add_child(HSeparator.new())
 
-	_objectives_items = VBoxContainer.new()
-	_objectives_items.add_theme_constant_override("separation", 4)
-	add_child(_objectives_items)
+	# Active subsection (always expanded, no toggle)
+	var active_lbl := Label.new()
+	active_lbl.text = "Active"
+	active_lbl.add_theme_font_override("font", _font_rb)
+	active_lbl.add_theme_font_size_override("font_size", 14)
+	active_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
+	add_child(active_lbl)
+
+	_active_items = VBoxContainer.new()
+	_active_items.add_theme_constant_override("separation", 4)
+	add_child(_active_items)
+
+	# Completed subsection (collapsible, collapsed by default)
+	_completed_header_btn = Button.new()
+	_completed_header_btn.flat = true
+	_completed_header_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_completed_header_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_completed_header_btn.add_theme_font_override("font", _font_rb)
+	_completed_header_btn.add_theme_font_size_override("font_size", 14)
+	_completed_header_btn.text = "▶  Completed (0)"
+	add_child(_completed_header_btn)
+
+	_completed_items = VBoxContainer.new()
+	_completed_items.add_theme_constant_override("separation", 4)
+	_completed_items.visible = false
+	add_child(_completed_items)
+
+	_completed_header_btn.pressed.connect(func() -> void:
+		_completed_expanded = not _completed_expanded
+		_completed_items.visible = _completed_expanded
+		_set_completed_header_text(_completed_items.get_child_count())
+	)
 
 	add_child(HSeparator.new())
 
@@ -116,7 +148,9 @@ func _refresh() -> void:
 
 
 func _refresh_objectives() -> void:
-	for child in _objectives_items.get_children():
+	for child in _active_items.get_children():
+		child.free()
+	for child in _completed_items.get_children():
 		child.free()
 
 	var st: GameState = GameManager.state
@@ -140,6 +174,8 @@ func _refresh_objectives() -> void:
 				active_idx = i
 				break
 
+	var completed_count: int = 0
+
 	for i in range(chain.size()):
 		var def: Dictionary = chain[i]
 		var qid: String = def.get("id", "")
@@ -147,20 +183,25 @@ func _refresh_objectives() -> void:
 		# Determine completion status
 		var is_completed: bool = career.completed_quest_ids.has(qid)
 		if not is_completed:
-			# Check if completed this run
 			for inst: Dictionary in st.event_instances:
 				if inst.get("id", "") == qid and inst.get("state", "") == "completed":
 					is_completed = true
 					break
 
 		var is_active: bool = (i == active_idx)
-		var is_future: bool = (not is_completed and not is_active)
 
-		if is_future:
-			continue  # Hidden
+		if is_active:
+			_active_items.add_child(_build_quest_row(def, false, true, st, em))
+		elif is_completed:
+			completed_count += 1
+			_completed_items.add_child(_build_quest_row(def, true, false, st, em))
+		# Future quests: hidden
 
-		var row := _build_quest_row(def, is_completed, is_active, st, em)
-		_objectives_items.add_child(row)
+	_set_completed_header_text(completed_count)
+
+
+func _set_completed_header_text(count: int) -> void:
+	_completed_header_btn.text = ("▼  " if _completed_expanded else "▶  ") + "Completed (%d)" % count
 
 
 func _build_quest_row(

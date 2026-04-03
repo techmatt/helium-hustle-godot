@@ -29,7 +29,7 @@ func _test_stress_tolerance_stacking() -> void:
 	# boredom reduction does not interfere.
 	var sim_stack := TF.create_fresh_sim()
 	var st_stack := TF.fresh_state_with_research(sim_stack, ["stress_tolerance"])
-	st_stack.ideology_values["humanist"] = 175.0  # rank 2: threshold at 175
+	st_stack.ideology_values["humanist"] = GameState.score_for_rank(2.0)  # rank 2
 	sim_stack.tick(st_stack, false)
 	var stacked: float = st_stack.amounts.get("boredom", 0.0)
 
@@ -238,7 +238,7 @@ func _test_land_cost_mult() -> void:
 	_assert_equal(sim.get_land_purchase_cost(state), int(floor(raw_at_4 * 0.85)),
 		"land_cost_mult: modifier 0.85 multiplies raw cost before floor")
 
-	# With modifier 0.85 + Nationalist rank 1 (ideology=70 → pow(0.97, 1)=0.97), stacks multiplicatively.
-	state.ideology_values["nationalist"] = 70.0
+	# With modifier 0.85 + Nationalist rank 1, stacks multiplicatively.
+	state.ideology_values["nationalist"] = GameState.score_for_rank(1.0)
 	_assert_equal(sim.get_land_purchase_cost(state), int(floor(raw_at_4 * 0.85 * 0.97)),
 		"land_cost_mult: modifier and Nationalist rank 1 stack multiplicatively")

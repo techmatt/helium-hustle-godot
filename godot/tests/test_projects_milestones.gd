@@ -267,6 +267,7 @@ func _test_cross_retirement_persistence(scene_root: Node) -> void:
 		gm.state.triggered_milestones.append("first_shipment_credits")
 
 	gm.retire(true)
+	TF.reset_career_bonus_tracking(gm.career)
 	gm.start_new_run()
 	gm.set_speed("||")
 

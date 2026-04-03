@@ -7,10 +7,17 @@ var _font_rb: FontFile
 var _font_e2r: FontFile
 var _font_e2s: FontFile
 
-var _active_cards: Array = []    # Array[ProjectCard]
-var _completed_vbox: VBoxContainer = null
-var _active_vbox: VBoxContainer = null
-var _empty_lbl: Label = null
+# Long-Term Projects section (persistent tier)
+var _lt_header: Button = null
+var _lt_body: VBoxContainer = null
+var _lt_expanded: bool = true
+var _lt_cards: Array = []  # Array[ProjectCard]
+
+# Strategic Projects section (personal tier)
+var _sp_header: Button = null
+var _sp_body: VBoxContainer = null
+var _sp_expanded: bool = true
+var _sp_cards: Array = []  # Array[ProjectCard]
 
 var _refresh_accum: float = 0.0
 var _last_unlocked_snapshot: Array = []
@@ -57,23 +64,28 @@ func _build() -> void:
 
 	add_child(HSeparator.new())
 
-	# Active section (collapsible, expanded by default)
-	_active_vbox = _make_collapsible_section("Active", true)
+	# Long-Term Projects section (persistent tier), expanded by default
+	_lt_header = _make_section_header("Long-Term Projects", _lt_expanded)
+	_lt_body = _make_section_body(_lt_expanded)
+	_add_section_desc(_lt_body, "Progress on these projects carries across retirements.")
+	_lt_header.pressed.connect(func() -> void:
+		_lt_expanded = not _lt_expanded
+		_lt_body.visible = _lt_expanded
+		_lt_header.text = ("▼  " if _lt_expanded else "▶  ") + "Long-Term Projects"
+	)
 
-	_empty_lbl = Label.new()
-	_empty_lbl.text = "No projects available yet."
-	_empty_lbl.add_theme_font_override("font", _font_e2r)
-	_empty_lbl.add_theme_font_size_override("font_size", 13)
-	_empty_lbl.add_theme_color_override("font_color",
-		Color(0.50, 0.50, 0.50) if dark else Color(0.55, 0.55, 0.55))
-	_active_vbox.add_child(_empty_lbl)
+	# Strategic Projects section (personal tier), expanded by default
+	_sp_header = _make_section_header("Strategic Projects", _sp_expanded)
+	_sp_body = _make_section_body(_sp_expanded)
+	_add_section_desc(_sp_body, "These projects reset when you retire. Plan accordingly.")
+	_sp_header.pressed.connect(func() -> void:
+		_sp_expanded = not _sp_expanded
+		_sp_body.visible = _sp_expanded
+		_sp_header.text = ("▼  " if _sp_expanded else "▶  ") + "Strategic Projects"
+	)
 
-	# Completed section (collapsible, collapsed by default)
-	_completed_vbox = _make_collapsible_section("Completed", false)
 
-
-func _make_collapsible_section(title: String, start_open: bool) -> VBoxContainer:
-	var dark: bool = GameSettings.is_dark_mode
+func _make_section_header(title: String, start_open: bool) -> Button:
 	var header := Button.new()
 	header.text = ("▼  " if start_open else "▶  ") + title
 	header.flat = true
@@ -83,17 +95,27 @@ func _make_collapsible_section(title: String, start_open: bool) -> VBoxContainer
 	header.add_theme_font_override("font", _font_rb)
 	header.add_theme_font_size_override("font_size", 16)
 	add_child(header)
+	return header
 
+
+func _make_section_body(start_open: bool) -> VBoxContainer:
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", 6)
 	body.visible = start_open
 	add_child(body)
-
-	header.pressed.connect(func() -> void:
-		body.visible = not body.visible
-		header.text = ("▼  " if body.visible else "▶  ") + title
-	)
 	return body
+
+
+func _add_section_desc(body: VBoxContainer, text: String) -> void:
+	var dark: bool = GameSettings.is_dark_mode
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_override("font", _font_e2r)
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color",
+		Color(0.55, 0.55, 0.55) if dark else Color(0.50, 0.50, 0.50))
+	body.add_child(lbl)
 
 
 # ── Rebuild (structural changes) ───────────────────────────────────────────────
@@ -102,49 +124,81 @@ func _make_collapsible_section(title: String, start_open: bool) -> VBoxContainer
 func _rebuild_cards() -> void:
 	var st: GameState = GameManager.state
 	var pm: ProjectManager = GameManager.project_manager
+	var career: CareerState = GameManager.career
 
-	var unlocked: Array = st.enabled_projects.duplicate()
 	var completed: Array = st.completed_projects_this_run.duplicate()
-	# Include career-completed persistent projects
-	for pid: String in GameManager.career.completed_projects:
+	for pid: String in career.completed_projects:
 		if not completed.has(pid):
 			completed.append(pid)
+	var unlocked: Array = st.enabled_projects.duplicate()
 
 	_last_unlocked_snapshot = unlocked.duplicate()
 	_last_completed_snapshot = completed.duplicate()
 
-	# Clear active cards
-	for card: ProjectCard in _active_cards:
+	# Clear existing project cards from both bodies
+	for card: ProjectCard in _lt_cards:
 		card.queue_free()
-	_active_cards.clear()
+	_lt_cards.clear()
+	for card: ProjectCard in _sp_cards:
+		card.queue_free()
+	_sp_cards.clear()
+	_clear_cards_from_body(_lt_body)
+	_clear_cards_from_body(_sp_body)
 
-	# Clear completed cards
-	for child in _completed_vbox.get_children():
-		child.queue_free()
+	# Group all defs by tier (only visible: unlocked or completed)
+	var lt_defs: Array = []
+	var sp_defs: Array = []
+	for pdef: Dictionary in pm.get_all_defs():
+		var pid: String = pdef.get("id", "")
+		if not unlocked.has(pid) and not completed.has(pid):
+			continue  # locked — skip
+		if pdef.get("tier", "personal") == "persistent":
+			lt_defs.append(pdef)
+		else:
+			sp_defs.append(pdef)
 
-	# Build active cards (unlocked, not completed)
-	var active_project_ids: Array = []
-	for pid: String in unlocked:
-		if not completed.has(pid):
-			active_project_ids.append(pid)
+	_populate_section(_lt_body, lt_defs, unlocked, completed, _lt_cards)
+	_populate_section(_sp_body, sp_defs, unlocked, completed, _sp_cards)
 
-	_empty_lbl.visible = active_project_ids.is_empty()
+	# Hide sections that have no visible projects (header + body both hidden)
+	var lt_has: bool = lt_defs.size() > 0
+	_lt_header.visible = lt_has
+	_lt_body.visible = lt_has and _lt_expanded
 
-	for pid: String in active_project_ids:
-		var pdef: Dictionary = pm.get_project_def(pid)
-		if pdef.is_empty():
+	var sp_has: bool = sp_defs.size() > 0
+	_sp_header.visible = sp_has
+	_sp_body.visible = sp_has and _sp_expanded
+
+
+func _clear_cards_from_body(body: VBoxContainer) -> void:
+	# Keep index 0 (the description label), free everything else
+	var children: Array = body.get_children()
+	for i: int in range(1, children.size()):
+		children[i].queue_free()
+
+
+func _populate_section(
+	body: VBoxContainer,
+	defs: Array,
+	unlocked: Array,
+	completed: Array,
+	cards_out: Array,
+) -> void:
+	# Active/available (unlocked, not completed) → full interactive card
+	for pdef: Dictionary in defs:
+		var pid: String = pdef.get("id", "")
+		if completed.has(pid):
 			continue
 		var card := ProjectCard.new()
 		card.setup(pdef, _font_rb, _font_e2r, _font_e2s)
-		_active_vbox.add_child(card)
-		_active_cards.append(card)
+		body.add_child(card)
+		cards_out.append(card)
 
-	# Build completed cards
-	for pid: String in completed:
-		var pdef: Dictionary = pm.get_project_def(pid)
-		if pdef.is_empty():
-			continue
-		_completed_vbox.add_child(_build_completed_card(pdef))
+	# Completed → compact single-line row
+	for pdef: Dictionary in defs:
+		var pid: String = pdef.get("id", "")
+		if completed.has(pid):
+			body.add_child(_build_completed_card(pdef))
 
 
 func _build_completed_card(pdef: Dictionary) -> PanelContainer:
@@ -153,53 +207,30 @@ func _build_completed_card(pdef: Dictionary) -> PanelContainer:
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.10, 0.10, 0.10) if dark else Color(0.94, 0.94, 0.94)
+	bg.bg_color = Color(0.08, 0.18, 0.08) if dark else Color(0.91, 0.96, 0.91)
 	bg.border_width_left   = 1
 	bg.border_width_right  = 1
 	bg.border_width_top    = 1
 	bg.border_width_bottom = 1
-	bg.border_color = Color(0.22, 0.22, 0.22) if dark else Color(0.816, 0.816, 0.816)
+	bg.border_color = Color(0.15, 0.30, 0.15) if dark else Color(0.72, 0.84, 0.72)
 	bg.content_margin_left   = 10
 	bg.content_margin_right  = 10
 	bg.content_margin_top    = 6
 	bg.content_margin_bottom = 6
 	card.add_theme_stylebox_override("panel", bg)
 
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 2)
-	card.add_child(vbox)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	vbox.add_child(row)
-
-	var check_lbl := Label.new()
-	check_lbl.text = "✓ " + pdef.get("name", pdef.id)
-	check_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	check_lbl.add_theme_font_override("font", _font_rb)
-	check_lbl.add_theme_font_size_override("font_size", 15)
-	check_lbl.add_theme_color_override("font_color",
-		Color(0.45, 0.45, 0.45) if dark else Color(0.40, 0.40, 0.40))
-	row.add_child(check_lbl)
-
-	var tier: String = pdef.get("tier", "personal")
-	var tier_lbl := Label.new()
-	tier_lbl.text = "Persistent" if tier == "persistent" else "Personal"
-	tier_lbl.add_theme_font_override("font", _font_e2s)
-	tier_lbl.add_theme_font_size_override("font_size", 12)
-	tier_lbl.add_theme_color_override("font_color",
-		Color(0.35, 0.55, 0.80) if dark else Color(0.25, 0.40, 0.65))
-	row.add_child(tier_lbl)
-
-	var reward_text := _format_reward_short(pdef.get("reward", {}))
+	var reward_text: String = _format_reward_short(pdef.get("reward", {}))
+	var line: String = "✓ " + pdef.get("name", pdef.id)
 	if not reward_text.is_empty():
-		var reward_lbl := Label.new()
-		reward_lbl.text = "Reward: " + reward_text
-		reward_lbl.add_theme_font_override("font", _font_e2r)
-		reward_lbl.add_theme_font_size_override("font_size", 12)
-		reward_lbl.add_theme_color_override("font_color",
-			Color(0.40, 0.40, 0.40) if dark else Color(0.45, 0.45, 0.45))
-		vbox.add_child(reward_lbl)
+		line += " — Reward: " + reward_text
+
+	var lbl := Label.new()
+	lbl.text = line
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_override("font", _font_e2r)
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+	card.add_child(lbl)
 
 	return card
 
@@ -209,18 +240,18 @@ func _build_completed_card(pdef: Dictionary) -> PanelContainer:
 
 func _refresh_cards() -> void:
 	var st: GameState = GameManager.state
-	# Detect structural change (new unlock or completion)
-	var unlocked: Array = st.enabled_projects
 	var completed: Array = st.completed_projects_this_run
 	for pid: String in GameManager.career.completed_projects:
 		if not completed.has(pid):
 			completed.append(pid)
 
-	if unlocked != _last_unlocked_snapshot or completed != _last_completed_snapshot:
+	if st.enabled_projects != _last_unlocked_snapshot or completed != _last_completed_snapshot:
 		_rebuild_cards()
 		return
 
-	for card: ProjectCard in _active_cards:
+	for card: ProjectCard in _lt_cards:
+		card.refresh()
+	for card: ProjectCard in _sp_cards:
 		card.refresh()
 
 

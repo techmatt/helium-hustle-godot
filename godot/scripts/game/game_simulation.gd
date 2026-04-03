@@ -704,7 +704,7 @@ func _get_research_effects(state: GameState, effect_type: String) -> Array:
 
 
 func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: float, demand: float = 0.0) -> void:
-	pending_shipments.append({"resource": pad.resource_type, "revenue": payout, "demand": demand})
+	pending_shipments.append({"resource": pad.resource_type, "revenue": payout, "demand": demand, "cargo": pad.cargo_loaded})
 	var record := GameState.LaunchRecord.new()
 	record.resource_type = pad.resource_type
 	record.quantity = pad.cargo_loaded
@@ -762,6 +762,12 @@ func execute_command(state: GameState, short_name: String) -> bool:
 	return true
 
 
+func _get_command_mult(state: GameState, short_name: String) -> float:
+	if short_name == "buy_power":
+		return state.get_modifier("buy_power_mult", 1.0)
+	return 1.0
+
+
 func _can_afford_command(state: GameState, short_name: String) -> bool:
 	if not _commands_data.has(short_name):
 		return false
@@ -781,8 +787,9 @@ func _can_afford_command(state: GameState, short_name: String) -> bool:
 			if not state.completed_research.has(req.get("value", "")):
 				return false
 	var costs: Dictionary = _get_effective_costs(state, cmd)
+	var cmd_mult: float = _get_command_mult(state, short_name)
 	for res in costs:
-		if state.amounts.get(res, 0.0) < float(costs[res]):
+		if state.amounts.get(res, 0.0) < float(costs[res]) * cmd_mult:
 			return false
 	return true
 
@@ -792,8 +799,9 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		return
 	var cmd = _commands_data[short_name]
 	var costs: Dictionary = _get_effective_costs(state, cmd)
+	var cmd_mult: float = _get_command_mult(state, short_name)
 	for res in costs:
-		var cost: float = float(costs[res])
+		var cost: float = float(costs[res]) * cmd_mult
 		_apply_delta(state, res, -cost)
 		prog_delta[res] = prog_delta.get(res, 0.0) - cost
 		if cost > 0.0:
@@ -803,7 +811,7 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 	# use a "boredom_add" effect below to support ideology scaling. Don't mix
 	# the two for the same command — only one path applies ideology modifiers.
 	for res in cmd.production:
-		var delta: float = float(cmd.production[res])
+		var delta: float = float(cmd.production[res]) * cmd_mult
 		_apply_delta(state, res, delta)
 		prog_delta[res] = prog_delta.get(res, 0.0) + delta
 		if delta > 0.0:
@@ -907,6 +915,8 @@ func _get_boredom_multiplier(state: GameState) -> float:
 	# AI Consciousness Act: permanent -15% base boredom rate
 	if state.flags.get("ai_consciousness_active", false):
 		mult *= 0.85
+	# Career boredom resilience bonus (derived from best_run_days, set on run start)
+	mult *= state.get_modifier("boredom_resilience_mult", 1.0)
 	return mult
 
 

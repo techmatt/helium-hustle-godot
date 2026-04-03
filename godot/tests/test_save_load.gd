@@ -56,6 +56,7 @@ func _test_retirement_reset(scene_root: Node) -> void:
 	var pre_run_number: int = gm.career.run_number
 
 	gm.retire(true)
+	TF.reset_career_bonus_tracking(gm.career)
 	gm.start_new_run()
 	gm.set_speed("||")  # stop timer immediately so ticks don't accumulate
 
@@ -63,7 +64,7 @@ func _test_retirement_reset(scene_root: Node) -> void:
 	_assert_approx(gm.state.amounts.get("boredom", -1.0), 0.0, 0.001,
 		"retirement: boredom resets to 0")
 	_assert_approx(gm.state.ideology_values.get("rationalist", -999.0), 0.0, 0.001,
-		"retirement: ideology resets to 0")
+		"retirement: ideology resets to 0 (no career high → no head start)")
 	_assert_equal(gm.career.total_retirements, pre_retirements + 1,
 		"retirement: career retirement count incremented")
 	_assert_true(gm.career.run_number > pre_run_number,

@@ -112,7 +112,7 @@ func _build() -> void:
 	vbox.add_theme_constant_override("separation", 6)
 	add_child(vbox)
 
-	# Header row: name + tier badge
+	# Header row: name
 	var header_row := HBoxContainer.new()
 	header_row.add_theme_constant_override("separation", 6)
 	vbox.add_child(header_row)
@@ -123,19 +123,6 @@ func _build() -> void:
 	name_lbl.add_theme_font_override("font", _font_rb)
 	name_lbl.add_theme_font_size_override("font_size", 16)
 	header_row.add_child(name_lbl)
-
-	var tier: String = _pdef.get("tier", "personal")
-	var tier_lbl := Label.new()
-	tier_lbl.text = "Persistent" if tier == "persistent" else "Personal"
-	tier_lbl.add_theme_font_override("font", _font_e2s)
-	tier_lbl.add_theme_font_size_override("font_size", 12)
-	var tier_color: Color
-	if tier == "persistent":
-		tier_color = Color(0.40, 0.70, 1.0) if dark else Color(0.13, 0.46, 0.80)
-	else:
-		tier_color = Color(0.60, 0.60, 0.60) if dark else Color(0.50, 0.50, 0.50)
-	tier_lbl.add_theme_color_override("font_color", tier_color)
-	header_row.add_child(tier_lbl)
 
 	# Description
 	var desc_lbl := Label.new()

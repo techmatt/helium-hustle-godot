@@ -178,6 +178,22 @@ static func pretrigger_all_milestones_except(state: GameState, except_id: String
 			state.triggered_milestones.append(mid)
 
 
+# Sets ideology_values[axis] to the exact score for the given integer rank
+# using the formula — so tests remain valid if the formula changes.
+static func set_ideology_rank(state: GameState, axis: String, rank: int) -> void:
+	state.ideology_values[axis] = GameState.score_for_rank(float(rank))
+
+
+# Zeroes all career-bonus-tracking fields so retire/new-run tests aren't
+# affected by career state accumulated by earlier tests in the suite.
+# Call this AFTER gm.retire() and BEFORE gm.start_new_run().
+static func reset_career_bonus_tracking(career: CareerState) -> void:
+	career.max_ideology_scores = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
+	career.peak_power_production = 0.0
+	career.best_run_credits = 0.0
+	career.best_run_days = 0
+
+
 # Returns a fresh state with the given research IDs pre-completed.
 # Also pre-triggers the "first_research" milestone so it doesn't fire during
 # the first tick and zero out the small boredom delta you're usually measuring.

@@ -26,6 +26,7 @@ var achievement_manager: AchievementManager
 var career: CareerState = CareerState.new()
 var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
+var _run_peak_power: float = 0.0  # per-run max energy produced by buildings in a single tick
 
 # When true: skip reading/writing the save file on startup and during autosave.
 # Set this before _ready() runs to prevent the initial load, or set it in _process()
@@ -74,6 +75,26 @@ func _ready() -> void:
 	achievement_manager = AchievementManager.new()
 	achievement_manager.init(_achievements_data)
 
+	# Connect telemetry signals before any state initialization
+	event_manager.event_triggered.connect(func(eid: String) -> void:
+		PlaytestLogger.log_event("event_triggered", {"event_id": eid})
+	)
+	event_manager.event_completed.connect(func(eid: String) -> void:
+		var edef: Dictionary = event_manager.get_event_def(eid)
+		if edef.get("category", "") == "story":
+			PlaytestLogger.log_event("quest_completed", {"quest_id": eid})
+	)
+	event_manager.boredom_phase_changed.connect(func(_old: int, new_phase: int) -> void:
+		PlaytestLogger.log_event("boredom_phase", {
+			"phase": new_phase,
+			"boredom_value": state.amounts.get("boredom", 0.0),
+		})
+	)
+	project_manager.project_completed.connect(func(pid: String) -> void:
+		var pdef: Dictionary = project_manager.get_project_def(pid)
+		PlaytestLogger.log_event("project_completed", {"id": pid, "tier": pdef.get("tier", "")})
+	)
+
 	if skip_save_load:
 		career = CareerState.new()
 		state = GameState.new()
@@ -111,11 +132,14 @@ func _ready() -> void:
 	add_child(_autosave_timer)
 	_autosave_timer.start()
 
+	get_tree().auto_accept_quit = false
+
 	set_speed(current_speed_key)
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		PlaytestLogger.finalize_run()
 		_autosave()
 		get_tree().quit()
 
@@ -125,6 +149,7 @@ func _restore_from_save() -> void:
 	event_manager.on_game_start(state, career)  # sets _career reference; won't re-trigger fired events
 	_apply_career_flags_to_run_state()
 	sim.recalculate_caps(state)
+	PlaytestLogger.start_run(state.run_number, career, state, sim.demand_system)
 	tick_completed.emit()
 
 
@@ -142,6 +167,8 @@ func _initialize_state() -> void:
 	sim.recalculate_caps(state)
 	sim.demand_system.initialize_demand(state)
 	state.programs[0].processors_assigned = 1
+	_run_peak_power = 0.0
+	PlaytestLogger.start_run(state.run_number, career, state, sim.demand_system)
 
 
 func set_speed(speed_key: String) -> void:
@@ -159,7 +186,13 @@ func set_speed(speed_key: String) -> void:
 
 func buy_building(short_name: String) -> void:
 	if sim.can_buy_building(state, short_name):
+		var costs: Dictionary = sim.get_scaled_costs(state, short_name)
 		sim.buy_building(state, short_name)
+		PlaytestLogger.log_event("building_purchased", {
+			"id": short_name,
+			"owned_count": state.buildings_owned.get(short_name, 0),
+			"cost": costs,
+		})
 		if not career.lifetime_owned_building_ids.has(short_name):
 			career.lifetime_owned_building_ids.append(short_name)
 		tick_completed.emit()
@@ -183,6 +216,10 @@ func get_scaled_costs(short_name: String) -> Dictionary:
 
 func sell_building(short_name: String, sell_count: int = 1) -> void:
 	sim.sell_building(state, short_name, sell_count)
+	PlaytestLogger.log_event("building_sold", {
+		"id": short_name,
+		"owned_count": state.buildings_owned.get(short_name, 0),
+	})
 	tick_completed.emit()
 
 
@@ -236,7 +273,12 @@ func get_land_per_purchase() -> int:
 
 func buy_land() -> void:
 	if sim.can_buy_land(state):
+		var land_cost: int = sim.get_land_purchase_cost(state)
 		sim.buy_land(state)
+		PlaytestLogger.log_event("land_purchased", {
+			"total_land": get_total_land(),
+			"cost": land_cost,
+		})
 		tick_completed.emit()
 
 
@@ -375,7 +417,16 @@ func is_research_item_visible(item_id: String) -> bool:
 
 func purchase_research(research_id: String) -> void:
 	if sim.can_purchase_research(state, research_id):
+		var sci_cost: float = 0.0
+		for rd: Dictionary in _research_data:
+			if rd.get("id", "") == research_id:
+				sci_cost = float((rd.get("cost", {}) as Dictionary).get("sci", 0))
+				break
 		sim.purchase_research(state, research_id)
+		PlaytestLogger.log_event("research_completed", {
+			"id": research_id,
+			"science_cost": sci_cost,
+		})
 		# Track in lifetime researched for Universal Research Archive
 		if not career.lifetime_researched_ids.has(research_id):
 			career.lifetime_researched_ids.append(research_id)
@@ -408,12 +459,23 @@ func _on_tick() -> void:
 			program_cycle_reset.emit(event.program_index)
 	for m in sim.pending_milestone_triggers:
 		print("[Milestone] %s — Boredom -%s" % [m.label, m.boredom_reduction])
+		PlaytestLogger.log_event("boredom_milestone", {
+			"milestone_id": m.id,
+			"reduction": m.boredom_reduction,
+			"boredom_after": state.amounts.get("boredom", 0.0),
+		})
 		milestone_triggered.emit(m.id, m.label, m.boredom_reduction)
 	for notif in project_manager.pending_completion_notifications:
 		event_manager.push_notification("Project Complete: " + notif.name, state.current_day)
 		project_completed_notification.emit(notif.name)
-	# Check shipment-based achievements
+	# Log shipments and check shipment-based achievements
 	for shipment in sim.pending_shipments:
+		PlaytestLogger.log_event("shipment_launched", {
+			"resource": shipment.resource,
+			"cargo": shipment.get("cargo", 0.0),
+			"demand": shipment.demand,
+			"revenue": shipment.revenue,
+		})
 		var newly: Array[String] = achievement_manager.check_shipment_conditions(
 			state, career, float(shipment.revenue), float(shipment.demand)
 		)
@@ -425,11 +487,24 @@ func _on_tick() -> void:
 	)
 	for aid: String in tick_new:
 		_unlock_achievement(aid)
-	# Update career max ideology ranks
+	# Track peak building energy production for career bonus
+	var tick_eng: float = sim.tick_produced.get("eng", 0.0)
+	if tick_eng > _run_peak_power:
+		_run_peak_power = tick_eng
+	if tick_eng > career.peak_power_production:
+		career.peak_power_production = tick_eng
+	# Update career max ideology ranks/scores and log any rank changes
 	for axis: String in ["nationalist", "humanist", "rationalist"]:
 		var current_rank: int = state.get_ideology_rank(axis)
 		if current_rank > int(career.max_ideology_ranks.get(axis, 0)):
 			career.max_ideology_ranks[axis] = current_rank
+		var abs_score: float = abs(state.ideology_values.get(axis, 0.0))
+		if abs_score > float(career.max_ideology_scores.get(axis, 0.0)):
+			career.max_ideology_scores[axis] = abs_score
+	PlaytestLogger.check_ideology_changes(state)
+	# Periodic snapshot every 100 ticks
+	if state.current_day > 0 and state.current_day % 100 == 0:
+		PlaytestLogger.log_snapshot(state, sim.demand_system)
 	tick_completed.emit()
 	if state.amounts.get("boredom", 0.0) >= 1000.0:
 		retire(false)
@@ -447,6 +522,12 @@ func retire(voluntary: bool) -> void:
 		run_buildings += count
 	var run_research: int = state.completed_research.size()
 
+	# Capture pre-update career highs for "new record" display on retirement screen
+	var pre_best_credits: float = career.best_run_credits
+	var pre_best_days: int = career.best_run_days
+	var pre_peak_power: float = career.peak_power_production
+	var pre_max_ideology_scores: Dictionary = career.max_ideology_scores.duplicate()
+
 	career.lifetime_credits_earned += run_credits
 	career.lifetime_shipments += run_shipments
 	career.lifetime_days_survived += run_days
@@ -455,6 +536,11 @@ func retire(voluntary: bool) -> void:
 	career.best_run_days = maxi(career.best_run_days, run_days)
 	career.best_run_credits = maxf(career.best_run_credits, run_credits)
 	career.best_run_shipments = maxi(career.best_run_shipments, run_shipments)
+	# peak_power_production is already updated live each tick; finalize ideology scores
+	for axis: String in ["nationalist", "humanist", "rationalist"]:
+		var abs_score: float = abs(state.ideology_values.get(axis, 0.0))
+		if abs_score > float(career.max_ideology_scores.get(axis, 0.0)):
+			career.max_ideology_scores[axis] = abs_score
 
 	# Update event persistence
 	for inst: Dictionary in state.event_instances:
@@ -490,11 +576,31 @@ func retire(voluntary: bool) -> void:
 		"milestones_hit": state.triggered_milestones.duplicate(),
 		"career_retirements": career.total_retirements + 1,
 		"career_total_days": career.lifetime_days_survived,
+		# Career highs (post-update) used by bonus preview
+		"career_best_credits": career.best_run_credits,
+		"career_best_days": career.best_run_days,
+		"career_peak_power": career.peak_power_production,
+		"career_max_ideology_scores": career.max_ideology_scores.duplicate(),
+		# Pre-update highs for "NEW" indicator display
+		"pre_best_credits": pre_best_credits,
+		"pre_best_days": pre_best_days,
+		"pre_peak_power": pre_peak_power,
+		"pre_max_ideology_scores": pre_max_ideology_scores,
+		# This run's peak power (for "from peak power" display)
+		"run_peak_power": _run_peak_power,
 	}
 
 	# Increment career counters
 	career.total_retirements += 1
 	career.run_number += 1
+
+	PlaytestLogger.log_event("retirement", {
+		"reason": "voluntary" if voluntary else "forced",
+		"final_day": run_days,
+		"final_credits": run_credits,
+		"final_boredom": state.amounts.get("boredom", 0.0),
+	})
+	PlaytestLogger.finalize_run()
 
 	retirement_started.emit(summary)
 
@@ -512,6 +618,32 @@ func start_new_run() -> void:
 				state.amounts["land"] -= float(bdef.land) * count
 				break
 	state.run_number = career.run_number
+
+	# --- Career bonus application (steps 4–6 of run init sequence) ---
+
+	# Step 4: Ideology head start — 20% of best continuous rank per axis
+	for axis: String in ["nationalist", "humanist", "rationalist"]:
+		var max_score: float = float(career.max_ideology_scores.get(axis, 0.0))
+		if max_score > 0.0:
+			var max_continuous: float = GameState.continuous_rank_for_score(max_score)
+			var starting_rank: float = max_continuous * 0.2
+			var starting_score: float = GameState.score_for_rank(starting_rank)
+			state.ideology_values[axis] = starting_score
+
+	# Step 5: Starting credits bonus — floor(best_run_credits / 100)
+	var credits_bonus: float = floor(career.best_run_credits / 100.0)
+	if credits_bonus > 0.0:
+		state.amounts["cred"] = state.amounts.get("cred", 0.0) + credits_bonus
+
+	# Step 6: Career modifiers derived from CareerState
+	# buy_power_mult: scales Buy Power command output and cost
+	var buy_power_mult: float = 1.0 + floor(career.peak_power_production / 20.0) * 0.25
+	state.set_modifier("buy_power_mult", buy_power_mult)
+	# boredom_resilience_mult: reduces boredom rate based on best survival
+	var boredom_resilience_mult: float = pow(0.995, career.best_run_days / 400.0)
+	state.set_modifier("boredom_resilience_mult", boredom_resilience_mult)
+
+	_run_peak_power = 0.0
 
 	# Transfer event history from career so prior events are marked seen
 	for eid: String in career.seen_event_ids:
@@ -563,6 +695,8 @@ func start_new_run() -> void:
 
 	_apply_career_flags_to_run_state()
 
+	PlaytestLogger.start_run(state.run_number, career, state, sim.demand_system)
+
 	set_speed("1x")
 	tick_completed.emit()
 	SaveManager.save_game(career, state, current_speed_key)
@@ -579,6 +713,10 @@ func _unlock_achievement(achievement_id: String) -> void:
 		def.get("name", achievement_id),
 		def.get("reward_description", "")
 	]
+	PlaytestLogger.log_event("achievement_earned", {
+		"id": achievement_id,
+		"reward_summary": def.get("reward_description", ""),
+	})
 	event_manager.push_notification(notif, state.current_day)
 	achievement_unlocked.emit(achievement_id)
 

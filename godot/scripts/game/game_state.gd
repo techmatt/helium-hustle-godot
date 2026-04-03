@@ -105,8 +105,20 @@ class LaunchRecord:
 
 const TRADEABLE_RESOURCES: Array = ["he3", "ti", "cir", "prop"]
 
-# Ideology rank thresholds (cumulative ideology value to reach each rank)
-const RANK_THRESHOLDS: Array = [70, 175, 333, 570, 925]
+# Ideology rank formula: score_for_rank(n) = 200 * (1.5^n - 1)
+# Cumulative reference values: rank 1=100, 2=250, 3=475, 4=812.5, 5=1318.75
+# Maximum rank is 99 (clamped in get_ideology_rank).
+static func score_for_rank(n: float) -> float:
+	if n < 0.0:
+		return -score_for_rank(-n)
+	return 200.0 * (pow(1.5, n) - 1.0)
+
+static func continuous_rank_for_score(score: float) -> float:
+	if score < 0.0:
+		return -continuous_rank_for_score(-score)
+	if score <= 0.0:
+		return 0.0
+	return log(score / 200.0 + 1.0) / log(1.5)
 
 # Pad status constants
 const PAD_EMPTY     = 0
@@ -158,17 +170,15 @@ func set_modifier(key: String, value: float) -> void:
 
 
 # Returns the current ideology rank for the given axis (can be negative).
+# Uses formula: continuous_rank = log(|score|/200 + 1) / log(1.5); rank = floor(continuous_rank)
+# Clamped to [-99, 99].
 func get_ideology_rank(axis: String) -> int:
 	var value: float = ideology_values.get(axis, 0.0)
 	var sign: int = 1 if value >= 0.0 else -1
-	var abs_value: float = abs(value)
-	var rank: int = 0
-	for threshold: int in RANK_THRESHOLDS:
-		if abs_value >= float(threshold):
-			rank += 1
-		else:
-			break
-	return rank * sign
+	# Add tiny epsilon to handle floating-point imprecision at exact rank thresholds
+	# (e.g. score_for_rank(5) → continuous ≈ 4.9999... without epsilon)
+	var abs_rank: int = floori(continuous_rank_for_score(abs(value)) + 1e-9)
+	return clampi(abs_rank * sign, -99, 99)
 
 
 # Returns the multiplicative bonus for the given axis and per-rank multiplier.

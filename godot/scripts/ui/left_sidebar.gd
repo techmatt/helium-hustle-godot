@@ -526,17 +526,16 @@ func update_ideology_display() -> void:
 
 
 func _ideology_progress_text(value: float, rank: int) -> String:
-	var thresholds: Array = GameState.RANK_THRESHOLDS
-	if rank >= 5:
+	if rank >= 99:
 		return "MAX"
-	if rank <= -5:
+	if rank <= -99:
 		return "MIN"
 	if rank == 0 and value < 0.0:
-		return "%d / -%d" % [int(value), thresholds[0]]
+		return "%d / -%d" % [int(value), int(GameState.score_for_rank(1.0))]
 	if rank >= 0:
-		return "%d / %d" % [int(value), thresholds[rank]]
+		return "%d / %d" % [int(value), int(GameState.score_for_rank(float(rank + 1)))]
 	else:
-		return "%d / -%d" % [int(value), thresholds[-rank]]
+		return "%d / -%d" % [int(value), int(GameState.score_for_rank(float(-rank + 1)))]
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────

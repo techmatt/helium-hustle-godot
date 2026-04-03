@@ -106,21 +106,20 @@ func _add_axis_section(st: GameState, axis: String) -> void:
 	body_vbox.add_theme_constant_override("separation", 6)
 	body_panel.add_child(body_vbox)
 
-	# Progress bar
-	var thresholds: Array = GameState.RANK_THRESHOLDS
+	# Progress bar — fraction of progress within the current rank
 	var fill_frac: float = 0.0
 	var is_negative_rank: bool = rank < 0
-	if rank >= 5 or rank <= -5:
+	if rank >= 99 or rank <= -99:
 		fill_frac = 1.0
 	elif rank > 0:
-		var lo: float = float(thresholds[rank - 1])
-		var hi: float = float(thresholds[rank])
+		var lo: float = GameState.score_for_rank(float(rank))
+		var hi: float = GameState.score_for_rank(float(rank + 1))
 		fill_frac = clampf((value - lo) / (hi - lo), 0.0, 1.0)
 	elif rank == 0:
-		fill_frac = clampf(value / float(thresholds[0]), 0.0, 1.0) if value > 0.0 else 0.0
+		fill_frac = clampf(value / GameState.score_for_rank(1.0), 0.0, 1.0) if value > 0.0 else 0.0
 	else:
-		var lo: float = float(thresholds[-rank - 1])
-		var hi: float = float(thresholds[-rank])
+		var lo: float = GameState.score_for_rank(float(-rank))
+		var hi: float = GameState.score_for_rank(float(-rank + 1))
 		fill_frac = 1.0 - clampf((abs(value) - lo) / (hi - lo), 0.0, 1.0)
 
 	var bar_wrapper := Control.new()
@@ -198,17 +197,16 @@ func _add_axis_section(st: GameState, axis: String) -> void:
 
 
 func _bar_text(value: float, rank: int) -> String:
-	var thresholds: Array = GameState.RANK_THRESHOLDS
-	if rank >= 5:
-		return "%d+" % thresholds[4]
-	if rank <= -5:
-		return "-%d+" % thresholds[4]
+	if rank >= 99:
+		return "Rank 99 (MAX)"
+	if rank <= -99:
+		return "Rank -99 (MIN)"
 	if rank == 0 and value < 0.0:
-		return "%d / -%d to Rank -1" % [int(value), thresholds[0]]
+		return "%d / -%d to Rank -1" % [int(value), int(GameState.score_for_rank(1.0))]
 	if rank >= 0:
-		return "%d / %d to Rank %d" % [int(value), thresholds[rank], rank + 1]
+		return "%d / %d to Rank %d" % [int(value), int(GameState.score_for_rank(float(rank + 1))), rank + 1]
 	else:
-		return "%d / -%d to Rank %d" % [int(value), thresholds[-rank], rank - 1]
+		return "%d / -%d to Rank %d" % [int(value), int(GameState.score_for_rank(float(-rank + 1))), rank - 1]
 
 
 func _bonus_lines(axis: String, rank: int) -> Array[String]:
