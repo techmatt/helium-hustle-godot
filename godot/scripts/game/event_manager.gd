@@ -3,6 +3,7 @@ extends RefCounted
 
 signal event_triggered(event_id: String)
 signal event_completed(event_id: String)
+signal surprise_event_completed(event_id: String)
 signal boredom_phase_changed(old_phase: int, new_phase: int)
 
 var _event_defs: Array = []
@@ -292,6 +293,8 @@ func _complete_event(state: GameState, inst: Dictionary, choice_id: String) -> v
 	var def: Dictionary = _def_map.get(inst.id, {})
 	if def.get("category", "") == "story":
 		state.highest_completed_story_quest = inst.id
+	# Capture first-time status before marking seen (used for surprise event signal below).
+	var is_first_time: bool = not state.seen_event_ids.has(inst.id)
 	# Auto-completing events (no choices) are immediately marked seen so
 	# systems that gate on seen_event_ids (e.g. research visible_when) activate at once.
 	if (def.get("choices", []) as Array).is_empty():
@@ -300,6 +303,14 @@ func _complete_event(state: GameState, inst: Dictionary, choice_id: String) -> v
 	for effect in def.get("unlocks", []):
 		_apply_unlock(state, effect)
 	event_completed.emit(inst.id)
+	# Ongoing game_start events with non-immediate conditions are "surprise" events —
+	# their instance is created silently at run start, and the modal fires here (on
+	# condition met) for the first time only.
+	var trigger_type: String = def.get("trigger", {}).get("type", "")
+	var cond_type: String = def.get("condition", {}).get("type", "")
+	if def.get("category", "") == "ongoing" and trigger_type == "game_start" \
+			and cond_type != "immediate" and is_first_time:
+		surprise_event_completed.emit(inst.id)
 
 
 func _apply_unlock(state: GameState, effect: Dictionary) -> void:

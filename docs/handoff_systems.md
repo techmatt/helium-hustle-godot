@@ -155,6 +155,20 @@ A command is visible if any of these are true: (1) it has no unlock requirement
 in `career_state.lifetime_used_command_ids`. The "Show All Cards" debug toggle 
 overrides visibility gating. Buy Ice is gated on owning an Ice Extractor.
 
+### Command Output-Cap Skip (NOT YET IMPLEMENTED)
+Buy commands that produce capped resources (Buy Titanium, Buy Propellant, Buy Ice, 
+Buy Power) should skip execution (advance pointer, don't pay inputs) when their 
+output resource is at storage cap. Mirrors building production-gated skip behavior.
+
+### Command Partial Production (NOT YET IMPLEMENTED)
+Buy commands should support partial production when close to output cap or when 
+inputs are scarce. Scale both inputs and outputs by `min(output_cap_fraction, 
+input_availability_fraction)`. With multiple processors hitting the same command 
+on the same tick, each execution independently checks remaining capacity.
+
+The `buy_power_mult` modifier applies before partial production math — use 
+modified output/cost values as the base for scaling.
+
 ### Key Design Intent
 Buy commands are intentionally 3-5x the cost of building-based production per unit. 
 They exist for tactical gap-bridging, not as a primary resource strategy. Buy 
@@ -274,8 +288,9 @@ forced retirement. Phase transitions determined by day counter using boredom cur
 - **Stress Tolerance** research: ×0.85
 - **Humanist ideology:** `pow(0.97, rank)`
 - **AI Consciousness Act** project: ×0.85 (permanent via career flag)
+- **Boredom Resilience** career bonus: `pow(0.995, best_run_days / 400.0)`
 
-All three applied in `_get_boredom_multiplier()`.
+All four applied in `_get_boredom_multiplier()`.
 
 ### Boredom in Stats Panel
 The Stats panel shows the current boredom accumulation rate as a line item in the 
@@ -298,14 +313,58 @@ Checked at end of each tick. Consciousness hook stub called on all boredom reduc
 - Forced at boredom 1000. Current tick finishes processing first.
 - Voluntary via Retirement nav panel (unlocked by Q3).
 - **Persists:** CareerState (lifetime stats, seen_event_ids, completed_quest_ids, 
-  max ideology ranks, lifetime_researched_ids, lifetime_owned_building_ids, 
-  lifetime_used_command_ids, project progress, achievements, saved loadouts, 
-  career_flags)
+  max ideology ranks, max ideology scores, lifetime_researched_ids, 
+  lifetime_owned_building_ids, lifetime_used_command_ids, project progress, 
+  achievements, saved loadouts, career_flags, peak_power_production)
 - **Resets:** All resources, buildings (owned/active/bonus counts), research, 
-  ideology values, demand state, boredom, day counter, land, personal projects, 
-  event instances, triggered milestones, cumulative counters, building stall status, 
-  active modifiers (re-derived from CareerState on next run start)
+  ideology values (reset to head-start scores, see Career Bonuses), demand state, 
+  boredom, day counter, land, personal projects, event instances, triggered 
+  milestones, cumulative counters, building stall status, active modifiers 
+  (re-derived from CareerState on next run start)
 - **Programs:** Slots kept, command queues emptied, pointers and assignments reset.
+
+### Career Bonuses (applied on run start)
+Four passive bonuses derived from career-high stats in CareerState. All based on 
+personal bests, no lifetime cumulative stats.
+
+**Starting Credits** — `floor(best_run_credits / 100)` added to starting credit 
+balance. Rewards mastering the trade loop.
+
+**Boredom Resilience** — boredom rate multiplier `pow(0.995, best_run_days / 400.0)`. 
+At 800 days: ~1% reduction. At 1500 days: ~1.9%. Stacks multiplicatively with other 
+boredom modifiers in `_get_boredom_multiplier()`.
+
+**Buy Power Scaling** — `buy_power_mult = 1.0 + floor(peak_power_production / 20.0) * 0.25`. 
+Multiplies both Buy Power energy output and credit cost. Same energy-per-credit 
+ratio, better energy-per-processor-tick. At peak 20: 1.25x. At peak 80: 2.0x. 
+Stored in `active_modifiers` as `buy_power_mult`, re-derived from CareerState on 
+run start.
+
+**Ideology Head Start** — on run start, each axis begins with a score derived from 
+career-best scores: `starting_score = score_for_rank(continuous_rank * 0.2)` where 
+`continuous_rank = continuous_rank_for_score(max_ideology_score_for_axis)`. Best 
+Humanist rank 5 (score 1319) → start at rank 1.0 (score 100). Best rank 10 → 
+start at rank 2.0 (score 250).
+
+### Run Initialization Sequence
+1. Load CareerState from save
+2. Increment run_number
+3. Create fresh GameState with default starting values
+4. Apply ideology head start (set starting ideology scores)
+5. Apply starting credits bonus
+6. Apply career modifiers to active_modifiers (`buy_power_mult`)
+7. Re-apply persistent project rewards (existing logic)
+8. Re-apply achievement rewards (existing logic)
+9. Re-apply completed event unlock effects (existing logic)
+10. Grant bonus buildings (Foundation Grant, achievements)
+11. Recalculate storage caps
+12. Quest chain picks up from first incomplete quest
+
+### Pre-Retirement Panel
+The "Retire" nav button opens a center panel showing: This Run stats (live), 
+Career Records (with NEW indicators when this run sets records), Next Run Bonuses 
+preview (projected values with deltas showing improvement from this run), and a 
+"Retire Now" button with confirmation dialog.
 
 ### Future: Consciousness Mechanic (DO NOT IMPLEMENT)
 Dream and boredom-reducing effects secretly accumulate a hidden "consciousness" 
@@ -370,13 +429,33 @@ visibility gating. Logic lives in `GameManager.is_research_item_visible(item_id)
 ## Ideology
 
 ### Overview
-Three axes: Nationalist, Humanist, Rationalist. Each starts at 0 per run. Fund 
+Three axes: Nationalist, Humanist, Rationalist. Each starts at ideology head-start 
+score on run start (0 on Run 1, derived from career bests on subsequent runs). Fund 
 commands push +1 target / -0.5 each other (zero-sum pressure). Values can go 
 negative.
 
-### Rank Thresholds
-70, 175, 333, 570, 925 for ranks 1–5. Negative ranks use same thresholds on 
-absolute value. Rank computed in `GameState.get_ideology_rank()`.
+### Rank Formula (geometric series)
+Each rank costs `100 * pow(1.5, n-1)` ideology score, where n is the rank number. 
+Cumulative score to reach rank n:
+
+```
+score_for_rank(n) = 200 * (pow(1.5, n) - 1)
+```
+
+Reference values: Rank 1: 100, Rank 2: 250, Rank 3: 475, Rank 4: 812.5, 
+Rank 5: 1318.75, Rank 10: 7930, Rank 15: 56559.
+
+**Integer rank from score:**
+```
+continuous_rank = log(score / 200 + 1) / log(1.5)
+integer_rank = floor(continuous_rank)
+```
+
+Negative ranks use absolute value of score, producing negative rank values. 
+Maximum rank capped at 99. Computed in `GameState.get_ideology_rank()`.
+
+Helper functions `score_for_rank(n)` and `continuous_rank_for_score(score)` are 
+available for fractional rank conversions (used by ideology head start bonus).
 
 ### Continuous Per-Rank Bonuses
 **Nationalist:** demand multiplier `pow(1.05, rank)`, speculator decay 
@@ -404,8 +483,10 @@ boredom costs on load_pads, cloud_compute, disrupt_spec.
 any research from prior runs.
 
 ### Persistence
-Values reset on retirement (Arc 1). Max rank per axis tracked in CareerState. 
-Updated at end of each tick. Career max checked for project unlock conditions.
+Values reset on retirement to ideology head-start scores (see Career Bonuses). 
+Max rank per axis tracked in `CareerState.max_ideology_ranks`. Max raw score per 
+axis tracked in `CareerState.max_ideology_scores`. Both updated at end of each 
+tick. Career max checked for project unlock conditions.
 
 ---
 
@@ -417,8 +498,31 @@ compact steppers. Each resource tracked independently. Resources stop draining o
 their component is fully funded. Project completes when all resources are full.
 
 ### Tiers
-- **Personal** — reset on retirement. Rewards are in-run modifiers.
-- **Persistent** — progress accumulates in CareerState. Rewards are permanent.
+- **Long-Term Projects** (internal: `persistent`) — progress accumulates in 
+  CareerState across retirements. Rewards are permanent.
+- **Strategic Projects** (internal: `personal`) — reset on retirement. Rewards 
+  are in-run modifiers.
+
+"Long-Term" and "Strategic" are display names only. Internal data model uses 
+`persistent` and `personal` as tier identifiers in JSON and GDScript.
+
+### Projects Panel Layout
+Tier-first grouping. Two collapsible sections:
+
+```
+▼ Long-Term Projects
+  Progress on these projects carries across retirements.
+  [project cards]
+
+▼ Strategic Projects
+  These projects reset when you retire. Plan accordingly.
+  [project cards]
+```
+
+Within each section, projects ordered: active (funding in progress) → available 
+(unlocked, zero progress) → completed (compact single-line: "✓ Name — Reward: ...").
+Locked projects hidden entirely. Section hidden when it contains zero visible 
+projects. No "Personal"/"Persistent" badge on individual cards.
 
 ### Mechanics
 - Any number of projects active simultaneously.
@@ -449,9 +553,11 @@ Keyed dictionary in GameState: `active_modifiers`. Systems query via
 | shipment_credit_mult | 1.0 | First Profit achievement | Shipment credit payout |
 | cargo_capacity_mult | 1.0 | Bulk Shipper achievement | Cargo loaded per pad per execution |
 | demand_ceiling | 1.0 | Market Timer achievement | Demand clamp upper bound |
+| buy_power_mult | 1.0 | Career bonus (peak power) | Buy Power output and cost |
 
-Personal project modifiers cleared on retirement. Persistent project modifiers 
-and achievement modifiers re-applied on run start from CareerState.
+Personal project modifiers cleared on retirement. Persistent project modifiers, 
+achievement modifiers, and career bonus modifiers re-applied on run start from 
+CareerState.
 
 ---
 
@@ -493,6 +599,15 @@ EventManager (pure logic) + EventPanel + EventModal. The Event Panel has a heade
 Ongoing, Completed. Events defined in events.json. First-time events auto-open 
 modal and pause; previously-seen events appear silently. Clicking any event entry 
 in the Events panel opens the EventModal with that event's text (does not pause).
+
+### Event Panel Visibility Rules
+- **Quest chain events** (Q1–Q_END): The currently active quest shows in Story 
+  with progress indicator. Completed quests displayed in Story panel instead.
+- **Standalone condition_met events** (Propellant Discovery, Ideology Unlock, 
+  etc.): Hidden from the Events panel entirely until they trigger. They should 
+  NOT appear in Ongoing with progress counters before firing. After triggering, 
+  they appear in Completed.
+- **Boredom phase events:** Appear in Completed after firing.
 
 ### Event Panel — Completed Quest Migration
 Completed quest events no longer appear in the Events panel's Completed section. 
@@ -536,9 +651,9 @@ unlock effects re-applied on run start.
 
 ### Special Events (separate from quest chain)
 - **Propellant Discovery:** Triggers at 4 shipments, makes Propellant Synthesis 
-  research visible.
+  research visible. Hidden from Events panel until it fires.
 - **Ideology Unlock:** Triggers when Geopolitical Intelligence research completed, 
-  enables Ideologies nav panel.
+  enables Ideologies nav panel. Hidden from Events panel until it fires.
 - **Boredom Phase events:** Fire on phase transitions.
 
 ---
@@ -546,14 +661,15 @@ unlock effects re-applied on run start.
 ## Story Panel
 
 ### Overview
-The "Story" nav button (left sidebar, renamed from "Achievements") opens a center 
-panel with two sections: Primary Objectives and Achievements.
+The "Story" nav button (left sidebar) opens a center panel with two sections: 
+Primary Objectives and Achievements.
 
 ### Primary Objectives
 Displays the quest chain (Q1–Q_END) as a vertical list. Completed quests show 
 checkmark, name, one-sentence summary, and what they unlocked. The active quest 
-shows highlighted with condition text and progress indicator. Future quests beyond 
-the active one are completely hidden.
+shows highlighted with condition text and progress indicator. The "Active" label 
+should match the size of section headers. Future quests beyond the active one are 
+completely hidden.
 
 Clicking a completed quest opens the EventModal with the full original event text 
 (does not pause the game).
@@ -607,7 +723,8 @@ Single file, configurable via `SaveManager.save_path`. Default:
 `user://helium_hustle_save.json`. Version 1.
 
 ### When Saves Happen
-After retirement, on pause, every 60s real-time, on quit.
+After retirement, on pause, every 60s real-time, on quit (via 
+`NOTIFICATION_WM_CLOSE_REQUEST` handler).
 
 ### Serialization
 GameState and CareerState both use `to_dict()` / `from_dict()`. Caps recalculated 
@@ -627,9 +744,38 @@ headless test runner).
 `run_number`, `total_retirements`, `lifetime_credits_earned`, `lifetime_shipments`, 
 `lifetime_days_survived`, `lifetime_buildings_built`, `lifetime_research_completed`, 
 `best_run_days`, `best_run_credits`, `best_run_shipments`, `max_ideology_ranks`, 
-`career_flags`, `lifetime_researched_ids`, `lifetime_owned_building_ids`, 
+`max_ideology_scores`, `peak_power_production`, `career_flags`, 
+`lifetime_researched_ids`, `lifetime_owned_building_ids`, 
 `lifetime_used_command_ids`, `seen_event_ids`, `completed_quest_ids`, 
 `project_progress`, `completed_projects`, `achievements`, `saved_loadouts`.
 
 All serialized via `to_dict()` / `from_dict()` and survive across retirements and 
 save/load cycles.
+
+---
+
+## Playtest Telemetry
+
+### Overview
+PlaytestLogger autoload singleton. Writes JSONL log files to `<repo>/logs/` 
+(one file per run: `run_N.jsonl`). Disabled when `GameManager.skip_save_load` 
+is true (headless tests). `logs/` directory in `.gitignore`.
+
+### Log Format
+One JSON object per line: `{"tick": N, "type": "...", "data": {...}}`.
+
+### Point Events
+`run_start`, `building_purchased`, `building_sold`, `research_completed`, 
+`quest_completed`, `event_triggered`, `achievement_earned`, `project_completed`, 
+`shipment_launched` (includes `spec` count), `boredom_phase`, `boredom_milestone`, 
+`land_purchased`, `ideology_rank_change`, `retirement`.
+
+### Periodic Snapshots (every 100 ticks + on retirement/close)
+Compact format with aggressive rounding (integers for most values, 1 decimal for 
+rates/demand/costs). Resources as `[current, cap, rate]` tuples, omitting zero 
+entries. Ideology as raw scores omitting zero axes. Speculators as `[count, target]`. 
+Includes completed research ID list.
+
+### File Lifecycle
+Opens on `start_run()`, writes immediately (no buffering), finalizes with 
+final snapshot on retirement or app close, then closes file handle.

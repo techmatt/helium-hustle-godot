@@ -143,7 +143,17 @@ func _rebuild_items() -> void:
 	var st: GameState = GameManager.state
 	var em: EventManager = GameManager.event_manager
 	var story: Array = em.get_active_events("story", st)
-	var ongoing: Array = em.get_active_events("ongoing", st)
+	# Filter out game_start-triggered events with non-immediate conditions.
+	# These are surprise events (Propellant Discovery, Ideology Unlock, etc.) that
+	# should be invisible until they complete — they then appear in Completed only.
+	var ongoing: Array = []
+	for inst: Dictionary in em.get_active_events("ongoing", st):
+		var def: Dictionary = em.get_event_def(inst.get("id", ""))
+		var trigger_type: String = def.get("trigger", {}).get("type", "")
+		var cond_type: String = def.get("condition", {}).get("type", "")
+		if trigger_type == "game_start" and cond_type != "immediate":
+			continue
+		ongoing.append(inst)
 	var all_completed: Array = em.get_completed_events(st)
 	# Completed story/quest events now live in the Story panel — exclude them here
 	var completed: Array = []

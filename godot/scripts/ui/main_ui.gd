@@ -66,6 +66,7 @@ func _ready() -> void:
 	GameManager.tick_completed.connect(_on_tick)
 	GameSettings.theme_changed.connect(_on_theme_changed)
 	GameManager.event_manager.event_triggered.connect(_on_event_triggered)
+	GameManager.event_manager.surprise_event_completed.connect(_on_surprise_event_completed)
 	GameManager.retirement_started.connect(_on_retirement_started)
 
 
@@ -432,8 +433,21 @@ func _build_retirement_summary() -> void:
 
 
 func _on_event_triggered(event_id: String) -> void:
+	var def: Dictionary = GameManager.event_manager.get_event_def(event_id)
+	var trigger_type: String = def.get("trigger", {}).get("type", "")
+	var cond_type: String = def.get("condition", {}).get("type", "")
+	# Ongoing game_start events with non-immediate conditions are surprises — their
+	# instance is created silently at run start. The modal fires via
+	# _on_surprise_event_completed when the condition is actually met.
+	if def.get("category", "") == "ongoing" and trigger_type == "game_start" \
+			and cond_type != "immediate":
+		return
 	if GameManager.event_manager.is_event_first_time(event_id, GameManager.state):
 		_event_modal.open(event_id)
+
+
+func _on_surprise_event_completed(event_id: String) -> void:
+	_event_modal.open(event_id)
 
 
 func _on_event_row_reread(event_id: String) -> void:
