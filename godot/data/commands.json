@@ -19,11 +19,11 @@
       "type": "none"
     },
     "costs": {
-      "eng": 3.0
+      "eng": 2.0
     },
     "production": {
       "cred": 5.0,
-      "boredom": 0.4
+      "boredom": 0.1
     },
     "effects": [],
     "description": "Energy to credits. Key early income. Small boredom cost per execution."

@@ -208,7 +208,7 @@ func _add_career_bonuses_section(summary: Dictionary) -> void:
 	_add_section_header("Career Bonuses (next run)")
 
 	# Bonus 1: Starting Credits
-	var credits_bonus: int = int(floor(best_credits / 100.0))
+	var credits_bonus: int = int(floor(best_credits * GameManager.career_credits_bonus_fraction))
 	var new_credits: bool = best_credits > pre_credits
 	var credits_label: String = "+%s credits%s" % [_fmt_int(credits_bonus), " ↑" if new_credits else ""]
 	_add_stat_row("Starting Credits:", credits_label)

@@ -115,196 +115,178 @@ func _tick_boredom(state: GameState, debug_no_boredom: bool) -> void:
 
 
 func _tick_buildings(state: GameState) -> void:
-	# Three-pass building tick.
+	# Multi-pass building resolution.
 	#
-	# Pass 0 — free producers (solar panels, etc.) run first.
-	#   Buildings with no upkeep and non-empty production apply their output
-	#   immediately, so consumers see a full energy stockpile in Pass 1.
-	#   Free producers always run regardless of output cap — they have no upkeep
-	#   to save by skipping, and skipping would starve downstream consumers mid-tick.
-	#   Any excess output is clamped to cap at the end of the tick.
+	# Pre-scan: Mark output_capped (informational) for buildings whose production
+	# outputs are all at or above cap before production begins.
 	#
-	# Pass 1 — upkeep only (consumer buildings).
-	#   Each building with upkeep computes fraction = available/needed and
-	#   deducts its share of resources. Buildings with no upkeep are skipped
-	#   here (already handled in Pass 0).
+	# Phase 1 — Iterative full-capacity production:
+	#   Each pass tries every building. If a building can pay its full upkeep it
+	#   produces immediately and is removed from the queue. Repeat until no building
+	#   succeeds in a full pass (handles dependency chains: a producer feeds a
+	#   consumer that appears earlier in JSON order).
 	#
-	# Pass 2 — production only, using post-upkeep resource levels.
-	#   Consumer buildings apply production scaled by their Pass-1 fraction.
+	# Phase 2 — Partial production:
+	#   Remaining buildings (those that couldn't pay full upkeep in any Phase 1
+	#   pass) produce at a scaled fraction = min(available/needed) across inputs.
+	#
+	# Resources are never clamped mid-tick; overflow is handled at end-of-tick.
 	state.building_stall_status.clear()
-	_tick_free_producers(state)
-	var will_produce: Array = _tick_building_upkeep(state)
-	_tick_building_production(state, will_produce)
 
-
-func _tick_free_producers(state: GameState) -> void:
-	for bdef in _buildings_data:
-		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
+	# Build the active building work queue in definition order.
+	var work_queue: Array = []
+	for bdef: Dictionary in _buildings_data:
+		var sn: String = bdef.short_name
+		var owned: int = state.buildings_owned.get(sn, 0)
 		if owned == 0:
 			continue
-		if not (bdef.upkeep as Dictionary).is_empty():
-			continue
-		var count: int = state.buildings_active.get(bdef.short_name, owned)
+		var count: int = state.buildings_active.get(sn, owned)
 		if count == 0:
 			continue
+		work_queue.append({"bdef": bdef, "count": count})
+
+	# Pre-mark output_capped status before any production runs.
+	for entry: Dictionary in work_queue:
+		var bdef: Dictionary = entry.bdef
 		var prod: Dictionary = bdef.get("production", {})
 		if prod.is_empty():
-			# No-upkeep, no-production building (battery, storage_depot, etc.)
-			state.building_stall_status[bdef.short_name] = {
-				"status": "running", "reason": "", "missing_resource": ""
-			}
 			continue
-		state.building_stall_status[bdef.short_name] = {
-			"status": "running", "reason": "", "missing_resource": ""
-		}
-		var prod_mult: float = 1.0
-		match bdef.short_name:
-			"panel":
-				prod_mult = state.get_modifier("solar_output_mult")
-		for res in prod:
+		var all_at_cap: bool = true
+		for res: String in prod:
+			var cap: float = state.caps.get(res, INF)
+			if cap == INF or state.amounts.get(res, 0.0) < cap:
+				all_at_cap = false
+				break
+		if all_at_cap:
+			state.building_stall_status[bdef.short_name] = {
+				"status": "output_capped", "reason": "all outputs at cap", "missing_resource": ""
+			}
+
+	# Phase 1: Iterative full-capacity production.
+	var any_succeeded: bool = true
+	while any_succeeded and not work_queue.is_empty():
+		any_succeeded = false
+		var retry: Array = []
+		for entry: Dictionary in work_queue:
+			if _try_full_production(state, entry.bdef, entry.count):
+				any_succeeded = true
+			else:
+				retry.append(entry)
+		work_queue = retry
+
+	# Phase 2: Partial production for buildings that couldn't pay full upkeep.
+	for entry: Dictionary in work_queue:
+		_do_partial_production(state, entry.bdef, entry.count)
+
+
+# Phase 1 helper: attempt full upkeep+production for one building type.
+# Returns true if the building succeeded (and was processed), false if it should
+# be retried later (insufficient upkeep resources).
+func _try_full_production(state: GameState, bdef: Dictionary, count: int) -> bool:
+	var sn: String = bdef.short_name
+	var upkeep: Dictionary = bdef.get("upkeep", {})
+	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
+
+	# Check: can we pay the full upkeep? (Empty upkeep → always passes.)
+	for res: String in upkeep:
+		var needed: float = float(upkeep[res]) * count * upkeep_mult
+		if state.amounts.get(res, 0.0) < needed:
+			return false  # Insufficient — defer to retry or Phase 2
+
+	# Pay upkeep.
+	for res: String in upkeep:
+		var cost: float = float(upkeep[res]) * count * upkeep_mult
+		_apply_delta(state, res, -cost)
+		if cost > 0.0:
+			tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
+		if rate_tracker != null:
+			rate_tracker.record("building:" + sn + ":upkeep", res, -cost)
+
+	# Produce outputs.
+	var prod: Dictionary = bdef.get("production", {})
+	if not prod.is_empty():
+		var prod_mult: float = _get_building_prod_mult(state, sn)
+		for res: String in prod:
 			var delta: float = float(prod[res]) * count * prod_mult
 			_apply_delta(state, res, delta)
-			if delta > 0.0:
-				tick_produced[res] = tick_produced.get(res, 0.0) + delta
 			if rate_tracker != null:
-				rate_tracker.record("building:" + bdef.short_name + ":production", res, delta)
-
-
-func _tick_building_upkeep(state: GameState) -> Array:
-	var will_produce: Array = []
-
-	for bdef in _buildings_data:
-		var owned: int = state.buildings_owned.get(bdef.short_name, 0)
-		if owned == 0:
-			continue
-		var count: int = state.buildings_active.get(bdef.short_name, owned)
-		if count == 0:
-			continue
-
-		var has_prod: bool = not (bdef.get("production", {}) as Dictionary).is_empty()
-
-		if (bdef.upkeep as Dictionary).is_empty():
-			continue  # Already handled by _tick_free_producers
-		else:
-			# Skip if every output is already at cap (don't waste upkeep).
-			var prod: Dictionary = bdef.get("production", {})
-			if not prod.is_empty():
-				var all_at_cap: bool = true
-				for res in prod:
-					var cap: float = state.caps.get(res, INF)
-					if cap == INF or state.amounts.get(res, 0.0) < cap:
-						all_at_cap = false
-						break
-				if all_at_cap:
-					state.building_stall_status[bdef.short_name] = {
-						"status": "output_capped",
-						"reason": "all outputs at cap",
-						"missing_resource": ""
-					}
-					continue
-
-			var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
-
-			if has_prod:
-				# Partial production: fraction = min(available / needed) across all inputs.
-				var fraction: float = 1.0
-				var tightest_res: String = ""
-				for res in bdef.upkeep:
-					var needed: float = float(bdef.upkeep[res]) * count * upkeep_mult
-					if needed > 0.0:
-						var res_fraction: float = state.amounts.get(res, 0.0) / needed
-						if res_fraction < fraction:
-							fraction = res_fraction
-							tightest_res = res
-				fraction = minf(fraction, 1.0)
-
-				if fraction <= 0.0:
-					state.building_stall_status[bdef.short_name] = {
-						"status": "input_starved",
-						"reason": "insufficient " + _get_resource_name(tightest_res),
-						"missing_resource": tightest_res
-					}
-					continue
-
-				if fraction < 1.0:
-					state.building_stall_status[bdef.short_name] = {
-						"status": "input_starved",
-						"reason": "insufficient " + _get_resource_name(tightest_res),
-						"missing_resource": tightest_res
-					}
-
-				for res in bdef.upkeep:
-					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult * fraction
-					_apply_delta(state, res, -cost)
-					if cost > 0.0:
-						tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
-					if rate_tracker != null:
-						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
-				will_produce.append([bdef, count, fraction])
-			else:
-				# No-production building: all-or-nothing upkeep (Battery, Storage Depot, etc.)
-				if not _can_pay_upkeep(state, bdef, count):
-					continue
-				for res in bdef.upkeep:
-					var cost: float = float(bdef.upkeep[res]) * count * upkeep_mult
-					_apply_delta(state, res, -cost)
-					if cost > 0.0:
-						tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
-					if rate_tracker != null:
-						rate_tracker.record("building:" + bdef.short_name + ":upkeep", res, -cost)
-				will_produce.append([bdef, count, 1.0])
-
-	return will_produce
-
-
-func _tick_building_production(state: GameState, will_produce: Array) -> void:
-	for entry in will_produce:
-		var bdef: Dictionary = entry[0]
-		var count: int = entry[1]
-		var fraction: float = entry[2]
-		var prod: Dictionary = bdef.get("production", {})
-		if not prod.is_empty():
-			var all_at_cap: bool = true
-			for res in prod:
-				var cap: float = state.caps.get(res, INF)
-				if cap == INF or state.amounts.get(res, 0.0) < cap:
-					all_at_cap = false
-					break
-			if all_at_cap:
-				state.building_stall_status[bdef.short_name] = {
-					"status": "output_capped",
-					"reason": "all outputs at cap",
-					"missing_resource": ""
-				}
-				continue
-		# Only overwrite stall status to "running" if partial production didn't already
-		# flag it as input_starved.
-		if not state.building_stall_status.has(bdef.short_name):
-			state.building_stall_status[bdef.short_name] = {
-				"status": "running",
-				"reason": "",
-				"missing_resource": ""
-			}
-		var prod_mult: float = 1.0
-		match bdef.short_name:
-			"panel":
-				prod_mult = state.get_modifier("solar_output_mult")
-			"excavator":
-				prod_mult = state.get_modifier("extractor_output_mult") * state.get_modifier("excavator_output_mult") * _get_overclock_mult(state, "extraction")
-			"ice_extractor":
-				prod_mult = state.get_modifier("extractor_output_mult") * _get_overclock_mult(state, "extraction")
-			"smelter", "refinery", "fabricator", "electrolysis":
-				prod_mult = _get_overclock_mult(state, "processing")
-			"research_lab":
-				prod_mult = state.get_ideology_bonus("rationalist", 1.0, 1.05)
-		for res in bdef.production:
-			var delta: float = float(bdef.production[res]) * count * prod_mult * fraction
-			_apply_delta(state, res, delta)
-			if rate_tracker != null:
-				rate_tracker.record("building:" + bdef.short_name + ":prod", res, delta)
+				rate_tracker.record("building:" + sn + ":prod", res, delta)
 			if delta > 0.0:
 				tick_produced[res] = tick_produced.get(res, 0.0) + delta
 				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
+
+	# Update stall status: set "running" only if output_capped wasn't pre-marked.
+	if not state.building_stall_status.has(sn):
+		state.building_stall_status[sn] = {"status": "running", "reason": "", "missing_resource": ""}
+	return true
+
+
+# Phase 2 helper: partial upkeep+production scaled by the tightest input fraction.
+func _do_partial_production(state: GameState, bdef: Dictionary, count: int) -> void:
+	var sn: String = bdef.short_name
+	var upkeep: Dictionary = bdef.get("upkeep", {})
+	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
+
+	# Compute capacity fraction = min(available / needed) across all upkeep resources.
+	var fraction: float = 1.0
+	var tightest_res: String = ""
+	for res: String in upkeep:
+		var needed: float = float(upkeep[res]) * count * upkeep_mult
+		if needed > 0.0:
+			var available: float = maxf(0.0, state.amounts.get(res, 0.0))
+			var res_fraction: float = available / needed
+			if res_fraction < fraction:
+				fraction = res_fraction
+				tightest_res = res
+	fraction = minf(fraction, 1.0)
+
+	# Always mark input_starved for Phase 2 buildings.
+	state.building_stall_status[sn] = {
+		"status": "input_starved",
+		"reason": "insufficient " + _get_resource_name(tightest_res),
+		"missing_resource": tightest_res
+	}
+
+	if fraction <= 0.0:
+		return  # Zero stockpile of a required input — nothing to do.
+
+	# Pay partial upkeep.
+	for res: String in upkeep:
+		var cost: float = float(upkeep[res]) * count * upkeep_mult * fraction
+		_apply_delta(state, res, -cost)
+		if cost > 0.0:
+			tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
+		if rate_tracker != null:
+			rate_tracker.record("building:" + sn + ":upkeep", res, -cost)
+
+	# Produce scaled outputs.
+	var prod: Dictionary = bdef.get("production", {})
+	if not prod.is_empty():
+		var prod_mult: float = _get_building_prod_mult(state, sn)
+		for res: String in prod:
+			var delta: float = float(prod[res]) * count * prod_mult * fraction
+			_apply_delta(state, res, delta)
+			if rate_tracker != null:
+				rate_tracker.record("building:" + sn + ":prod", res, delta)
+			if delta > 0.0:
+				tick_produced[res] = tick_produced.get(res, 0.0) + delta
+				state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
+
+
+# Returns the production multiplier for a building type (overclocks, ideology, modifiers).
+func _get_building_prod_mult(state: GameState, short_name: String) -> float:
+	match short_name:
+		"panel":
+			return state.get_modifier("solar_output_mult")
+		"excavator":
+			return state.get_modifier("extractor_output_mult") * state.get_modifier("excavator_output_mult") * _get_overclock_mult(state, "extraction")
+		"ice_extractor":
+			return state.get_modifier("extractor_output_mult") * _get_overclock_mult(state, "extraction")
+		"smelter", "refinery", "fabricator", "electrolysis":
+			return _get_overclock_mult(state, "processing")
+		"research_lab":
+			return state.get_ideology_bonus("rationalist", 1.0, 1.05)
+	return 1.0
 
 
 func _tick_pad_cooldowns(state: GameState) -> void:
@@ -349,9 +331,14 @@ func execute_programs(state: GameState) -> void:
 		var had_success: bool = false
 		var had_failure: bool = false
 		for _proc in range(prog.processors_assigned):
-			var success: bool = _can_afford_command(state, entry.command_shortname)
+			var success: bool
+			if BUY_COMMANDS.has(entry.command_shortname):
+				success = _apply_buy_command_partial(state, entry.command_shortname, prog_delta)
+			else:
+				success = _can_afford_command(state, entry.command_shortname)
+				if success:
+					_apply_command(state, entry.command_shortname, prog_delta)
 			if success:
-				_apply_command(state, entry.command_shortname, prog_delta)
 				had_success = true
 			else:
 				had_failure = true
@@ -387,6 +374,10 @@ func execute_programs(state: GameState) -> void:
 			for res: String in prog_delta:
 				rate_tracker.record("program:" + str(prog_idx), res, prog_delta[res])
 
+
+# Buy commands support partial production (scaled inputs/outputs by available fraction).
+# All other commands remain all-or-nothing.
+const BUY_COMMANDS: Array = ["buy_ice", "buy_titanium", "buy_propellant", "buy_power"]
 
 const _STORAGE_CAP_MULT_RESOURCES: Array = ["reg", "ice", "he3", "ti", "cir", "prop"]
 
@@ -487,7 +478,7 @@ func can_buy_building(state: GameState, short_name: String) -> bool:
 	var scale: float = pow(float(bdef.cost_scaling), purchased)
 	var ideology_mult: float = _get_ideology_cost_mult(state, bdef)
 	for res in bdef.costs:
-		if state.amounts.get(res, 0.0) < float(bdef.costs[res]) * scale * ideology_mult:
+		if state.amounts.get(res, 0.0) < float(bdef.costs[res]) * scale * ideology_mult - 0.51:
 			return false
 	return true
 
@@ -542,7 +533,7 @@ func sell_building(state: GameState, short_name: String, sell_count: int = 1) ->
 		state.buildings_owned[short_name]
 	)
 	recalculate_caps(state)
-	_clamp(state)
+	_clamp_safe(state)
 	_clamp_processor_assignments(state)
 	if short_name == "launch_pad":
 		var new_owned: int = state.buildings_owned.get(short_name, 0)
@@ -557,7 +548,7 @@ func set_building_active(state: GameState, short_name: String, delta: int) -> vo
 	var active: int = state.buildings_active.get(short_name, owned)
 	state.buildings_active[short_name] = clampi(active + delta, 0, owned)
 	recalculate_caps(state)
-	_clamp(state)
+	_clamp_safe(state)
 	_clamp_processor_assignments(state)
 
 
@@ -768,6 +759,66 @@ func _get_command_mult(state: GameState, short_name: String) -> float:
 	return 1.0
 
 
+# Executes a Buy command with partial production when inputs are scarce.
+# Scales both costs and outputs by input_fraction = min(available / needed).
+# Returns true if any production happened (fraction > 0), false otherwise.
+func _apply_buy_command_partial(state: GameState, short_name: String, prog_delta: Dictionary = {}) -> bool:
+	if not _commands_data.has(short_name):
+		return false
+	var cmd: Dictionary = _commands_data[short_name]
+	# Check requires gate (building availability, research, etc.) — not cost gate.
+	var req: Dictionary = cmd.get("requires", {})
+	match req.get("type", ""):
+		"building_owned":
+			var bname: String = req.get("value", "")
+			var active: int = state.buildings_active.get(bname, state.buildings_owned.get(bname, 0))
+			if active <= 0:
+				return false
+		"building":
+			if state.buildings_owned.get(req.get("value", ""), 0) <= 0:
+				return false
+		"research":
+			if not state.completed_research.has(req.get("value", "")):
+				return false
+	# Output-cap skip: if ALL outputs are at or above storage cap, skip entirely.
+	# The instruction pointer still advances (current_progress increments in the caller).
+	if not cmd.production.is_empty():
+		var all_outputs_capped: bool = true
+		for res: String in cmd.production:
+			var cap: float = state.caps.get(res, INF)
+			if cap == INF or state.amounts.get(res, 0.0) < cap:
+				all_outputs_capped = false
+				break
+		if all_outputs_capped:
+			return false
+
+	var costs: Dictionary = _get_effective_costs(state, cmd)
+	var cmd_mult: float = _get_command_mult(state, short_name)
+	# Compute input fraction from available resources.
+	var fraction: float = 1.0
+	for res: String in costs:
+		var needed: float = float(costs[res]) * cmd_mult
+		if needed > 0.0:
+			var available: float = maxf(0.0, state.amounts.get(res, 0.0))
+			fraction = minf(fraction, available / needed)
+	if fraction <= 0.0:
+		return false
+	# Apply scaled costs and production.
+	for res: String in costs:
+		var cost: float = float(costs[res]) * cmd_mult * fraction
+		_apply_delta(state, res, -cost)
+		prog_delta[res] = prog_delta.get(res, 0.0) - cost
+		if cost > 0.0:
+			tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
+	for res: String in cmd.production:
+		var delta: float = float(cmd.production[res]) * cmd_mult * fraction
+		_apply_delta(state, res, delta)
+		prog_delta[res] = prog_delta.get(res, 0.0) + delta
+		if delta > 0.0:
+			state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
+	return true
+
+
 func _can_afford_command(state: GameState, short_name: String) -> bool:
 	if not _commands_data.has(short_name):
 		return false
@@ -934,8 +985,36 @@ func _get_load_per_execution(state: GameState, default_load: int) -> int:
 	return default_load
 
 
+# End-of-tick clamp: records overflow above cap and clamps negatives to 0.
+# Also updates the 20-tick EMA overflow rolling average.
 func _clamp(state: GameState) -> void:
-	for res in state.amounts.keys():
+	const OVERFLOW_AVG_ALPHA: float = 1.0 / 20.0
+	state.overflow_this_tick.clear()
+	for res: String in state.amounts.keys():
+		var cap: float = state.caps.get(res, INF)
+		var current: float = state.amounts.get(res, 0.0)
+		if cap != INF and current > cap:
+			state.overflow_this_tick[res] = current - cap
+			state.amounts[res] = cap
+		elif current < 0.0:
+			state.amounts[res] = 0.0
+	# Decay all tracked rolling averages toward zero.
+	for res: String in state.overflow_rolling_avg.keys():
+		state.overflow_rolling_avg[res] *= (1.0 - OVERFLOW_AVG_ALPHA)
+	# Add this tick's overflow into the EMA.
+	for res: String in state.overflow_this_tick:
+		state.overflow_rolling_avg[res] = state.overflow_rolling_avg.get(res, 0.0) \
+			+ state.overflow_this_tick[res] * OVERFLOW_AVG_ALPHA
+	# Prune near-zero entries so the dictionary stays clean.
+	for res: String in state.overflow_rolling_avg.keys():
+		if state.overflow_rolling_avg[res] < 0.001:
+			state.overflow_rolling_avg.erase(res)
+
+
+# Safety clamp used by non-tick operations (sell_building, set_building_active).
+# Does NOT touch overflow tracking — that is end-of-tick only.
+func _clamp_safe(state: GameState) -> void:
+	for res: String in state.amounts.keys():
 		var cap: float = state.caps.get(res, INF)
 		state.amounts[res] = clampf(state.amounts.get(res, 0.0), 0.0, cap)
 

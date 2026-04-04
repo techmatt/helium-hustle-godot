@@ -226,8 +226,9 @@ func _refresh_bonuses(st: GameState, career: CareerState) -> void:
 	var run_peak: float = GameManager.get_run_peak_power()
 
 	# --- Starting credits ---
-	var proj_credits: int = int(floor(maxf(career.best_run_credits, this_credits) / 100.0))
-	var cur_credits: int  = int(floor(career.best_run_credits / 100.0))
+	var frac: float = GameManager.career_credits_bonus_fraction
+	var proj_credits: int = int(floor(maxf(career.best_run_credits, this_credits) * frac))
+	var cur_credits: int  = int(floor(career.best_run_credits * frac))
 	var delta_credits: int = proj_credits - cur_credits
 	if proj_credits > 0:
 		_bonus_credits_val.text = "+%d credits" % proj_credits

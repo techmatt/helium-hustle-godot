@@ -1,4 +1,5 @@
 {
+  "career_credits_bonus_fraction": 0.02,
   "starting_resources": {
     "eng": 100,
     "reg": 0,

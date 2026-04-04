@@ -107,6 +107,15 @@ func log_snapshot(state: GameState, demand_system: DemandSystem) -> void:
 	if not state.completed_research.is_empty():
 		data["research"] = state.completed_research.duplicate()
 
+	# Overflow: only resources with non-zero rolling average
+	var overflow_dict: Dictionary = {}
+	for res: String in state.overflow_rolling_avg:
+		var oval: float = state.overflow_rolling_avg[res]
+		if oval >= 0.5:
+			overflow_dict[res] = roundi(oval)
+	if not overflow_dict.is_empty():
+		data["overflow"] = overflow_dict
+
 	log_event("snapshot", data)
 
 

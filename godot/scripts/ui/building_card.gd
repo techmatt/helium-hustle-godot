@@ -155,7 +155,7 @@ func refresh() -> void:
 		else:
 			var amount: float = scaled.get(res, 0.0)
 			lbl.text = "%.0f" % amount
-			var ok: bool = st.amounts.get(res, 0.0) >= amount
+			var ok: bool = st.amounts.get(res, 0.0) >= amount - 0.51
 			lbl.add_theme_color_override("font_color", ok_color if ok else _c("negative"))
 
 

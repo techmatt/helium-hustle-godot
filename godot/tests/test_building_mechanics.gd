@@ -66,31 +66,39 @@ func _test_building_production() -> void:
 func _test_production_gated_upkeep() -> void:
 	print("--- Production Gated Upkeep ---")
 
-	# Solar panel is a free producer (no upkeep). It always runs regardless of
-	# output cap — skipping it saves nothing and would starve downstream consumers.
-	# Excess output is clamped at end of tick.
+	# Solar panel (no upkeep, produces eng). When eng is at cap, the building is
+	# marked output_capped (informational). It still produces; overflow is clamped
+	# at end of tick. Status is "output_capped", not "running".
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "panel")
-	state.amounts["eng"] = 100.0  # at eng cap
+	var eng_cap: float = state.caps.get("eng", 100.0)
+	state.amounts["eng"] = eng_cap  # at eng cap
 	sim.tick(state, true)
-	_assert_stall_status(state, "panel", "running",
-		"gated_upkeep: solar panel runs (status=running) even when eng is at cap")
+	_assert_stall_status(state, "panel", "output_capped",
+		"gated_upkeep: solar panel is output_capped when eng is at cap (informational)")
+	# overflow_this_tick should record eng excess
+	_assert_true(state.overflow_this_tick.get("eng", 0.0) > 0.0,
+		"gated_upkeep: solar panel overflow recorded when eng at cap")
 
-	# Excavator: when reg is at cap, the output-capped check fires in Pass 1
-	# before upkeep is paid — so upkeep is NOT deducted and production is skipped.
+	# Excavator: output_capped is informational — upkeep IS paid and reg IS produced.
+	# Excess reg is clamped at end of tick and recorded as overflow.
+	var exc_bdef := TF.get_building_def("excavator")
+	var exc_upkeep_eng: float = float(exc_bdef.get("upkeep", {}).get("eng", 0.0))
+	var exc_prod_reg: float = float(exc_bdef.get("production", {}).get("reg", 0.0))
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
 	state.amounts["eng"] = 10.0
 	var reg_cap: float = state.caps.get("reg", 0.0)
 	state.amounts["reg"] = reg_cap  # at reg cap
-	var eng_before: float = state.amounts["eng"]
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("eng", 0.0), eng_before, 0.001,
-		"gated_upkeep: excavator does not pay eng upkeep when reg output is at cap")
+	_assert_approx(state.amounts.get("eng", 0.0), 10.0 - exc_upkeep_eng, 0.001,
+		"gated_upkeep: excavator pays eng upkeep even when reg is at cap")
 	_assert_approx(state.amounts.get("reg", 0.0), reg_cap, 0.001,
-		"gated_upkeep: excavator does not produce reg when output is at cap")
+		"gated_upkeep: reg stays at cap after end-of-tick clamp")
+	_assert_approx(state.overflow_this_tick.get("reg", 0.0), exc_prod_reg, 0.001,
+		"gated_upkeep: overflow_this_tick records reg overflow equal to production")
 	_assert_stall_status(state, "excavator", "output_capped",
 		"gated_upkeep: excavator stall status is output_capped when reg at cap")
 

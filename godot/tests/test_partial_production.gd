@@ -14,48 +14,47 @@ func run(_scene_root: Node) -> void:
 	_test_processing_order_priority()
 
 
-# 1. Basic partial production
+# 1. Basic partial production — multi-pass: excavator produces reg before smelter checks
 func _test_basic_partial_production() -> void:
-	print("--- Partial Production: Basic ---")
+	print("--- Partial Production: Basic (multi-pass) ---")
 
-	# 1 Excavator produces 2 reg/tick. 1 Smelter needs 2 reg + 3 eng/tick.
-	# Start: reg=1 (half of what Smelter needs), plenty of eng.
-	# Excavator runs first → reg: 1 + 2 = 3. Smelter sees 3 reg, needs 2 → fraction=1.0?
-	# Wait — upkeep is Pass 1, Excavator is Pass 1 too. Let's think again.
-	# Excavator has upkeep (eng) so it's in Pass 1. Smelter has upkeep too.
-	# Both are processed in JSON row order. Excavator runs first.
-	# But upkeep (Pass 1) and production (Pass 2) are separate.
-	# Pass 1: Excavator pays 2 eng upkeep. Smelter checks reg fraction: reg=1, needs 2 → fraction=0.5.
-	# Pass 2: Excavator produces 2 reg. Smelter produces 0.5 ti.
-	# Post-tick: reg = 1 - 1(smelter) + 2(excav) = 2.
-
+	# Multi-pass model: in Phase 1 pass 1, excavator pays its eng upkeep AND produces
+	# reg in a single atomic step. Then smelter sees reg = initial + exc_prod_reg and
+	# can run at full capacity. So smelter should NOT be input_starved here.
 	var exc_bdef := TF.get_building_def("excavator")
 	var sml_bdef := TF.get_building_def("smelter")
 	var sml_upkeep_reg: float = float(sml_bdef.get("upkeep", {}).get("reg", 0.0))
+	var sml_upkeep_eng: float = float(sml_bdef.get("upkeep", {}).get("eng", 0.0))
 	var sml_prod_ti: float = float(sml_bdef.get("production", {}).get("ti", 0.0))
+	var exc_upkeep_eng: float = float(exc_bdef.get("upkeep", {}).get("eng", 0.0))
 	var exc_prod_reg: float = float(exc_bdef.get("production", {}).get("reg", 0.0))
 
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
 	TF.add_building(state, "smelter")
-	var reg_start: float = sml_upkeep_reg * 0.5  # half what smelter needs
+	# Start with half of smelter's reg need, but excavator will produce enough to cover.
+	var reg_start: float = sml_upkeep_reg * 0.5
 	state.amounts["reg"] = reg_start
 	state.amounts["ti"] = 0.0
 	state.amounts["eng"] = 100.0
 	sim.tick(state, true)
 
-	var expected_fraction: float = reg_start / sml_upkeep_reg  # 0.5
-	# Pass 1: smelter pays reg_start * fraction (= reg_start). Pass 2: excavator adds exc_prod_reg.
-	var expected_reg: float = reg_start - (sml_upkeep_reg * expected_fraction) + exc_prod_reg
-	var expected_ti: float = sml_prod_ti * expected_fraction
+	# Phase 1 pass 1: excavator pays exc_upkeep_eng, produces exc_prod_reg.
+	# reg is now reg_start + exc_prod_reg >= sml_upkeep_reg → smelter runs at full.
+	var expected_reg: float = reg_start + exc_prod_reg - sml_upkeep_reg
+	var expected_eng: float = 100.0 - exc_upkeep_eng - sml_upkeep_eng
 
-	_assert_approx(state.amounts.get("ti", 0.0), expected_ti, 0.001,
-		"partial_production: smelter produces titanium scaled by fraction")
+	_assert_approx(state.amounts.get("ti", 0.0), sml_prod_ti, 0.001,
+		"partial_production multi-pass: smelter runs at FULL capacity after excavator produces reg")
 	_assert_approx(state.amounts.get("reg", 0.0), expected_reg, 0.001,
-		"partial_production: reg = start - smelter_fraction_upkeep + excavator_prod")
-	_assert_stall_status(state, "smelter", "input_starved",
-		"partial_production: smelter flagged input_starved when running at fraction < 1.0")
+		"partial_production multi-pass: reg = start + exc_prod - sml_upkeep")
+	_assert_approx(state.amounts.get("eng", 0.0), expected_eng, 0.001,
+		"partial_production multi-pass: eng = start - exc_upkeep - sml_upkeep")
+	_assert_stall_status(state, "excavator", "running",
+		"partial_production multi-pass: excavator not stalled")
+	_assert_stall_status(state, "smelter", "running",
+		"partial_production multi-pass: smelter runs at full capacity, not input_starved")
 
 
 # 2. Steady-state convergence
@@ -168,52 +167,68 @@ func _test_multi_resource_bottleneck() -> void:
 		"partial_production bottleneck: smelter flagged input_starved")
 
 
-# 6. Output-capped buildings skip entirely (no partial production)
+# 6. Output-capped buildings still produce; overflow tracked at end of tick
 func _test_output_capped_unaffected() -> void:
-	print("--- Partial Production: Output-Capped Unaffected ---")
+	print("--- Partial Production: Output-Capped Still Produces ---")
 
+	# output_capped is now informational only. Excavator still pays upkeep and produces
+	# even when reg is at cap. The excess is clamped and recorded as overflow_this_tick.
 	var exc_bdef := TF.get_building_def("excavator")
 	var exc_upkeep_eng: float = float(exc_bdef.get("upkeep", {}).get("eng", 0.0))
+	var exc_prod_reg: float = float(exc_bdef.get("production", {}).get("reg", 0.0))
 
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "excavator")
 	state.amounts["eng"] = exc_upkeep_eng * 5.0
-	state.amounts["reg"] = state.caps.get("reg", 50.0)  # at storage cap
+	var reg_cap: float = state.caps.get("reg", 50.0)
+	state.amounts["reg"] = reg_cap  # at storage cap
 	var eng_before: float = state.amounts["eng"]
 	sim.tick(state, true)
 
-	_assert_approx(state.amounts.get("eng", 0.0), eng_before, 0.001,
-		"partial_production output_capped: no upkeep paid when output at cap")
+	# Upkeep IS paid (building still runs)
+	_assert_approx(state.amounts.get("eng", 0.0), eng_before - exc_upkeep_eng, 0.001,
+		"partial_production output_capped: upkeep IS paid even when output at cap")
+	# reg clamped back to cap after overflow
+	_assert_approx(state.amounts.get("reg", 0.0), reg_cap, 0.001,
+		"partial_production output_capped: reg stays at cap after clamp")
+	# overflow tracked
+	_assert_true(state.overflow_this_tick.get("reg", 0.0) > 0.0,
+		"partial_production output_capped: overflow_this_tick records excess reg")
+	_assert_approx(state.overflow_this_tick.get("reg", 0.0), exc_prod_reg, 0.001,
+		"partial_production output_capped: overflow equals exactly the production amount")
 	_assert_stall_status(state, "excavator", "output_capped",
-		"partial_production output_capped: excavator flagged output_capped, not input_starved")
+		"partial_production output_capped: excavator flagged output_capped (informational)")
 
 
-# 7. No-production buildings pay full upkeep all-or-nothing
+# 7. No-production buildings do partial upkeep (not all-or-nothing skip)
 func _test_no_production_building_unaffected() -> void:
 	print("--- Partial Production: No-Production Building ---")
 
 	# Data center: upkeep eng, no production outputs.
-	# Give partial eng. It should skip entirely (not partial).
+	# With multi-pass, data_center goes to Phase 2 when it can't pay full upkeep.
+	# Phase 2: pays fraction * upkeep, produces nothing, marked input_starved.
 	var dc_bdef := TF.get_building_def("data_center")
 	var dc_upkeep_eng: float = float(dc_bdef.get("upkeep", {}).get("eng", 0.0))
 
-	# Case A: insufficient eng → skip (no upkeep paid)
+	# Case A: insufficient eng → partial upkeep paid (fraction = 0.5)
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state_isolated(sim)
 	TF.add_building(state, "data_center")
-	state.amounts["eng"] = dc_upkeep_eng * 0.5  # half needed
-	var eng_before: float = state.amounts["eng"]
+	var eng_partial: float = dc_upkeep_eng * 0.5  # half needed
+	state.amounts["eng"] = eng_partial
 	sim.tick(state, true)
-	_assert_approx(state.amounts.get("eng", 0.0), eng_before, 0.001,
-		"partial_production no-prod: data_center skips entirely when eng < upkeep (all-or-nothing)")
+	_assert_approx(state.amounts.get("eng", 0.0), 0.0, 0.001,
+		"partial_production no-prod: data_center pays partial upkeep (all available eng consumed)")
+	_assert_stall_status(state, "data_center", "input_starved",
+		"partial_production no-prod: data_center flagged input_starved when eng < upkeep")
 
 	# Case B: sufficient eng → pays full upkeep
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state_isolated(sim)
 	TF.add_building(state, "data_center")
 	state.amounts["eng"] = dc_upkeep_eng * 5.0
-	eng_before = state.amounts["eng"]
+	var eng_before: float = state.amounts["eng"]
 	sim.tick(state, true)
 	_assert_approx(state.amounts.get("eng", 0.0), eng_before - dc_upkeep_eng, 0.001,
 		"partial_production no-prod: data_center pays full upkeep when eng sufficient")

@@ -162,6 +162,10 @@ var completed_projects_this_run: Array[String] = []
 # Modifier framework — reconstructed from completed projects on load/run-start
 var active_modifiers: Dictionary = {}           # { modifier_key: float }
 
+# Overflow tracking — transient, not saved/loaded (repopulates each tick)
+var overflow_this_tick: Dictionary = {}         # resource_id -> float (excess above cap this tick)
+var overflow_rolling_avg: Dictionary = {}       # resource_id -> float (20-tick EMA of overflow)
+
 func get_modifier(key: String, default_value: float = 1.0) -> float:
 	return active_modifiers.get(key, default_value)
 

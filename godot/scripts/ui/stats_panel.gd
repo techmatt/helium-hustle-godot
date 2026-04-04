@@ -272,6 +272,11 @@ func _refresh_card(resource_id: String, rate_tracker: ResourceRateTracker,
 		body.add_child(_make_stall_row(active, _get_building_display_name(sn, buildings_data),
 				stall.get("status", ""), stall.get("reason", "")))
 
+	# Overflow: show when the rolling average is non-trivial (resource is being wasted)
+	var overflow_avg: float = state.overflow_rolling_avg.get(resource_id, 0.0)
+	if overflow_avg > 0.005:
+		body.add_child(_make_overflow_row(overflow_avg))
+
 	body.add_child(HSeparator.new())
 	body.add_child(_make_rate_row("Net", net, true))
 
@@ -295,6 +300,30 @@ func _make_rate_row(label_text: String, value: float, bold: bool = false) -> HBo
 	val_lbl.add_theme_font_override("font", _font_e2s)
 	val_lbl.add_theme_font_size_override("font_size", 16)
 	val_lbl.add_theme_color_override("font_color", _rate_color(value))
+	row.add_child(val_lbl)
+
+	return row
+
+
+func _make_overflow_row(overflow_avg: float) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	var name_lbl := Label.new()
+	name_lbl.text = "Overflow"
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.clip_text = true
+	name_lbl.add_theme_font_override("font", _font_e2r)
+	name_lbl.add_theme_font_size_override("font_size", 16)
+	row.add_child(name_lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = _fmt_rate(-overflow_avg)  # negative sign = wasted production
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.custom_minimum_size = Vector2(64, 0)
+	val_lbl.add_theme_font_override("font", _font_e2s)
+	val_lbl.add_theme_font_size_override("font_size", 16)
+	val_lbl.add_theme_color_override("font_color", Color(0.85, 0.55, 0.05))  # orange
 	row.add_child(val_lbl)
 
 	return row

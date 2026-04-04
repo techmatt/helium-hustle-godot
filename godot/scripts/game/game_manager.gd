@@ -46,6 +46,8 @@ signal retirement_started(summary_data: Dictionary)
 signal project_completed_notification(project_name: String)
 signal achievement_unlocked(achievement_id: String)
 
+var career_credits_bonus_fraction: float = 0.02
+
 var _timer: Timer
 var _autosave_timer: Timer
 var _game_config: Dictionary
@@ -60,6 +62,7 @@ func _ready() -> void:
 	var resources_data: Array = _load_json("res://data/resources.json")
 	_buildings_data = _load_json("res://data/buildings.json")
 	_game_config = _load_json("res://data/game_config.json")
+	career_credits_bonus_fraction = float(_game_config.get("career_credits_bonus_fraction", 0.02))
 	_commands_data = _load_json("res://data/commands.json")
 	_research_data = _load_json("res://data/research.json")
 	var events_data: Array = _load_json("res://data/events.json")
@@ -644,8 +647,8 @@ func start_new_run() -> void:
 			var starting_score: float = GameState.score_for_rank(starting_rank)
 			state.ideology_values[axis] = starting_score
 
-	# Step 5: Starting credits bonus — floor(best_run_credits / 100)
-	var credits_bonus: float = floor(career.best_run_credits / 100.0)
+	# Step 5: Starting credits bonus — fraction of best run credits (see game_config.json)
+	var credits_bonus: float = floor(career.best_run_credits * career_credits_bonus_fraction)
 	if credits_bonus > 0.0:
 		state.amounts["cred"] = state.amounts.get("cred", 0.0) + credits_bonus
 

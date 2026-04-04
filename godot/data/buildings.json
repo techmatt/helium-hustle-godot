@@ -36,7 +36,7 @@
       "cred": 35.0
     },
     "production": {
-      "reg": 2.0
+      "reg": 1.0
     },
     "upkeep": {
       "eng": 2.0
@@ -84,7 +84,7 @@
       "reg": 20.0
     },
     "production": {
-      "ti": 1.0
+      "ti": 0.5
     },
     "upkeep": {
       "eng": 3.0,

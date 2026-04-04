@@ -39,6 +39,12 @@ const HIDDEN_NAV_PANELS: Dictionary = {
 	"ideologies":  "Ideologies",
 }
 
+# Nav buttons gated on building ownership (this run OR career lifetime).
+const BUILDING_GATED_NAV_PANELS: Dictionary = {
+	"launch_pad":   "Launch Pads",
+	"research_lab": "Research",
+}
+
 const SPEEDS: Array = ["||", "1x", "3x", "10x", "50x", "200x"]
 
 const TRADEABLE_DISPLAY: Dictionary = {
@@ -130,7 +136,11 @@ func _build_nav_grid() -> void:
 		_nav_buttons[item[0]] = btn
 		for panel_id: String in HIDDEN_NAV_PANELS:
 			if HIDDEN_NAV_PANELS[panel_id] == item[0]:
-				btn.visible = unlocked_panels.has(panel_id)
+				btn.visible = GameSettings.show_all_cards or unlocked_panels.has(panel_id)
+				break
+		for bsn: String in BUILDING_GATED_NAV_PANELS:
+			if BUILDING_GATED_NAV_PANELS[bsn] == item[0]:
+				btn.visible = _is_building_gated_visible(bsn)
 				break
 
 
@@ -218,7 +228,20 @@ func update_nav_visibility() -> void:
 	for panel_id: String in HIDDEN_NAV_PANELS:
 		var btn_label: String = HIDDEN_NAV_PANELS[panel_id]
 		if _nav_buttons.has(btn_label):
-			_nav_buttons[btn_label].visible = unlocked.has(panel_id)
+			_nav_buttons[btn_label].visible = GameSettings.show_all_cards or unlocked.has(panel_id)
+	for bsn: String in BUILDING_GATED_NAV_PANELS:
+		var btn_label: String = BUILDING_GATED_NAV_PANELS[bsn]
+		if _nav_buttons.has(btn_label):
+			_nav_buttons[btn_label].visible = _is_building_gated_visible(bsn)
+
+
+func _is_building_gated_visible(building_short_name: String) -> bool:
+	if GameSettings.show_all_cards:
+		return true
+	var st: GameState = GameManager.state
+	if st.buildings_owned.get(building_short_name, 0) > 0:
+		return true
+	return GameManager.career.lifetime_owned_building_ids.has(building_short_name)
 
 
 # ── Speed section ─────────────────────────────────────────────────────────────
@@ -487,14 +510,14 @@ func _build_ideology_section() -> void:
 
 		_ideology_axis_rows[axis] = {"rank_lbl": rank_lbl, "rate_lbl": rate_lbl, "prog_lbl": prog_lbl}
 
-	_ideology_section.visible = GameManager.state.unlocked_nav_panels.has("ideologies")
+	_ideology_section.visible = GameSettings.show_all_cards or GameManager.state.unlocked_nav_panels.has("ideologies")
 
 
 func update_ideology_display() -> void:
 	if _ideology_section == null or not is_instance_valid(_ideology_section):
 		return
 	var st: GameState = GameManager.state
-	var unlocked: bool = st.unlocked_nav_panels.has("ideologies")
+	var unlocked: bool = GameSettings.show_all_cards or st.unlocked_nav_panels.has("ideologies")
 	_ideology_section.visible = unlocked
 	if not unlocked:
 		return

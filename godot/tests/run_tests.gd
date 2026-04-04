@@ -23,6 +23,7 @@ const _SUITES: Array = [
 	preload("res://tests/test_passive_effects.gd"),
 	preload("res://tests/test_progressive_disclosure.gd"),
 	preload("res://tests/test_partial_production.gd"),
+	preload("res://tests/test_overflow_tracking.gd"),
 	preload("res://tests/test_research_visibility.gd"),
 	preload("res://tests/test_achievements.gd"),
 	preload("res://tests/test_career_bonuses.gd"),
