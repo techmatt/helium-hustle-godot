@@ -148,7 +148,7 @@ func _add_section_header(text: String) -> void:
 	var lbl := Label.new()
 	lbl.text = text.to_upper()
 	lbl.add_theme_font_override("font", _font_exo2_semibold)
-	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", Color(0.55, 0.65, 0.80) if GameSettings.is_dark_mode else Color(0.17, 0.24, 0.31))
 	_content_vbox.add_child(lbl)
 
@@ -160,14 +160,14 @@ func _add_stat_row(label_text: String, value_text: String) -> void:
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 16)
 	lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85) if GameSettings.is_dark_mode else Color(0.2, 0.2, 0.2))
 	row.add_child(lbl)
 	var val := Label.new()
 	val.text = value_text
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.add_theme_font_override("font", _font_exo2_semibold)
-	val.add_theme_font_size_override("font_size", 14)
+	val.add_theme_font_size_override("font_size", 16)
 	val.add_theme_color_override("font_color", Color.WHITE if GameSettings.is_dark_mode else Color(0.1, 0.1, 0.1))
 	row.add_child(val)
 
@@ -176,7 +176,7 @@ func _add_bullet(text: String) -> void:
 	var lbl := Label.new()
 	lbl.text = "• " + text
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_font_size_override("font_size", 15)
 	lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.80) if GameSettings.is_dark_mode else Color(0.3, 0.3, 0.3))
 	_content_vbox.add_child(lbl)
 
@@ -267,7 +267,7 @@ func _add_indent_note(text: String) -> void:
 	var lbl := Label.new()
 	lbl.text = "    (" + text + ")"
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", Color(0.60, 0.60, 0.65) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.45))
 	_content_vbox.add_child(lbl)
 

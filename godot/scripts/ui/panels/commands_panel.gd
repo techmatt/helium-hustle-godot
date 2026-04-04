@@ -229,7 +229,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 			var hdr := Label.new()
 			hdr.text = "Costs:"
 			hdr.add_theme_font_override("font", _font_e2r)
-			hdr.add_theme_font_size_override("font_size", 14)
+			hdr.add_theme_font_size_override("font_size", 16)
 			hdr.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 			col.add_child(hdr)
 			for res: String in costs:
@@ -243,7 +243,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 			var hdr := Label.new()
 			hdr.text = "Produces:"
 			hdr.add_theme_font_override("font", _font_e2r)
-			hdr.add_theme_font_size_override("font_size", 14)
+			hdr.add_theme_font_size_override("font_size", 16)
 			hdr.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 			col.add_child(hdr)
 			for res: String in production:
@@ -256,7 +256,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 			var lbl := Label.new()
 			lbl.text = text
 			lbl.add_theme_font_override("font", _font_e2r)
-			lbl.add_theme_font_size_override("font_size", 14)
+			lbl.add_theme_font_size_override("font_size", 16)
 			lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			vbox.add_child(lbl)
@@ -273,7 +273,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 			var ai_lbl := Label.new()
 			ai_lbl.text = "+%.1f boredom (AI Consciousness Act)" % ai_extra
 			ai_lbl.add_theme_font_override("font", _font_e2r)
-			ai_lbl.add_theme_font_size_override("font_size", 14)
+			ai_lbl.add_theme_font_size_override("font_size", 16)
 			ai_lbl.add_theme_color_override("font_color", UIPalette.p("text_negative"))
 			ai_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			vbox.add_child(ai_lbl)
@@ -284,7 +284,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 		var lbl := Label.new()
 		lbl.text = req_text
 		lbl.add_theme_font_override("font", _font_e2r)
-		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_font_size_override("font_size", 16)
 		lbl.add_theme_color_override("font_color", UIPalette.p("text_requires"))
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		vbox.add_child(lbl)
@@ -317,13 +317,13 @@ func _make_resource_line(res: String, amount: float, color: Color) -> HBoxContai
 	name_lbl.text = meta[0]
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.add_theme_font_override("font", _font_e2r)
-	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(name_lbl)
 
 	var amt_lbl := Label.new()
 	amt_lbl.text = ("%d" % int(amount)) if amount == int(amount) else ("%.1f" % amount)
 	amt_lbl.add_theme_font_override("font", _font_e2s)
-	amt_lbl.add_theme_font_size_override("font_size", 14)
+	amt_lbl.add_theme_font_size_override("font_size", 16)
 	amt_lbl.add_theme_color_override("font_color", color)
 	row.add_child(amt_lbl)
 

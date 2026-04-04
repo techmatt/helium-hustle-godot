@@ -196,7 +196,7 @@ func _load_fonts() -> void:
 func _setup_theme() -> void:
 	var t := Theme.new()
 	t.default_font = _font_exo2_regular
-	t.default_font_size = 13
+	t.default_font_size = 15
 	if not GameSettings.is_dark_mode:
 		var text_dark := Color(0.102, 0.102, 0.102)
 		t.set_color("font_color", "Label", text_dark)
@@ -299,7 +299,7 @@ func _setup_status_bar() -> void:
 	_uptime_label = Label.new()
 	_uptime_label.text = "Day 0"
 	_uptime_label.add_theme_font_override("font", _font_exo2_semibold)
-	_uptime_label.add_theme_font_size_override("font_size", 13)
+	_uptime_label.add_theme_font_size_override("font_size", 15)
 	_uptime_label.custom_minimum_size.x = 60
 	hbox.add_child(_uptime_label)
 
@@ -313,7 +313,7 @@ func _setup_status_bar() -> void:
 	var bd_lbl := Label.new()
 	bd_lbl.text = "Boredom"
 	bd_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	bd_lbl.add_theme_font_size_override("font_size", 13)
+	bd_lbl.add_theme_font_size_override("font_size", 15)
 	boredom_hbox.add_child(bd_lbl)
 
 	var bd := _make_status_bar_bar(Color(0.180, 0.490, 0.196))
@@ -325,7 +325,7 @@ func _setup_status_bar() -> void:
 	_boredom_rate_lbl = Label.new()
 	_boredom_rate_lbl.text = "0/s"
 	_boredom_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_boredom_rate_lbl.add_theme_font_size_override("font_size", 12)
+	_boredom_rate_lbl.add_theme_font_size_override("font_size", 14)
 	_boredom_rate_lbl.custom_minimum_size.x = 90
 	boredom_hbox.add_child(_boredom_rate_lbl)
 
@@ -339,7 +339,7 @@ func _setup_status_bar() -> void:
 	var en_lbl := Label.new()
 	en_lbl.text = "Energy"
 	en_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	en_lbl.add_theme_font_size_override("font_size", 13)
+	en_lbl.add_theme_font_size_override("font_size", 15)
 	energy_hbox.add_child(en_lbl)
 
 	var en := _make_status_bar_bar(Color(0.082, 0.396, 0.753))
@@ -351,7 +351,7 @@ func _setup_status_bar() -> void:
 	_energy_rate_lbl = Label.new()
 	_energy_rate_lbl.text = "0/s"
 	_energy_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_energy_rate_lbl.add_theme_font_size_override("font_size", 12)
+	_energy_rate_lbl.add_theme_font_size_override("font_size", 14)
 	_energy_rate_lbl.custom_minimum_size.x = 72
 	energy_hbox.add_child(_energy_rate_lbl)
 

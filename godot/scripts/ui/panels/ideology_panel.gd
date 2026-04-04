@@ -158,7 +158,7 @@ func _add_axis_section(st: GameState, axis: String) -> void:
 	bar_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bar_lbl.text = _bar_text(value, rank)
 	bar_lbl.add_theme_font_override("font", _font_e2s)
-	bar_lbl.add_theme_font_size_override("font_size", 13)
+	bar_lbl.add_theme_font_size_override("font_size", 15)
 	bar_lbl.add_theme_color_override("font_color", Color.WHITE)
 	bar_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	bar_lbl.add_theme_constant_override("shadow_offset_y", 1)
@@ -172,7 +172,7 @@ func _add_axis_section(st: GameState, axis: String) -> void:
 			var b_lbl := Label.new()
 			b_lbl.text = line
 			b_lbl.add_theme_font_override("font", _font_e2r)
-			b_lbl.add_theme_font_size_override("font_size", 13)
+			b_lbl.add_theme_font_size_override("font_size", 15)
 			b_lbl.add_theme_color_override("font_color", Color(0.80, 0.80, 0.80))
 			body_vbox.add_child(b_lbl)
 
@@ -190,7 +190,7 @@ func _add_axis_section(st: GameState, axis: String) -> void:
 			status_lbl.text = "Project: %s — %s" % [pname, "Completed" if completed else "Not yet completed"]
 			status_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			status_lbl.add_theme_font_override("font", _font_e2s)
-			status_lbl.add_theme_font_size_override("font_size", 13)
+			status_lbl.add_theme_font_size_override("font_size", 15)
 			var status_color: Color = Color(0.50, 0.90, 0.50) if completed else Color(0.90, 0.75, 0.30)
 			status_lbl.add_theme_color_override("font_color", status_color)
 			body_vbox.add_child(status_lbl)

@@ -51,7 +51,7 @@ func _build() -> void:
 	var active_lbl := Label.new()
 	active_lbl.text = "Active"
 	active_lbl.add_theme_font_override("font", _font_rb)
-	active_lbl.add_theme_font_size_override("font_size", 14)
+	active_lbl.add_theme_font_size_override("font_size", 16)
 	active_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	add_child(active_lbl)
 
@@ -65,7 +65,7 @@ func _build() -> void:
 	_completed_header_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_completed_header_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_completed_header_btn.add_theme_font_override("font", _font_rb)
-	_completed_header_btn.add_theme_font_size_override("font_size", 14)
+	_completed_header_btn.add_theme_font_size_override("font_size", 16)
 	_completed_header_btn.text = "▶  Completed (0)"
 	add_child(_completed_header_btn)
 
@@ -97,7 +97,7 @@ func _build() -> void:
 	_achievements_header_lbl = Label.new()
 	_achievements_header_lbl.text = "0 / 0 completed"
 	_achievements_header_lbl.add_theme_font_override("font", _font_e2r)
-	_achievements_header_lbl.add_theme_font_size_override("font_size", 13)
+	_achievements_header_lbl.add_theme_font_size_override("font_size", 15)
 	_achievements_header_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	ach_header_row.add_child(_achievements_header_lbl)
 
@@ -255,14 +255,14 @@ func _build_quest_row(
 		prefix_lbl.text = "▶"
 		prefix_lbl.add_theme_color_override("font_color", Color(0.20, 0.40, 0.90))
 	prefix_lbl.add_theme_font_override("font", _font_e2s)
-	prefix_lbl.add_theme_font_size_override("font_size", 14)
+	prefix_lbl.add_theme_font_size_override("font_size", 16)
 	title_row.add_child(prefix_lbl)
 
 	var title_lbl := Label.new()
 	title_lbl.text = title
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title_lbl.add_theme_font_override("font", _font_e2s)
-	title_lbl.add_theme_font_size_override("font_size", 14)
+	title_lbl.add_theme_font_size_override("font_size", 16)
 	title_row.add_child(title_lbl)
 
 	# Summary / condition row
@@ -270,7 +270,7 @@ func _build_quest_row(
 		var summary_lbl := Label.new()
 		summary_lbl.text = summary
 		summary_lbl.add_theme_font_override("font", _font_e2r)
-		summary_lbl.add_theme_font_size_override("font_size", 12)
+		summary_lbl.add_theme_font_size_override("font_size", 14)
 		summary_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 		summary_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		inner.add_child(summary_lbl)
@@ -281,7 +281,7 @@ func _build_quest_row(
 			var unlocks_lbl := Label.new()
 			unlocks_lbl.text = "Unlocked: " + unlocks_text
 			unlocks_lbl.add_theme_font_override("font", _font_e2r)
-			unlocks_lbl.add_theme_font_size_override("font_size", 12)
+			unlocks_lbl.add_theme_font_size_override("font_size", 14)
 			unlocks_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
 			unlocks_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			inner.add_child(unlocks_lbl)
@@ -299,7 +299,7 @@ func _build_quest_row(
 		var cond_lbl := Label.new()
 		cond_lbl.text = summary
 		cond_lbl.add_theme_font_override("font", _font_e2r)
-		cond_lbl.add_theme_font_size_override("font_size", 12)
+		cond_lbl.add_theme_font_size_override("font_size", 14)
 		cond_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		inner.add_child(cond_lbl)
 
@@ -308,7 +308,7 @@ func _build_quest_row(
 			var prog_lbl := Label.new()
 			prog_lbl.text = "Progress: " + progress_str
 			prog_lbl.add_theme_font_override("font", _font_e2s)
-			prog_lbl.add_theme_font_size_override("font_size", 12)
+			prog_lbl.add_theme_font_size_override("font_size", 14)
 			prog_lbl.add_theme_color_override("font_color", Color(0.20, 0.40, 0.90))
 			inner.add_child(prog_lbl)
 
@@ -434,7 +434,7 @@ func _build_achievement_row(def: Dictionary, is_done: bool) -> Control:
 	var name_lbl := Label.new()
 	name_lbl.text = status_prefix + def.get("name", "")
 	name_lbl.add_theme_font_override("font", _font_e2s)
-	name_lbl.add_theme_font_size_override("font_size", 13)
+	name_lbl.add_theme_font_size_override("font_size", 15)
 	if is_done:
 		name_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
 	left_vbox.add_child(name_lbl)
@@ -442,7 +442,7 @@ func _build_achievement_row(def: Dictionary, is_done: bool) -> Control:
 	var cond_lbl := Label.new()
 	cond_lbl.text = def.get("description", "")
 	cond_lbl.add_theme_font_override("font", _font_e2r)
-	cond_lbl.add_theme_font_size_override("font_size", 12)
+	cond_lbl.add_theme_font_size_override("font_size", 14)
 	cond_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	cond_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	left_vbox.add_child(cond_lbl)
@@ -451,7 +451,7 @@ func _build_achievement_row(def: Dictionary, is_done: bool) -> Control:
 	var reward_lbl := Label.new()
 	reward_lbl.text = def.get("reward_description", "")
 	reward_lbl.add_theme_font_override("font", _font_e2s)
-	reward_lbl.add_theme_font_size_override("font_size", 12)
+	reward_lbl.add_theme_font_size_override("font_size", 14)
 	if is_done:
 		reward_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
 	else:

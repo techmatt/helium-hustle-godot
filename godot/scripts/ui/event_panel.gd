@@ -216,7 +216,7 @@ func _build_event_row(inst: Dictionary, is_completed: bool, st: GameState, em: E
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.add_theme_font_override("font", _font_exo2_regular)
-	btn.add_theme_font_size_override("font_size", 13)
+	btn.add_theme_font_size_override("font_size", 15)
 
 	var summary: String = def.get("summary", event_id)
 	var progress_str: String = em.get_condition_display(event_id, st)
@@ -264,7 +264,7 @@ func _build_notification_row(title: String) -> Label:
 	lbl.text = title
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_font_size_override("font_size", 15)
 	var dark: bool = GameSettings.is_dark_mode
 	lbl.add_theme_color_override("font_color",
 		Color(0.60, 0.85, 0.60) if dark else Color(0.18, 0.49, 0.20))

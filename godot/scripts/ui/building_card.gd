@@ -253,7 +253,7 @@ func _build_header(parent: VBoxContainer) -> void:
 	_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_count_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	_count_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	_count_lbl.add_theme_font_size_override("font_size", 14)
+	_count_lbl.add_theme_font_size_override("font_size", 16)
 	_count_lbl.add_theme_color_override("font_color", _c("count"))
 	row.add_child(_count_lbl)
 
@@ -280,7 +280,7 @@ func _build_description(parent: VBoxContainer) -> void:
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 16)
 	lbl.add_theme_color_override("font_color", _c("desc"))
 	parent.add_child(lbl)
 
@@ -291,7 +291,7 @@ func _build_requires_label(parent: VBoxContainer) -> void:
 	_requires_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_requires_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	_requires_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_requires_lbl.add_theme_font_size_override("font_size", 14)
+	_requires_lbl.add_theme_font_size_override("font_size", 16)
 	_requires_lbl.add_theme_color_override("font_color", _c("requires"))
 	parent.add_child(_requires_lbl)
 
@@ -302,7 +302,7 @@ func _build_production(parent: VBoxContainer) -> void:
 		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), RESOURCE_NAMES.get(res, res)]
 		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_font_size_override("font_size", 16)
 		lbl.add_theme_color_override("font_color", _c("positive"))
 		parent.add_child(lbl)
 
@@ -313,7 +313,7 @@ func _build_upkeep(parent: VBoxContainer) -> void:
 		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), RESOURCE_NAMES.get(res, res)]
 		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
-		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_font_size_override("font_size", 16)
 		lbl.add_theme_color_override("font_color", _c("negative"))
 		parent.add_child(lbl)
 
@@ -327,7 +327,7 @@ func _build_effects(parent: VBoxContainer) -> void:
 			lbl.text = "  +%.0f %s storage" % [float(effect.value), RESOURCE_NAMES.get(res, res)]
 			lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 			lbl.add_theme_font_override("font", _font_exo2_regular)
-			lbl.add_theme_font_size_override("font_size", 14)
+			lbl.add_theme_font_size_override("font_size", 16)
 			lbl.add_theme_color_override("font_color", _c("positive"))
 			parent.add_child(lbl)
 			_effect_store_rows[res] = lbl
@@ -365,7 +365,7 @@ func _build_ideology_pill(parent: VBoxContainer) -> void:
 	lbl.text = alignment.capitalize()
 	lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	lbl.add_theme_font_override("font", _font_exo2_semibold)
-	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", Color.WHITE)
 	margin.add_child(lbl)
 	parent.add_child(pill)
@@ -376,7 +376,7 @@ func _build_stall_label(parent: VBoxContainer) -> void:
 	_stall_lbl.text = ""
 	_stall_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	_stall_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_stall_lbl.add_theme_font_size_override("font_size", 14)
+	_stall_lbl.add_theme_font_size_override("font_size", 16)
 	parent.add_child(_stall_lbl)
 
 
@@ -406,14 +406,14 @@ func _add_cost_row(grid: GridContainer, res: String) -> void:
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	name_lbl.add_theme_font_override("font", _font_exo2_regular)
-	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_font_size_override("font_size", 16)
 	grid.add_child(name_lbl)
 
 	var amt_lbl := Label.new()
 	amt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	amt_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	amt_lbl.add_theme_font_override("font", _font_exo2_semibold)
-	amt_lbl.add_theme_font_size_override("font_size", 14)
+	amt_lbl.add_theme_font_size_override("font_size", 16)
 	grid.add_child(amt_lbl)
 
 	_cost_labels[res] = amt_lbl

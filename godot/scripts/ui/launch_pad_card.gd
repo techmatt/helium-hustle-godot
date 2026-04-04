@@ -95,7 +95,7 @@ func _build_ui() -> void:
 	_resource_opt = OptionButton.new()
 	_resource_opt.custom_minimum_size = Vector2(145, 0)
 	_resource_opt.add_theme_font_override("font", _font_e2s)
-	_resource_opt.add_theme_font_size_override("font_size", 13)
+	_resource_opt.add_theme_font_size_override("font_size", 15)
 	if not GameSettings.is_dark_mode:
 		var opt_style := StyleBoxFlat.new()
 		opt_style.bg_color = Color.WHITE
@@ -127,7 +127,7 @@ func _build_ui() -> void:
 	_launch_btn.text = "Launch"
 	_launch_btn.custom_minimum_size = Vector2(76, 0)
 	_launch_btn.add_theme_font_override("font", _font_e2s)
-	_launch_btn.add_theme_font_size_override("font_size", 14)
+	_launch_btn.add_theme_font_size_override("font_size", 16)
 	_launch_btn.pressed.connect(_on_launch_pressed)
 	title_row.add_child(_launch_btn)
 
@@ -167,7 +167,7 @@ func _build_ui() -> void:
 	_cargo_label.text = "0 / 100 units"
 	_cargo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_cargo_label.add_theme_font_override("font", _font_e2r)
-	_cargo_label.add_theme_font_size_override("font_size", 13)
+	_cargo_label.add_theme_font_size_override("font_size", 15)
 	_cargo_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	vbox.add_child(_cargo_label)
 
@@ -175,7 +175,7 @@ func _build_ui() -> void:
 	_value_label.text = ""
 	_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_value_label.add_theme_font_override("font", _font_e2r)
-	_value_label.add_theme_font_size_override("font_size", 12)
+	_value_label.add_theme_font_size_override("font_size", 14)
 	_value_label.add_theme_color_override("font_color", _c_text_muted())
 	_value_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	vbox.add_child(_value_label)
@@ -184,7 +184,7 @@ func _build_ui() -> void:
 	_status_label.text = "Empty — waiting for cargo"
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status_label.add_theme_font_override("font", _font_e2r)
-	_status_label.add_theme_font_size_override("font_size", 12)
+	_status_label.add_theme_font_size_override("font_size", 14)
 	_status_label.add_theme_color_override("font_color", _c_text_muted())
 	_status_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	vbox.add_child(_status_label)

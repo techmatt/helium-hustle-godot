@@ -68,7 +68,7 @@ func _build() -> void:
 	var toggle_lbl := Label.new()
 	toggle_lbl.text = "Show completed research"
 	toggle_lbl.add_theme_font_override("font", _font_e2r)
-	toggle_lbl.add_theme_font_size_override("font_size", 13)
+	toggle_lbl.add_theme_font_size_override("font_size", 15)
 	toggle_row.add_child(toggle_lbl)
 
 	if research_data.is_empty():
@@ -93,7 +93,7 @@ func _build() -> void:
 		lbl.text = "Build a Research Lab and earn science to unlock research."
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lbl.add_theme_font_override("font", _font_e2r)
-		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_font_size_override("font_size", 16)
 		lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 		add_child(lbl)
 		return
@@ -207,7 +207,7 @@ func _build_card(item: Dictionary) -> PanelContainer:
 		btn.disabled = not can_afford
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.add_theme_font_override("font", _font_e2s)
-		btn.add_theme_font_size_override("font_size", 14)
+		btn.add_theme_font_size_override("font_size", 16)
 		if not GameSettings.is_dark_mode and can_afford:
 			var gs := StyleBoxFlat.new()
 			gs.bg_color = Color(0.298, 0.686, 0.314)
@@ -226,7 +226,7 @@ func _build_card(item: Dictionary) -> PanelContainer:
 	desc_lbl.text = item.get("description", "")
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_lbl.add_theme_font_override("font", _font_e2r)
-	desc_lbl.add_theme_font_size_override("font_size", 13)
+	desc_lbl.add_theme_font_size_override("font_size", 15)
 	desc_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	vbox.add_child(desc_lbl)
 
@@ -240,7 +240,7 @@ func _build_card(item: Dictionary) -> PanelContainer:
 					break
 			req_lbl.text = "Requires: %s" % req_name
 			req_lbl.add_theme_font_override("font", _font_e2r)
-			req_lbl.add_theme_font_size_override("font_size", 12)
+			req_lbl.add_theme_font_size_override("font_size", 14)
 			req_lbl.add_theme_color_override("font_color", UIPalette.p("text_requires"))
 			vbox.add_child(req_lbl)
 
@@ -257,7 +257,7 @@ func _build_card(item: Dictionary) -> PanelContainer:
 		var cost_lbl := Label.new()
 		cost_lbl.text = "%d science" % cost
 		cost_lbl.add_theme_font_override("font", _font_e2r)
-		cost_lbl.add_theme_font_size_override("font_size", 13)
+		cost_lbl.add_theme_font_size_override("font_size", 15)
 		cost_lbl.add_theme_color_override("font_color", UIPalette.p("text_positive") if can_afford else UIPalette.p("text_negative"))
 		cost_row.add_child(cost_lbl)
 

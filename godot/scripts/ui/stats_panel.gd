@@ -65,7 +65,7 @@ func _build_mode_selector() -> void:
 	var lbl := Label.new()
 	lbl.text = "Display:"
 	lbl.add_theme_font_override("font", _font_e2r)
-	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_font_size_override("font_size", 15)
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(lbl)
 
@@ -74,7 +74,7 @@ func _build_mode_selector() -> void:
 	opt.add_item("Instantaneous", 1)
 	opt.selected = 1
 	opt.add_theme_font_override("font", _font_e2r)
-	opt.add_theme_font_size_override("font_size", 13)
+	opt.add_theme_font_size_override("font_size", 15)
 	if not GameSettings.is_dark_mode:
 		var opt_style := StyleBoxFlat.new()
 		opt_style.bg_color = Color(0.97, 0.97, 0.97)
@@ -178,7 +178,7 @@ func _build_card(resource_id: String, display_name: String) -> void:
 	net_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	net_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	net_lbl.add_theme_font_override("font", _font_e2s)
-	net_lbl.add_theme_font_size_override("font_size", 14)
+	net_lbl.add_theme_font_size_override("font_size", 16)
 	header_row.add_child(net_lbl)
 
 	vbox.add_child(HSeparator.new())
@@ -285,7 +285,7 @@ func _make_rate_row(label_text: String, value: float, bold: bool = false) -> HBo
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.clip_text = true
 	name_lbl.add_theme_font_override("font", _font_e2s if bold else _font_e2r)
-	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(name_lbl)
 
 	var val_lbl := Label.new()
@@ -293,7 +293,7 @@ func _make_rate_row(label_text: String, value: float, bold: bool = false) -> HBo
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val_lbl.custom_minimum_size = Vector2(64, 0)
 	val_lbl.add_theme_font_override("font", _font_e2s)
-	val_lbl.add_theme_font_size_override("font_size", 14)
+	val_lbl.add_theme_font_size_override("font_size", 16)
 	val_lbl.add_theme_color_override("font_color", _rate_color(value))
 	row.add_child(val_lbl)
 
@@ -309,14 +309,14 @@ func _make_stall_row(count: int, building_name: String, status: String, reason: 
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.clip_text = true
 	name_lbl.add_theme_font_override("font", _font_e2r)
-	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_font_size_override("font_size", 16)
 	name_lbl.add_theme_color_override("font_color", Color(0.4, 0.4, 0.4))
 	row.add_child(name_lbl)
 
 	var status_lbl := Label.new()
 	status_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status_lbl.add_theme_font_override("font", _font_e2r)
-	status_lbl.add_theme_font_size_override("font_size", 14)
+	status_lbl.add_theme_font_size_override("font_size", 16)
 	if status == "input_starved":
 		status_lbl.text = "stalled: " + reason
 		status_lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.000))  # #E65100

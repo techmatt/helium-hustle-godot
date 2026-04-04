@@ -301,7 +301,7 @@ func _make_section_header(title: String) -> Label:
 	var lbl := Label.new()
 	lbl.text = title.to_upper()
 	lbl.add_theme_font_override("font", _font_e2s)
-	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_font_size_override("font_size", 16)
 	lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	return lbl
 
@@ -314,12 +314,12 @@ func _make_stat_row(label_text: String, parent: VBoxContainer) -> Label:
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_override("font", _font_e2r)
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(lbl)
 	var val := Label.new()
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.add_theme_font_override("font", _font_e2s)
-	val.add_theme_font_size_override("font_size", 14)
+	val.add_theme_font_size_override("font_size", 16)
 	row.add_child(val)
 	return val
 
@@ -332,17 +332,17 @@ func _make_stat_row_with_badge(label_text: String, parent: VBoxContainer) -> Arr
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_override("font", _font_e2r)
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(lbl)
 	var val := Label.new()
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.add_theme_font_override("font", _font_e2s)
-	val.add_theme_font_size_override("font_size", 14)
+	val.add_theme_font_size_override("font_size", 16)
 	row.add_child(val)
 	var badge := Label.new()
 	badge.text = " NEW"
 	badge.add_theme_font_override("font", _font_e2s)
-	badge.add_theme_font_size_override("font_size", 12)
+	badge.add_theme_font_size_override("font_size", 16)
 	badge.add_theme_color_override("font_color", UIPalette.p("text_positive"))
 	badge.visible = false
 	row.add_child(badge)
@@ -361,16 +361,16 @@ func _make_bonus_row(label_text: String, parent: VBoxContainer) -> Array:
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_override("font", _font_e2r)
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(lbl)
 	var val := Label.new()
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.add_theme_font_override("font", _font_e2s)
-	val.add_theme_font_size_override("font_size", 14)
+	val.add_theme_font_size_override("font_size", 16)
 	row.add_child(val)
 	var delta := Label.new()
 	delta.add_theme_font_override("font", _font_e2r)
-	delta.add_theme_font_size_override("font_size", 13)
+	delta.add_theme_font_size_override("font_size", 15)
 	delta.add_theme_color_override("font_color", UIPalette.p("text_positive"))
 	delta.visible = false
 	row.add_child(delta)

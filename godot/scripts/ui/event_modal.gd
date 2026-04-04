@@ -110,7 +110,7 @@ func _build_ui() -> void:
 
 	_body_lbl = Label.new()
 	_body_lbl.add_theme_font_override("font", _font_exo2_regular)
-	_body_lbl.add_theme_font_size_override("font_size", 14)
+	_body_lbl.add_theme_font_size_override("font_size", 16)
 	_body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if GameSettings.is_dark_mode:
 		_body_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
@@ -159,7 +159,7 @@ func _add_button(label: String, callback: Callable, enabled: bool) -> void:
 	btn.disabled = not enabled
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.add_theme_font_override("font", _font_exo2_semibold)
-	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_font_size_override("font_size", 16)
 	btn.custom_minimum_size = Vector2(100, 36)
 
 	if not GameSettings.is_dark_mode:

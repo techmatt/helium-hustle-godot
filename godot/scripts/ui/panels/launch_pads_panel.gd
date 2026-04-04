@@ -111,7 +111,7 @@ func _build() -> void:
 		no_pads_lbl.text = "No Launch Pads built. Purchase a Launch Pad from the Buildings panel to begin shipping resources to Earth."
 		no_pads_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		no_pads_lbl.add_theme_font_override("font", _font_e2r)
-		no_pads_lbl.add_theme_font_size_override("font_size", 14)
+		no_pads_lbl.add_theme_font_size_override("font_size", 16)
 		no_pads_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 		add_child(no_pads_lbl)
 	else:
@@ -154,7 +154,7 @@ func _refresh_launch_history() -> void:
 		var lbl := Label.new()
 		lbl.text = "No launches yet."
 		lbl.add_theme_font_override("font", _font_e2r)
-		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_font_size_override("font_size", 15)
 		lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 		_launch_history_vbox.add_child(lbl)
 		return
@@ -171,7 +171,7 @@ func _refresh_launch_history() -> void:
 			var res_name: String = RESOURCE_META.get(record.resource_type, [record.resource_type.capitalize()])[0]
 			lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
 		lbl.add_theme_font_override("font", _font_e2r)
-		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_font_size_override("font_size", 15)
 		_launch_history_vbox.add_child(lbl)
 
 
@@ -186,25 +186,25 @@ func _build_spec_intel_section(body: VBoxContainer) -> void:
 		var locked_lbl := Label.new()
 		locked_lbl.text = "Requires Speculator Analysis research."
 		locked_lbl.add_theme_font_override("font", _font_e2r)
-		locked_lbl.add_theme_font_size_override("font_size", 13)
+		locked_lbl.add_theme_font_size_override("font_size", 15)
 		locked_lbl.add_theme_color_override("font_color", UIPalette.p("text_locked"))
 		body.add_child(locked_lbl)
 		return
 
 	_spec_intel_countdown_lbl = Label.new()
 	_spec_intel_countdown_lbl.add_theme_font_override("font", _font_e2r)
-	_spec_intel_countdown_lbl.add_theme_font_size_override("font_size", 13)
+	_spec_intel_countdown_lbl.add_theme_font_size_override("font_size", 15)
 	body.add_child(_spec_intel_countdown_lbl)
 
 	_spec_intel_size_lbl = Label.new()
 	_spec_intel_size_lbl.add_theme_font_override("font", _font_e2r)
-	_spec_intel_size_lbl.add_theme_font_size_override("font_size", 13)
+	_spec_intel_size_lbl.add_theme_font_size_override("font_size", 15)
 	body.add_child(_spec_intel_size_lbl)
 
 	var prob_hdr := Label.new()
 	prob_hdr.text = "Target probabilities:"
 	prob_hdr.add_theme_font_override("font", _font_e2r)
-	prob_hdr.add_theme_font_size_override("font_size", 13)
+	prob_hdr.add_theme_font_size_override("font_size", 15)
 	body.add_child(prob_hdr)
 
 	var bar_wrap := PanelContainer.new()
@@ -242,7 +242,7 @@ func _build_spec_intel_section(body: VBoxContainer) -> void:
 		var prob_lbl := Label.new()
 		prob_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		prob_lbl.add_theme_font_override("font", _font_e2s)
-		prob_lbl.add_theme_font_size_override("font_size", 12)
+		prob_lbl.add_theme_font_size_override("font_size", 14)
 		prob_lbl.add_theme_color_override("font_color", display[1])
 		prob_row.add_child(prob_lbl)
 		_spec_intel_prob_labels[res] = prob_lbl
@@ -345,7 +345,7 @@ func _populate_demand_section(st: GameState, has_ma: bool) -> void:
 			var name_lbl := Label.new()
 			name_lbl.text = display[0]
 			name_lbl.add_theme_font_override("font", _font_e2r)
-			name_lbl.add_theme_font_size_override("font_size", 13)
+			name_lbl.add_theme_font_size_override("font_size", 15)
 			if has_ma:
 				name_lbl.custom_minimum_size = Vector2(66, 0)
 			else:
@@ -365,7 +365,7 @@ func _populate_demand_section(st: GameState, has_ma: bool) -> void:
 				val_lbl.custom_minimum_size = Vector2(36, 0)
 				val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				val_lbl.add_theme_font_override("font", _font_e2s)
-				val_lbl.add_theme_font_size_override("font_size", 13)
+				val_lbl.add_theme_font_size_override("font_size", 15)
 				var tier_arr: Array = _demand_tier(demand_val)
 				if tier_arr[2] != Color(0, 0, 0, 0):
 					val_lbl.add_theme_color_override("font_color", tier_arr[2])
@@ -379,7 +379,7 @@ func _populate_demand_section(st: GameState, has_ma: bool) -> void:
 				tier_lbl.text = tier_arr[1]
 				tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				tier_lbl.add_theme_font_override("font", _font_e2s)
-				tier_lbl.add_theme_font_size_override("font_size", 13)
+				tier_lbl.add_theme_font_size_override("font_size", 15)
 				if tier_arr[2] != Color(0, 0, 0, 0):
 					tier_lbl.add_theme_color_override("font_color", tier_arr[2])
 				block.add_child(tier_lbl)
@@ -489,7 +489,7 @@ func _build_loading_priority_list(parent: VBoxContainer) -> void:
 		name_lbl.text = RESOURCE_META.get(res, [res.capitalize()])[0]
 		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		name_lbl.add_theme_font_override("font", _font_e2r)
-		name_lbl.add_theme_font_size_override("font_size", 14)
+		name_lbl.add_theme_font_size_override("font_size", 16)
 		row.add_child(name_lbl)
 
 

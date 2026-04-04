@@ -93,7 +93,7 @@ func _build_ui() -> void:
 	_usage_lbl.text = "— / — used"
 	_usage_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_usage_lbl.add_theme_font_override("font", _font_e2r)
-	_usage_lbl.add_theme_font_size_override("font_size", 14)
+	_usage_lbl.add_theme_font_size_override("font_size", 16)
 	if not GameSettings.is_dark_mode:
 		_usage_lbl.add_theme_color_override("font_color", Color(0.35, 0.35, 0.35))
 	left.add_child(_usage_lbl)
@@ -104,7 +104,7 @@ func _build_ui() -> void:
 	_cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_cost_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_cost_lbl.add_theme_font_override("font", _font_e2r)
-	_cost_lbl.add_theme_font_size_override("font_size", 14)
+	_cost_lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(_cost_lbl)
 
 	# Right: buy button
@@ -112,7 +112,7 @@ func _build_ui() -> void:
 	_buy_btn.text = "Buy Land"
 	_buy_btn.focus_mode = Control.FOCUS_NONE
 	_buy_btn.add_theme_font_override("font", _font_e2s)
-	_buy_btn.add_theme_font_size_override("font_size", 14)
+	_buy_btn.add_theme_font_size_override("font_size", 16)
 	_buy_btn.pressed.connect(_on_buy_pressed)
 	if not GameSettings.is_dark_mode:
 		var btn_s := StyleBoxFlat.new()

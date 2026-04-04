@@ -126,7 +126,7 @@ func _build_processor_row() -> void:
 	_proc_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_proc_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_proc_label.add_theme_font_override("font", _font_e2r)
-	_proc_label.add_theme_font_size_override("font_size", 14)
+	_proc_label.add_theme_font_size_override("font_size", 16)
 	hbox.add_child(_proc_label)
 
 	_proc_minus_btn = Button.new()
@@ -151,7 +151,7 @@ func _build_processor_row() -> void:
 	reset_btn.text = "Reset"
 	reset_btn.focus_mode = Control.FOCUS_NONE
 	reset_btn.add_theme_font_override("font", _font_e2s)
-	reset_btn.add_theme_font_size_override("font_size", 13)
+	reset_btn.add_theme_font_size_override("font_size", 15)
 	reset_btn.pressed.connect(_on_proc_reset)
 	hbox.add_child(reset_btn)
 

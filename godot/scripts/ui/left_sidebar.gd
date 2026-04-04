@@ -171,7 +171,7 @@ func _make_nav_button(label: String, color: Color) -> Button:
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lbl.add_theme_font_override("font", _font_e2s)
-	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_font_size_override("font_size", 15)
 	vbox.add_child(lbl)
 
 	return btn
@@ -307,7 +307,7 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_lbl.add_theme_font_override("font", _font_e2r)
-	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(name_lbl)
 
 	var val_lbl := Label.new()
@@ -316,7 +316,7 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	val_lbl.add_theme_font_override("font", _font_e2s)
-	val_lbl.add_theme_font_size_override("font_size", 14)
+	val_lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(val_lbl)
 
 	var rate_lbl: Label = null
@@ -327,7 +327,7 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		rate_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		rate_lbl.add_theme_font_override("font", _font_e2r)
-		rate_lbl.add_theme_font_size_override("font_size", 13)
+		rate_lbl.add_theme_font_size_override("font_size", 15)
 		row.add_child(rate_lbl)
 
 	_resource_labels[sn] = {"val": val_lbl, "rate": rate_lbl, "row": row}
@@ -407,7 +407,7 @@ func _build_adversaries_section() -> void:
 	_spec_name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_spec_name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_spec_name_lbl.add_theme_font_override("font", _font_e2r)
-	_spec_name_lbl.add_theme_font_size_override("font_size", 14)
+	_spec_name_lbl.add_theme_font_size_override("font_size", 16)
 	spec_row.add_child(_spec_name_lbl)
 
 	_spec_count_lbl = Label.new()
@@ -416,7 +416,7 @@ func _build_adversaries_section() -> void:
 	_spec_count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_spec_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_spec_count_lbl.add_theme_font_override("font", _font_e2s)
-	_spec_count_lbl.add_theme_font_size_override("font_size", 14)
+	_spec_count_lbl.add_theme_font_size_override("font_size", 16)
 	spec_row.add_child(_spec_count_lbl)
 
 
@@ -456,7 +456,7 @@ func _build_ideology_section() -> void:
 		name_lbl.text = axis.capitalize()
 		name_lbl.custom_minimum_size = Vector2(88, 0)
 		name_lbl.add_theme_font_override("font", _font_e2s)
-		name_lbl.add_theme_font_size_override("font_size", 13)
+		name_lbl.add_theme_font_size_override("font_size", 15)
 		name_lbl.add_theme_color_override("font_color", IDEOLOGY_COLORS[axis])
 		row.add_child(name_lbl)
 
@@ -464,7 +464,7 @@ func _build_ideology_section() -> void:
 		rank_lbl.text = "Rank 0"
 		rank_lbl.custom_minimum_size = Vector2(52, 0)
 		rank_lbl.add_theme_font_override("font", _font_e2s)
-		rank_lbl.add_theme_font_size_override("font_size", 13)
+		rank_lbl.add_theme_font_size_override("font_size", 15)
 		row.add_child(rank_lbl)
 
 		var rate_lbl := Label.new()
@@ -472,7 +472,7 @@ func _build_ideology_section() -> void:
 		rate_lbl.custom_minimum_size = Vector2(52, 0)
 		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		rate_lbl.add_theme_font_override("font", _font_e2r)
-		rate_lbl.add_theme_font_size_override("font_size", 12)
+		rate_lbl.add_theme_font_size_override("font_size", 14)
 		rate_lbl.add_theme_color_override("font_color", Color(0.400, 0.400, 0.400))
 		row.add_child(rate_lbl)
 
@@ -481,7 +481,7 @@ func _build_ideology_section() -> void:
 		prog_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		prog_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		prog_lbl.add_theme_font_override("font", _font_e2r)
-		prog_lbl.add_theme_font_size_override("font_size", 12)
+		prog_lbl.add_theme_font_size_override("font_size", 14)
 		prog_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 		row.add_child(prog_lbl)
 

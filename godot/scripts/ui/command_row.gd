@@ -149,7 +149,7 @@ func _make_drag_preview() -> Control:
 	panel.add_theme_stylebox_override("panel", style)
 	var lbl := Label.new()
 	lbl.text = "  " + _cmd_name + " (x%d)" % _repeat_count + "  "
-	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_font_size_override("font_size", 15)
 	panel.add_child(lbl)
 	return panel
 
@@ -208,7 +208,7 @@ func _build_ui(font_r: FontFile, font_s: FontFile) -> void:
 	_name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	if font_r:
 		_name_lbl.add_theme_font_override("font", font_r)
-	_name_lbl.add_theme_font_size_override("font_size", 13)
+	_name_lbl.add_theme_font_size_override("font_size", 15)
 	hbox.add_child(_name_lbl)
 
 	# Progress bar

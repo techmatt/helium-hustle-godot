@@ -129,7 +129,7 @@ func _build() -> void:
 	desc_lbl.text = _pdef.get("description", "")
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_lbl.add_theme_font_override("font", _font_e2r)
-	desc_lbl.add_theme_font_size_override("font_size", 13)
+	desc_lbl.add_theme_font_size_override("font_size", 15)
 	desc_lbl.add_theme_color_override("font_color",
 		Color(0.60, 0.60, 0.60) if dark else Color(0.40, 0.40, 0.40))
 	vbox.add_child(desc_lbl)
@@ -144,7 +144,7 @@ func _build() -> void:
 	reward_lbl.text = "Reward: " + _format_reward(_pdef.get("reward", {}))
 	reward_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	reward_lbl.add_theme_font_override("font", _font_e2r)
-	reward_lbl.add_theme_font_size_override("font_size", 12)
+	reward_lbl.add_theme_font_size_override("font_size", 14)
 	reward_lbl.add_theme_color_override("font_color",
 		Color(0.55, 0.55, 0.55) if dark else Color(0.45, 0.45, 0.45))
 	vbox.add_child(reward_lbl)
@@ -173,7 +173,7 @@ func _build_resource_row(res: String, total_needed: float) -> PanelContainer:
 	res_lbl.text = RESOURCE_NAMES.get(res, res)
 	res_lbl.custom_minimum_size = Vector2(70, 0)
 	res_lbl.add_theme_font_override("font", _font_e2r)
-	res_lbl.add_theme_font_size_override("font_size", 13)
+	res_lbl.add_theme_font_size_override("font_size", 15)
 	row.add_child(res_lbl)
 
 	# Progress bar
@@ -199,7 +199,7 @@ func _build_resource_row(res: String, total_needed: float) -> PanelContainer:
 	prog_lbl.custom_minimum_size = Vector2(72, 0)
 	prog_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	prog_lbl.add_theme_font_override("font", _font_e2s)
-	prog_lbl.add_theme_font_size_override("font_size", 12)
+	prog_lbl.add_theme_font_size_override("font_size", 14)
 	row.add_child(prog_lbl)
 	_progress_labels[res] = prog_lbl
 
@@ -219,7 +219,7 @@ func _build_resource_row(res: String, total_needed: float) -> PanelContainer:
 	rate_lbl.custom_minimum_size = Vector2(24, 0)
 	rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rate_lbl.add_theme_font_override("font", _font_e2s)
-	rate_lbl.add_theme_font_size_override("font_size", 13)
+	rate_lbl.add_theme_font_size_override("font_size", 15)
 	stepper_box.add_child(rate_lbl)
 	_rate_labels[res] = rate_lbl
 
@@ -264,7 +264,7 @@ func _make_stepper_btn(symbol: String) -> Button:
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.custom_minimum_size = Vector2(26, 22)
 	btn.add_theme_font_override("font", _font_e2s)
-	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_font_size_override("font_size", 16)
 	if not dark:
 		var s := StyleBoxFlat.new()
 		s.bg_color = Color(0.941, 0.941, 0.941)

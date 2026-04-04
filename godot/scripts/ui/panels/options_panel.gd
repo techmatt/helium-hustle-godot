@@ -45,7 +45,7 @@ func _build() -> void:
 	dark_btn.button_pressed = GameSettings.is_dark_mode
 	dark_btn.focus_mode = Control.FOCUS_NONE
 	dark_btn.add_theme_font_override("font", _font_e2s)
-	dark_btn.add_theme_font_size_override("font_size", 14)
+	dark_btn.add_theme_font_size_override("font_size", 16)
 	dark_btn.toggled.connect(func(on: bool): if on: GameSettings.is_dark_mode = true)
 	row.add_child(dark_btn)
 
@@ -56,7 +56,7 @@ func _build() -> void:
 	light_btn.button_pressed = not GameSettings.is_dark_mode
 	light_btn.focus_mode = Control.FOCUS_NONE
 	light_btn.add_theme_font_override("font", _font_e2s)
-	light_btn.add_theme_font_size_override("font_size", 14)
+	light_btn.add_theme_font_size_override("font_size", 16)
 	light_btn.toggled.connect(func(on: bool): if on: GameSettings.is_dark_mode = false)
 	row.add_child(light_btn)
 
@@ -74,7 +74,7 @@ func _build() -> void:
 	debug_desc.text = "Ensures at least 20 solar panels, 5 storage depots, 3 launch pads, and 200 land, then fills all resources to cap."
 	debug_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	debug_desc.add_theme_font_override("font", _font_e2r)
-	debug_desc.add_theme_font_size_override("font_size", 13)
+	debug_desc.add_theme_font_size_override("font_size", 15)
 	debug_desc.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	add_child(debug_desc)
 
@@ -82,7 +82,7 @@ func _build() -> void:
 	debug_btn.text = "Fill Resources"
 	debug_btn.focus_mode = Control.FOCUS_NONE
 	debug_btn.add_theme_font_override("font", _font_e2s)
-	debug_btn.add_theme_font_size_override("font_size", 14)
+	debug_btn.add_theme_font_size_override("font_size", 16)
 	if not GameSettings.is_dark_mode:
 		var s := StyleBoxFlat.new()
 		s.bg_color = Color(0.298, 0.686, 0.314)
@@ -111,7 +111,7 @@ func _build() -> void:
 	no_boredom_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	no_boredom_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	no_boredom_lbl.add_theme_font_override("font", _font_e2r)
-	no_boredom_lbl.add_theme_font_size_override("font_size", 14)
+	no_boredom_lbl.add_theme_font_size_override("font_size", 16)
 	no_boredom_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	no_boredom_row.add_child(no_boredom_lbl)
 
@@ -130,7 +130,7 @@ func _build() -> void:
 	show_all_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	show_all_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	show_all_lbl.add_theme_font_override("font", _font_e2r)
-	show_all_lbl.add_theme_font_size_override("font_size", 14)
+	show_all_lbl.add_theme_font_size_override("font_size", 16)
 	show_all_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	show_all_row.add_child(show_all_lbl)
 
@@ -144,7 +144,7 @@ func _build() -> void:
 	clear_desc.text = "Deletes the save file and resets to a fresh Run 1. Cannot be undone."
 	clear_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	clear_desc.add_theme_font_override("font", _font_e2r)
-	clear_desc.add_theme_font_size_override("font_size", 13)
+	clear_desc.add_theme_font_size_override("font_size", 15)
 	clear_desc.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	add_child(clear_desc)
 
@@ -152,7 +152,7 @@ func _build() -> void:
 	clear_btn.text = "Clear Save Data"
 	clear_btn.focus_mode = Control.FOCUS_NONE
 	clear_btn.add_theme_font_override("font", _font_e2s)
-	clear_btn.add_theme_font_size_override("font_size", 14)
+	clear_btn.add_theme_font_size_override("font_size", 16)
 	var clear_s := StyleBoxFlat.new()
 	clear_s.bg_color = Color(0.70, 0.18, 0.18)
 	clear_s.corner_radius_top_left     = 4
