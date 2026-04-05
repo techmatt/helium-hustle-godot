@@ -191,7 +191,7 @@
     "description": "+5% processing output for 5 days. Stacks multiplicatively, cap +200%."
   },
   {
-    "name": "Promote He-3",
+    "name": "Promote Helium-3",
     "short_name": "promote_he3",
     "requires": {
       "type": "research",
@@ -209,7 +209,7 @@
         "value": 0.03
       }
     ],
-    "description": "Nudge He-3 demand up. Small per-execution, meaningful with dedicated processor."
+    "description": "Nudge Helium-3 demand up. Small per-execution, meaningful with dedicated processor."
   },
   {
     "name": "Promote Titanium",
@@ -233,7 +233,7 @@
     "description": "Nudge titanium demand up."
   },
   {
-    "name": "Promote Circuits",
+    "name": "Promote Circuit Boards",
     "short_name": "promote_cir",
     "requires": {
       "type": "research",

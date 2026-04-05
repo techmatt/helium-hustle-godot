@@ -9,10 +9,10 @@ const DEMAND_TIERS: Array = [
 ]
 
 const TRADEABLE_DISPLAY: Dictionary = {
-	"he3":  ["He-3",       Color(0.50, 0.50, 1.00)],
-	"ti":   ["Titanium",   Color(0.80, 0.80, 0.80)],
-	"cir":  ["Circuits",   Color(0.30, 0.80, 0.70)],
-	"prop": ["Propellant", Color(0.40, 0.70, 0.95)],
+	"he3":  ["Helium-3",      Color(0.50, 0.50, 1.00)],
+	"ti":   ["Titanium",      Color(0.80, 0.80, 0.80)],
+	"cir":  ["Circuit Boards", Color(0.30, 0.80, 0.70)],
+	"prop": ["Propellant",    Color(0.40, 0.70, 0.95)],
 }
 
 const RESOURCE_META: Dictionary = {
@@ -24,7 +24,7 @@ const RESOURCE_META: Dictionary = {
 	"ti":     ["Titanium",   Color(0.80, 0.80, 0.80)],
 	"prop":   ["Propellant", Color(0.40, 0.70, 0.95)],
 	"sci":    ["Science",    Color(0.70, 0.50, 0.90)],
-	"cir":    ["Circuits",   Color(0.30, 0.80, 0.70)],
+	"cir":    ["Circuit Boards", Color(0.30, 0.80, 0.70)],
 	"boredom":["Boredom",    Color(0.55, 0.55, 0.55)],
 	"land":   ["Land",       Color(0.40, 0.70, 0.30)],
 }

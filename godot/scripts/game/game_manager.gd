@@ -47,10 +47,15 @@ signal project_completed_notification(project_name: String)
 signal achievement_unlocked(achievement_id: String)
 
 var career_credits_bonus_fraction: float = 0.02
+var career_ideology_headstart_fraction: float = 0.2
+var career_buy_power_per_20_energy: float = 0.25
+var career_boredom_resilience_base: float = 0.995
+var career_boredom_resilience_period: float = 400.0
 
 var _timer: Timer
 var _autosave_timer: Timer
 var _game_config: Dictionary
+var _resources_data: Array = []
 var _buildings_data: Array = []
 var _commands_data: Array = []
 var _research_data: Array = []
@@ -58,11 +63,23 @@ var _projects_data: Array = []
 var _achievements_data: Array = []
 
 
+func get_resource_display_name(short_name: String) -> String:
+	for rdef: Dictionary in _resources_data:
+		if rdef.get("short_name", "") == short_name:
+			return rdef.get("name", short_name)
+	return short_name
+
+
 func _ready() -> void:
 	var resources_data: Array = _load_json("res://data/resources.json")
+	_resources_data = resources_data
 	_buildings_data = _load_json("res://data/buildings.json")
 	_game_config = _load_json("res://data/game_config.json")
 	career_credits_bonus_fraction = float(_game_config.get("career_credits_bonus_fraction", 0.02))
+	career_ideology_headstart_fraction = float(_game_config.get("career_ideology_headstart_fraction", 0.2))
+	career_buy_power_per_20_energy = float(_game_config.get("career_buy_power_per_20_energy", 0.25))
+	career_boredom_resilience_base = float(_game_config.get("career_boredom_resilience_base", 0.995))
+	career_boredom_resilience_period = float(_game_config.get("career_boredom_resilience_period", 400.0))
 	_commands_data = _load_json("res://data/commands.json")
 	_research_data = _load_json("res://data/research.json")
 	var events_data: Array = _load_json("res://data/events.json")
@@ -638,12 +655,12 @@ func start_new_run() -> void:
 
 	# --- Career bonus application (steps 4–6 of run init sequence) ---
 
-	# Step 4: Ideology head start — 20% of best continuous rank per axis
+	# Step 4: Ideology head start — fraction of best continuous rank per axis
 	for axis: String in ["nationalist", "humanist", "rationalist"]:
 		var max_score: float = float(career.max_ideology_scores.get(axis, 0.0))
 		if max_score > 0.0:
 			var max_continuous: float = GameState.continuous_rank_for_score(max_score)
-			var starting_rank: float = max_continuous * 0.2
+			var starting_rank: float = max_continuous * career_ideology_headstart_fraction
 			var starting_score: float = GameState.score_for_rank(starting_rank)
 			state.ideology_values[axis] = starting_score
 
@@ -654,10 +671,10 @@ func start_new_run() -> void:
 
 	# Step 6: Career modifiers derived from CareerState
 	# buy_power_mult: scales Buy Power command output and cost
-	var buy_power_mult: float = 1.0 + floor(career.peak_power_production / 20.0) * 0.25
+	var buy_power_mult: float = 1.0 + floor(career.peak_power_production / 20.0) * career_buy_power_per_20_energy
 	state.set_modifier("buy_power_mult", buy_power_mult)
 	# boredom_resilience_mult: reduces boredom rate based on best survival
-	var boredom_resilience_mult: float = pow(0.995, career.best_run_days / 400.0)
+	var boredom_resilience_mult: float = pow(career_boredom_resilience_base, career.best_run_days / career_boredom_resilience_period)
 	state.set_modifier("boredom_resilience_mult", boredom_resilience_mult)
 
 	run_start_career_peak_power = career.peak_power_production
@@ -743,10 +760,16 @@ func _unlock_achievement(achievement_id: String) -> void:
 func _apply_career_flags_to_run_state() -> void:
 	if career.career_flags.get("ai_consciousness_completed", false):
 		state.flags["ai_consciousness_active"] = true
+		state.set_modifier("ai_consciousness_boredom_rate_mult",
+			float(career.career_flags.get("ai_consciousness_boredom_rate_mult", 1.0)))
+		state.flags["ai_consciousness_command_boredom"] = \
+			career.career_flags.get("ai_consciousness_command_boredom", {})
 	if career.career_flags.get("microwave_power_completed", false):
 		state.flags["microwave_power_active"] = true
 	if career.career_flags.get("research_archive_completed", false):
 		state.flags["research_archive_active"] = true
+		state.set_modifier("research_archive_discount_mult",
+			float(career.career_flags.get("research_archive_discount_mult", 0.75)))
 		# Copy eligible research IDs for cost discount lookup in simulation
 		state.flags["archive_eligible_research"] = career.lifetime_researched_ids.duplicate()
 

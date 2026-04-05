@@ -37,20 +37,6 @@ const RESOURCE_COLORS: Dictionary = {
 	"cir":     Color(0.30, 0.80, 0.70),
 }
 
-const RESOURCE_NAMES: Dictionary = {
-	"eng":     "Energy",
-	"reg":     "Regolith",
-	"ice":     "Ice",
-	"he3":     "Helium-3",
-	"cred":    "Credits",
-	"land":    "Land",
-	"boredom": "Boredom",
-	"proc":    "Processors",
-	"ti":      "Titanium",
-	"prop":    "Propellant",
-	"sci":     "Science",
-	"cir":     "Circuits",
-}
 
 var _bdef: Dictionary
 var _font_rajdhani_bold: FontFile
@@ -299,7 +285,7 @@ func _build_requires_label(parent: VBoxContainer) -> void:
 func _build_production(parent: VBoxContainer) -> void:
 	for res: String in _bdef.production:
 		var lbl := Label.new()
-		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), RESOURCE_NAMES.get(res, res)]
+		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), GameManager.get_resource_display_name(res)]
 		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 16)
@@ -310,7 +296,7 @@ func _build_production(parent: VBoxContainer) -> void:
 func _build_upkeep(parent: VBoxContainer) -> void:
 	for res: String in _bdef.upkeep:
 		var lbl := Label.new()
-		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), RESOURCE_NAMES.get(res, res)]
+		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), GameManager.get_resource_display_name(res)]
 		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 16)
@@ -324,7 +310,7 @@ func _build_effects(parent: VBoxContainer) -> void:
 		if effect.get("prefix", "") == "store":
 			var res: String = effect.resource
 			var lbl := Label.new()
-			lbl.text = "  +%.0f %s storage" % [float(effect.value), RESOURCE_NAMES.get(res, res)]
+			lbl.text = "  +%.0f %s storage" % [float(effect.value), GameManager.get_resource_display_name(res)]
 			lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 			lbl.add_theme_font_override("font", _font_exo2_regular)
 			lbl.add_theme_font_size_override("font_size", 16)
@@ -402,7 +388,7 @@ func _add_cost_row(grid: GridContainer, res: String) -> void:
 	grid.add_child(icon)
 
 	var name_lbl := Label.new()
-	name_lbl.text = RESOURCE_NAMES.get(res, res)
+	name_lbl.text = GameManager.get_resource_display_name(res)
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 	name_lbl.add_theme_font_override("font", _font_exo2_regular)

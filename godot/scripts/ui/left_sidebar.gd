@@ -12,7 +12,7 @@ const RESOURCES: Array = [
 	["ice",    "Ice",        Color(0.70, 0.92, 1.00)],
 	["he3",    "Helium-3",   Color(0.50, 0.50, 1.00)],
 	["ti",     "Titanium",   Color(0.80, 0.80, 0.80)],
-	["cir",    "Circuits",   Color(0.30, 0.80, 0.70)],
+	["cir",    "Circuit Boards", Color(0.30, 0.80, 0.70)],
 	["prop",   "Propellant", Color(0.40, 0.70, 0.95)],
 	["cred",   "Credits",    Color(0.20, 0.85, 0.20)],
 	["sci",    "Science",    Color(0.70, 0.50, 0.90)],
@@ -48,10 +48,10 @@ const BUILDING_GATED_NAV_PANELS: Dictionary = {
 const SPEEDS: Array = ["||", "1x", "3x", "10x", "50x", "200x"]
 
 const TRADEABLE_DISPLAY: Dictionary = {
-	"he3":  ["He-3",       Color(0.50, 0.50, 1.00)],
-	"ti":   ["Titanium",   Color(0.80, 0.80, 0.80)],
-	"cir":  ["Circuits",   Color(0.30, 0.80, 0.70)],
-	"prop": ["Propellant", Color(0.40, 0.70, 0.95)],
+	"he3":  ["Helium-3",      Color(0.50, 0.50, 1.00)],
+	"ti":   ["Titanium",      Color(0.80, 0.80, 0.80)],
+	"cir":  ["Circuit Boards", Color(0.30, 0.80, 0.70)],
+	"prop": ["Propellant",    Color(0.40, 0.70, 0.95)],
 }
 
 const IDEOLOGY_COLORS: Dictionary = {

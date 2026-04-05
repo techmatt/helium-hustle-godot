@@ -1,5 +1,9 @@
 {
   "career_credits_bonus_fraction": 0.02,
+  "career_ideology_headstart_fraction": 0.2,
+  "career_buy_power_per_20_energy": 0.25,
+  "career_boredom_resilience_base": 0.995,
+  "career_boredom_resilience_period": 400,
   "starting_resources": {
     "eng": 100,
     "reg": 0,

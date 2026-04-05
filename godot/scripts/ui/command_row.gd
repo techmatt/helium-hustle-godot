@@ -33,11 +33,6 @@ func _fill_color_partial() -> Color:
 func _grip_color() -> Color:
 	return Color(0.50, 0.50, 0.50) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.50)
 
-const _RES_NAMES: Dictionary = {
-	"eng": "Energy", "reg": "Regolith", "ice": "Ice", "he3": "Helium-3",
-	"cred": "Credits", "ti": "Titanium", "prop": "Propellant",
-	"sci": "Science", "cir": "Circuits", "boredom": "Boredom", "land": "Land",
-}
 
 var _entry_index: int = 0
 var _cmd_name: String = ""
@@ -78,12 +73,12 @@ func _build_tooltip(costs: Dictionary, production: Dictionary) -> String:
 	else:
 		var cost_strs: Array = []
 		for k: String in costs:
-			cost_strs.append("%s %s" % [_fmt(costs[k]), _RES_NAMES.get(k, k)])
+			cost_strs.append("%s %s" % [_fmt(costs[k]), GameManager.get_resource_display_name(k)])
 		parts.append("Cost: " + ", ".join(cost_strs))
 	if not production.is_empty():
 		var prod_strs: Array = []
 		for k: String in production:
-			prod_strs.append("%s %s" % [_fmt(production[k]), _RES_NAMES.get(k, k)])
+			prod_strs.append("%s %s" % [_fmt(production[k]), GameManager.get_resource_display_name(k)])
 		parts.append("Produces: " + ", ".join(prod_strs))
 	return "\n".join(parts)
 

@@ -134,11 +134,17 @@ func _complete_project(state: GameState, career: CareerState, pid: String, pdef:
 		"boredom_modifiers":
 			# AI Consciousness Act — permanent boredom rate reduction
 			career.career_flags["ai_consciousness_completed"] = true
+			career.career_flags["ai_consciousness_boredom_rate_mult"] = float(reward.get("base_boredom_rate_mult", 1.0))
+			career.career_flags["ai_consciousness_command_boredom"] = reward.get("command_boredom", {}).duplicate()
 			state.flags["ai_consciousness_active"] = true
+			state.set_modifier("ai_consciousness_boredom_rate_mult", float(reward.get("base_boredom_rate_mult", 1.0)))
+			state.flags["ai_consciousness_command_boredom"] = reward.get("command_boredom", {}).duplicate()
 		"research_discount":
 			# Universal Research Archive — discount on re-purchased research
 			career.career_flags["research_archive_completed"] = true
+			career.career_flags["research_archive_discount_mult"] = float(reward.get("discount_mult", 0.75))
 			state.flags["research_archive_active"] = true
+			state.set_modifier("research_archive_discount_mult", float(reward.get("discount_mult", 0.75)))
 			state.flags["archive_eligible_research"] = career.lifetime_researched_ids.duplicate()
 
 	# Track completion

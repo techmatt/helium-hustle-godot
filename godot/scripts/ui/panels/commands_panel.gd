@@ -36,7 +36,7 @@ const RESOURCE_META: Dictionary = {
 	"ti":     ["Titanium",   Color(0.80, 0.80, 0.80)],
 	"prop":   ["Propellant", Color(0.40, 0.70, 0.95)],
 	"sci":    ["Science",    Color(0.70, 0.50, 0.90)],
-	"cir":    ["Circuits",   Color(0.30, 0.80, 0.70)],
+	"cir":    ["Circuit Boards", Color(0.30, 0.80, 0.70)],
 	"boredom":["Boredom",    Color(0.55, 0.55, 0.55)],
 	"land":   ["Land",       Color(0.40, 0.70, 0.30)],
 }
@@ -261,14 +261,10 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 			lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			vbox.add_child(lbl)
 
-	# AI Consciousness Act boredom surcharge
-	if GameManager.state.flags.get("ai_consciousness_active", false):
-		const AI_BOREDOM: Dictionary = {
-			"load_pads": 0.3,
-			"cloud_compute": 0.2,
-			"disrupt_spec": 0.5,
-		}
-		var ai_extra: float = float(AI_BOREDOM.get(cmd.get("short_name", ""), 0.0))
+	# AI Consciousness Act boredom surcharge (values from projects.json via state.flags)
+	var _ai_cmd_boredom: Dictionary = GameManager.state.flags.get("ai_consciousness_command_boredom", {})
+	if not _ai_cmd_boredom.is_empty():
+		var ai_extra: float = float(_ai_cmd_boredom.get(cmd.get("short_name", ""), 0.0))
 		if ai_extra > 0.0:
 			var ai_lbl := Label.new()
 			ai_lbl.text = "+%.1f boredom (AI Consciousness Act)" % ai_extra

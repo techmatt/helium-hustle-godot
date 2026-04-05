@@ -3,12 +3,6 @@ extends PanelContainer
 
 const TRADEABLE: Array = ["he3", "ti", "cir", "prop"]
 
-const RESOURCE_DISPLAY: Dictionary = {
-	"he3":  "He-3",
-	"ti":   "Titanium",
-	"cir":  "Circuit Boards",
-	"prop": "Propellant",
-}
 
 const RESOURCE_COLORS: Dictionary = {
 	"he3":  Color(0.50, 0.50, 1.00),
@@ -119,7 +113,7 @@ func _build_ui() -> void:
 		_resource_opt.add_theme_color_override("font_focus_color", black)
 	_resource_opt.add_item("None (disabled)")
 	for res: String in TRADEABLE:
-		_resource_opt.add_item(RESOURCE_DISPLAY[res])
+		_resource_opt.add_item(GameManager.get_resource_display_name(res))
 	_resource_opt.item_selected.connect(_on_resource_selected)
 	title_row.add_child(_resource_opt)
 

@@ -1,17 +1,6 @@
 class_name ProjectCard
 extends PanelContainer
 
-const RESOURCE_NAMES: Dictionary = {
-	"cred": "Credits",
-	"sci":  "Science",
-	"reg":  "Regolith",
-	"eng":  "Energy",
-	"he3":  "Helium-3",
-	"ti":   "Titanium",
-	"cir":  "Circuits",
-	"prop": "Propellant",
-	"ice":  "Ice",
-}
 
 var _pdef: Dictionary = {}
 var _font_rb: FontFile
@@ -170,7 +159,7 @@ func _build_resource_row(res: String, total_needed: float) -> PanelContainer:
 
 	# Resource name label
 	var res_lbl := Label.new()
-	res_lbl.text = RESOURCE_NAMES.get(res, res)
+	res_lbl.text = GameManager.get_resource_display_name(res)
 	res_lbl.custom_minimum_size = Vector2(70, 0)
 	res_lbl.add_theme_font_override("font", _font_e2r)
 	res_lbl.add_theme_font_size_override("font_size", 15)

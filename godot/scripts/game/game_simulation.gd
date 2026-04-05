@@ -883,14 +883,10 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 				_effect_ideology_push(state, effect)
 			"overclock":
 				_effect_overclock(state, effect)
-	# AI Consciousness Act: add extra boredom per execution for affected commands
-	if state.flags.get("ai_consciousness_active", false):
-		const AI_CONSCIOUSNESS_BOREDOM: Dictionary = {
-			"load_pads": 0.3,
-			"cloud_compute": 0.2,
-			"disrupt_spec": 0.5,
-		}
-		var extra_boredom: float = float(AI_CONSCIOUSNESS_BOREDOM.get(short_name, 0.0))
+	# AI Consciousness Act: add extra boredom per execution for affected commands (values from projects.json)
+	var ai_cmd_boredom: Dictionary = state.flags.get("ai_consciousness_command_boredom", {})
+	if not ai_cmd_boredom.is_empty():
+		var extra_boredom: float = float(ai_cmd_boredom.get(short_name, 0.0))
 		if extra_boredom != 0.0:
 			_apply_delta(state, "boredom", extra_boredom)
 
@@ -913,11 +909,11 @@ func _get_research_cost(state: GameState, research_id: String) -> float:
 	var base_cost: float = float(_research_data[research_id].get("cost", 0))
 	# Rationalist ideology: research cost reduction
 	var mult: float = state.get_ideology_bonus("rationalist", 1.0, 0.97)
-	# Universal Research Archive: 25% discount on previously researched tech
+	# Universal Research Archive: discount on previously researched tech (value from projects.json)
 	if state.flags.get("research_archive_active", false):
 		var eligible: Array = state.flags.get("archive_eligible_research", [])
 		if eligible.has(research_id):
-			mult *= 0.75
+			mult *= state.get_modifier("research_archive_discount_mult", 0.75)
 	return base_cost * mult
 
 
@@ -963,9 +959,8 @@ func _get_boredom_multiplier(state: GameState) -> float:
 		mult *= float(eff.get("value", 1.0))
 	# Humanist ideology: passive boredom growth bonus
 	mult *= state.get_ideology_bonus("humanist", 1.0, 0.97)
-	# AI Consciousness Act: permanent -15% base boredom rate
-	if state.flags.get("ai_consciousness_active", false):
-		mult *= 0.85
+	# AI Consciousness Act: permanent boredom rate reduction (value from projects.json)
+	mult *= state.get_modifier("ai_consciousness_boredom_rate_mult", 1.0)
 	# Career boredom resilience bonus (derived from best_run_days, set on run start)
 	mult *= state.get_modifier("boredom_resilience_mult", 1.0)
 	return mult

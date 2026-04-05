@@ -53,5 +53,10 @@
     "name": "Boredom",
     "short_name": "boredom",
     "storage_base": 1000.0
+  },
+  {
+    "name": "Processors",
+    "short_name": "proc",
+    "storage_base": null
   }
 ]

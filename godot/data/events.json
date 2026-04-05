@@ -16,7 +16,7 @@
     "id": "q2_first_extraction",
     "category": "story",
     "title": "Q2 — First Extraction",
-    "summary": "Accumulate 50 He-3 (cumulative production, not stockpile).",
+    "summary": "Accumulate 50 Helium-3 (cumulative production, not stockpile).",
     "body": "Energy infrastructure nominal. Proceeding to resource extraction phase. Helium-3 identified as primary export commodity. Begin extraction and refinement operations.",
     "trigger": { "type": "quest_complete", "quest_id": "q1_boot_sequence" },
     "condition": { "type": "resource_cumulative", "resource_id": "he3", "amount": 50 },

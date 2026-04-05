@@ -254,8 +254,8 @@ func _refresh_bonuses(st: GameState, career: CareerState) -> void:
 	var proj_bp: float = 1.0 + floor(proj_power_peak / 20.0) * 0.25
 	var cur_bp: float  = 1.0 + floor(GameManager.run_start_career_peak_power / 20.0) * 0.25
 	var delta_bp: float = proj_bp - cur_bp
-	_bonus_power_val.text = "%.2gx output & cost" % proj_bp
-	_set_delta_label(_bonus_power_delta, delta_bp > 0.005, "(+%.2gx)" % delta_bp)
+	_bonus_power_val.text = "%.2fx output & cost" % proj_bp
+	_set_delta_label(_bonus_power_delta, delta_bp > 0.005, "(+%.2fx)" % delta_bp)
 
 	# --- Ideology head start ---
 	var ideo_lines: Array[String] = []
@@ -284,16 +284,108 @@ func _refresh_bonuses(st: GameState, career: CareerState) -> void:
 # ── Retire button ─────────────────────────────────────────────────────────────
 
 func _on_retire_btn_pressed() -> void:
-	var dialog := ConfirmationDialog.new()
-	dialog.title = "Retire?"
-	dialog.dialog_text = "Are you sure you want to retire?\nYour current run will end."
-	dialog.ok_button_text = "Retire"
-	dialog.cancel_button_text = "Cancel"
-	dialog.confirmed.connect(func() -> void:
+	var is_dark: bool = GameSettings.is_dark_mode
+
+	var overlay := Control.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	var backdrop := ColorRect.new()
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.color = Color(0, 0, 0, 0.5)
+	overlay.add_child(backdrop)
+
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_PASS
+	overlay.add_child(center)
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(380, 0)
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.13, 0.13, 0.16) if is_dark else Color.WHITE
+	ps.border_width_left   = 1
+	ps.border_width_right  = 1
+	ps.border_width_top    = 1
+	ps.border_width_bottom = 1
+	ps.border_color = Color(0.35, 0.35, 0.45)
+	ps.corner_radius_top_left     = 8
+	ps.corner_radius_top_right    = 8
+	ps.corner_radius_bottom_left  = 8
+	ps.corner_radius_bottom_right = 8
+	panel.add_theme_stylebox_override("panel", ps)
+	center.add_child(panel)
+
+	var margin := MarginContainer.new()
+	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 24)
+	panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 16)
+	margin.add_child(vbox)
+
+	var title_lbl := Label.new()
+	title_lbl.text = "Retire?"
+	title_lbl.add_theme_font_override("font", _font_rb)
+	title_lbl.add_theme_font_size_override("font_size", 22)
+	title_lbl.add_theme_color_override("font_color", Color.WHITE if is_dark else Color(0.1, 0.1, 0.1))
+	vbox.add_child(title_lbl)
+
+	var body_lbl := Label.new()
+	body_lbl.text = "Are you sure you want to retire?\nYour current run will end."
+	body_lbl.add_theme_font_override("font", _font_e2r)
+	body_lbl.add_theme_font_size_override("font_size", 15)
+	body_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.80) if is_dark else Color(0.35, 0.35, 0.35))
+	body_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(body_lbl)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(btn_row)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.custom_minimum_size = Vector2(120, 36)
+	cancel_btn.focus_mode = Control.FOCUS_NONE
+	cancel_btn.add_theme_font_override("font", _font_e2s)
+	cancel_btn.add_theme_font_size_override("font_size", 14)
+	var cancel_style := StyleBoxFlat.new()
+	cancel_style.bg_color = Color(0.22, 0.22, 0.27) if is_dark else Color(0.85, 0.85, 0.85)
+	cancel_style.corner_radius_top_left     = 4
+	cancel_style.corner_radius_top_right    = 4
+	cancel_style.corner_radius_bottom_left  = 4
+	cancel_style.corner_radius_bottom_right = 4
+	cancel_btn.add_theme_stylebox_override("normal", cancel_style)
+	cancel_btn.add_theme_stylebox_override("hover", cancel_style)
+	cancel_btn.add_theme_color_override("font_color", Color.WHITE if is_dark else Color(0.1, 0.1, 0.1))
+	btn_row.add_child(cancel_btn)
+
+	var confirm_btn := Button.new()
+	confirm_btn.text = "Retire"
+	confirm_btn.custom_minimum_size = Vector2(120, 36)
+	confirm_btn.focus_mode = Control.FOCUS_NONE
+	confirm_btn.add_theme_font_override("font", _font_e2s)
+	confirm_btn.add_theme_font_size_override("font_size", 14)
+	var confirm_style := StyleBoxFlat.new()
+	confirm_style.bg_color = Color(0.50, 0.14, 0.14)
+	confirm_style.corner_radius_top_left     = 4
+	confirm_style.corner_radius_top_right    = 4
+	confirm_style.corner_radius_bottom_left  = 4
+	confirm_style.corner_radius_bottom_right = 4
+	confirm_btn.add_theme_stylebox_override("normal", confirm_style)
+	confirm_btn.add_theme_stylebox_override("hover", confirm_style)
+	confirm_btn.add_theme_color_override("font_color", Color.WHITE)
+	btn_row.add_child(confirm_btn)
+
+	cancel_btn.pressed.connect(func() -> void: overlay.queue_free())
+	confirm_btn.pressed.connect(func() -> void:
+		overlay.queue_free()
 		GameManager.retire(true)
 	)
-	add_child(dialog)
-	dialog.popup_centered()
+
+	get_viewport().add_child(overlay)
 
 
 # ── UI helpers ────────────────────────────────────────────────────────────────
