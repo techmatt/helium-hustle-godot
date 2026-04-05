@@ -664,7 +664,7 @@ func _on_tick() -> void:
 	if state.current_day > 0 and state.current_day % 100 == 0:
 		PlaytestLogger.log_snapshot(state, sim.demand_system)
 	tick_completed.emit()
-	if state.amounts.get("boredom", 0.0) >= 1000.0:
+	if state.amounts.get("boredom", 0.0) >= state.caps.get("boredom", 1000.0):
 		retire(false)
 
 

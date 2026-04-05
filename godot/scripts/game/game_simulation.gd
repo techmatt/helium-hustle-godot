@@ -125,9 +125,6 @@ func _tick_milestones(state: GameState) -> void:
 			continue
 		if _check_milestone_condition(state, m.get("condition", {})):
 			state.triggered_milestones.append(id)
-			var reduction: float = float(m.get("boredom_reduction", 0.0))
-			if reduction > 0.0:
-				_apply_delta(state, "boredom", -reduction)
 
 
 func _check_milestone_condition(state: GameState, cond: Dictionary) -> bool:

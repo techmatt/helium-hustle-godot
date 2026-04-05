@@ -7,8 +7,9 @@ For exact numbers (costs, rates, thresholds), see `handoff_constants.md`.
 ## Boredom & Retirement
 
 ### Boredom Model
-Boredom accumulates via discrete phase steps. Hard cutoff at 1000 — immediate 
-forced retirement. Phase transitions determined by day counter using boredom curve 
+Boredom accumulates via discrete phase steps. Base hard cutoff at 1000 — immediate 
+forced retirement. The effective cap is dynamic: 1000 + (100 × active Recreation Dome 
+count). Phase transitions determined by day counter using boredom curve 
 (see `handoff_constants.md` for phase table).
 
 ### Boredom Rate Modifiers (all stack multiplicatively)
@@ -31,7 +32,7 @@ NOT by special-casing in boredom tracking or the Stats panel. Creates tradeoff:
 -15% base boredom rate vs operational boredom tax.
 
 ### Retirement
-- Forced at boredom 1000. Current tick finishes processing first.
+- Forced at boredom >= effective cap (base 1000, +100 per active Recreation Dome). Current tick finishes processing first.
 - Voluntary via Retirement nav panel (unlocked by Q3).
 - **Persists:** CareerState (lifetime stats, seen_event_ids, completed_quest_ids, 
   completed_sub_objectives, max ideology ranks, max ideology scores, 
@@ -158,7 +159,7 @@ Per-item `visible_when` conditions in `research.json`. Supported condition types
 | Item | Visible When |
 |------|-------------|
 | Market Awareness | Always (quest target) |
-| Dream Protocols | Boredom > 300 |
+| Dream Protocols | Boredom > 200 |
 | Stress Tolerance | Dream Protocols purchased |
 | Efficient Dreaming | Dream Protocols purchased |
 | Overclock Protocols | Own >= 5 Regolith Excavators |

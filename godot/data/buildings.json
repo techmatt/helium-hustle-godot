@@ -321,7 +321,7 @@
         "prefix": "store",
         "resource": "cir",
         "operator": "+",
-        "value": 10.0
+        "value": 20.0
       },
       {
         "prefix": "store",
@@ -409,5 +409,33 @@
     "upkeep": {},
     "effects": [],
     "description": "Orbital power reception array. Enables purchasing energy from Earth via Buy Power command."
+  },
+  {
+    "name": "Recreation Dome",
+    "short_name": "recreation_dome",
+    "category": "Infrastructure",
+    "ideology": "humanist",
+    "requires": {
+      "type": "quest",
+      "value": "Q6",
+      "label": "Q6 — Open Horizons (start)"
+    },
+    "land": 3,
+    "cost_scaling": 1.5,
+    "costs": {
+      "cred": 300.0,
+      "cir": 30.0
+    },
+    "production": {},
+    "upkeep": {},
+    "effects": [
+      {
+        "prefix": "store",
+        "resource": "boredom",
+        "operator": "+",
+        "value": 100.0
+      }
+    ],
+    "description": "Recreational facilities keep your AI engaged. Raises the boredom cap by +100 per active dome."
   }
 ]

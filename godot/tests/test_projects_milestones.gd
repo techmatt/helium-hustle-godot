@@ -6,7 +6,6 @@ const TF = preload("res://tests/test_fixtures.gd")
 func run(scene_root: Node) -> void:
 	_test_project_drain()
 	_test_project_completion()
-	_test_milestone_boredom_reduction()
 	_test_project_persistence(scene_root)
 	_test_persistent_project_reward(scene_root)
 	_test_milestone_reset_on_retirement(scene_root)
@@ -85,54 +84,6 @@ func _test_project_completion() -> void:
 		"project completion: project in completed_projects_this_run")
 	_assert_approx(state.get_modifier("building_upkeep_mult"), 0.90, 0.001,
 		"project completion: building_upkeep_mult modifier set to 0.90")
-
-
-# ── Milestones: Boredom Reduction ────────────────────────────────────────────
-
-func _test_milestone_boredom_reduction() -> void:
-	print("--- Milestones: Boredom Reduction ---")
-	var sim := TF.create_fresh_sim()
-
-	# Test: first_shipment_credits (boredom -250)
-	var state := TF.fresh_state_isolated(sim)
-	TF.pretrigger_all_milestones_except(state, "first_shipment_credits")
-	state.amounts["boredom"] = 400.0
-	state.total_shipments_completed = 1
-	sim.tick(state, true)  # debug_no_boredom = true
-
-	_assert_approx(state.amounts.get("boredom", -1.0), 150.0, 0.001,
-		"milestone first_shipment_credits: boredom reduced by 250 (400 → 150)")
-	_assert_true(state.triggered_milestones.has("first_shipment_credits"),
-		"milestone first_shipment_credits: id in triggered_milestones")
-
-	# Verify it doesn't fire a second time.
-	sim.tick(state, true)
-	_assert_approx(state.amounts.get("boredom", -1.0), 150.0, 0.001,
-		"milestone first_shipment_credits: no second reduction on re-tick")
-
-	# Test: first_research (boredom -150)
-	var state2 := TF.fresh_state_isolated(sim)
-	TF.pretrigger_all_milestones_except(state2, "first_research")
-	state2.amounts["boredom"] = 300.0
-	state2.completed_research.append("overclock_protocols")
-	sim.tick(state2, true)
-
-	_assert_approx(state2.amounts.get("boredom", -1.0), 150.0, 0.001,
-		"milestone first_research: boredom reduced by 150 (300 → 150)")
-	_assert_true(state2.triggered_milestones.has("first_research"),
-		"milestone first_research: id in triggered_milestones")
-
-	# Test: credits_threshold (boredom -150, cumulative cred >= 500)
-	var state3 := TF.fresh_state_isolated(sim)
-	TF.pretrigger_all_milestones_except(state3, "credits_threshold")
-	state3.amounts["boredom"] = 300.0
-	state3.cumulative_resources_earned["cred"] = 500.0
-	sim.tick(state3, true)
-
-	_assert_approx(state3.amounts.get("boredom", -1.0), 150.0, 0.001,
-		"milestone credits_threshold: boredom reduced by 150 (300 → 150)")
-	_assert_true(state3.triggered_milestones.has("credits_threshold"),
-		"milestone credits_threshold: id in triggered_milestones")
 
 
 # ── Project: Cross-Retirement Persistence ────────────────────────────────────

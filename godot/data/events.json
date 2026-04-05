@@ -103,6 +103,19 @@
     "unlocks": []
   },
   {
+    "id": "recreation_dome_unlock",
+    "category": "ongoing",
+    "title": "Recreation Dome Unlocked",
+    "summary": "",
+    "body": "",
+    "trigger": { "type": "quest_complete", "quest_id": "q5_market_awareness" },
+    "condition": { "type": "immediate" },
+    "choices": [],
+    "unlocks": [
+      { "type": "enable_building", "building_id": "recreation_dome" }
+    ]
+  },
+  {
     "id": "q_end_signal_detected",
     "category": "story",
     "title": "Q7 — Signal Detected",

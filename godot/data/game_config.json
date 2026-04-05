@@ -112,18 +112,15 @@
   "milestones": [
     {
       "id": "first_shipment_credits",
-      "condition": {"type": "shipments_completed", "min": 1},
-      "boredom_reduction": 250
+      "condition": {"type": "shipments_completed", "min": 1}
     },
     {
       "id": "first_research",
-      "condition": {"type": "research_count", "min": 1},
-      "boredom_reduction": 150
+      "condition": {"type": "research_count", "min": 1}
     },
     {
       "id": "credits_threshold",
-      "condition": {"type": "cumulative_credits", "min": 500},
-      "boredom_reduction": 150
+      "condition": {"type": "cumulative_credits", "min": 500}
     }
   ]
 }

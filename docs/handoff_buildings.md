@@ -76,8 +76,9 @@ GameState fields:
 - `overflow_this_tick: Dictionary` — resource_id → float, reset each tick
 - `overflow_rolling_avg: Dictionary` — resource_id → float, rolling average
 
-This is the ONLY place resources are clamped to storage caps (except boredom's 
-0–1000 range which triggers forced retirement).
+This is the ONLY place resources are clamped to storage caps. Boredom uses the 
+same clamp path — its effective cap (base 500 + Recreation Dome bonus) triggers 
+forced retirement when reached.
 
 ## Partial Production (Input-Constrained)
 
@@ -113,7 +114,7 @@ Buildings are assigned to ideology axes. Aligned buildings get per-rank cost
 discount `pow(0.97, rank)`.
 
 - **Nationalist:** Launch Pad, Arbitrage Engine, Microwave Receiver, Fuel Cell Array
-- **Humanist:** Data Center, Battery
+- **Humanist:** Data Center, Battery, Recreation Dome
 - **Rationalist:** Fabricator, Research Lab
 
 Ideology alignment labels are hidden on building cards until the Ideologies nav 
