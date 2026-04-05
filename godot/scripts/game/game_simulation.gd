@@ -9,9 +9,7 @@ var _buildings_map: Dictionary = {}   # {short_name: bdef}
 var _resource_names: Dictionary = {}  # {short_name: display_name}
 var _commands_data: Dictionary = {}   # {short_name: command_dict}
 var _research_data: Dictionary = {}   # {id: research_item_dict}
-var _milestones: Array = []           # milestone definitions from game_config
 var pending_program_events: Array = []   # populated during tick, read by GameManager
-var pending_milestone_triggers: Array = []  # {id, label, boredom_reduction} — read by GameManager
 var pending_rival_notifications: Array = []  # {tick, rival_name, resource, message}
 var pending_executed_commands: Array[String] = []  # short_names of successfully executed commands this tick
 var pending_shipments: Array = []  # {resource: String, revenue: float, demand: float} — read by GameManager
@@ -75,12 +73,10 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 		_land_cost_scaling = float(lc.get("cost_scaling", 1.5))
 		_land_per_purchase = int(lc.get("land_per_purchase", 10))
 	_land_starting = int(game_config.get("starting_resources", {}).get("land", 40))
-	_milestones = game_config.get("milestones", [])
 
 
 func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	pending_program_events.clear()
-	pending_milestone_triggers.clear()
 	pending_rival_notifications.clear()
 	pending_executed_commands.clear()
 	pending_shipments.clear()
@@ -97,7 +93,6 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	_tick_pad_cooldowns(state)
 	execute_programs(state)
 	_tick_rivals_and_speculators(state)
-	_check_milestones(state)
 	_clamp(state)
 	_tick_overclock_states(state)
 	state.current_day += 1
@@ -109,6 +104,8 @@ func _tick_boredom(state: GameState, debug_no_boredom: bool) -> void:
 		boredom_rate = _get_boredom_rate(state.current_day)
 		boredom_rate *= _get_boredom_multiplier(state)
 	_apply_delta(state, "boredom", boredom_rate)
+	if boredom_rate != 0.0:
+		state.lifetime_boredom_sources["phase_growth"] = state.lifetime_boredom_sources.get("phase_growth", 0.0) + boredom_rate
 	if rate_tracker != null and boredom_rate != 0.0:
 		var phase_idx: int = _get_boredom_phase_index(state.current_day)
 		rate_tracker.record("boredom_phase:" + str(phase_idx), "boredom", boredom_rate)
@@ -494,7 +491,10 @@ func buy_building(state: GameState, short_name: String) -> void:
 	var scale: float = pow(float(bdef.cost_scaling), purchased)
 	var ideology_mult: float = _get_ideology_cost_mult(state, bdef)
 	for res in bdef.costs:
-		state.amounts[res] -= float(bdef.costs[res]) * scale * ideology_mult
+		var cost: float = float(bdef.costs[res]) * scale * ideology_mult
+		state.amounts[res] -= cost
+		if res == "cred" and cost != 0.0:
+			state.lifetime_credit_sources["building_purchases"] = state.lifetime_credit_sources.get("building_purchases", 0.0) - cost
 	state.amounts["land"] -= float(bdef.land)
 	state.buildings_owned[short_name] = old_owned + 1
 	# New building comes online immediately
@@ -638,6 +638,8 @@ func _effect_boredom_add(state: GameState, effect: Dictionary, command_shortname
 	if command_shortname == "dream" and boredom_val < 0.0:
 		boredom_val *= state.get_ideology_bonus("humanist", 1.0, 1.05)
 	_apply_delta(state, "boredom", boredom_val)
+	if boredom_val != 0.0:
+		state.lifetime_boredom_sources[command_shortname] = state.lifetime_boredom_sources.get(command_shortname, 0.0) + boredom_val
 
 
 func _effect_demand_nudge(state: GameState, effect: Dictionary) -> void:
@@ -696,6 +698,8 @@ func _get_research_effects(state: GameState, effect_type: String) -> Array:
 
 func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: float, demand: float = 0.0) -> void:
 	pending_shipments.append({"resource": pad.resource_type, "revenue": payout, "demand": demand, "cargo": pad.cargo_loaded})
+	var shipment_key: String = "shipment_" + pad.resource_type
+	state.lifetime_credit_sources[shipment_key] = state.lifetime_credit_sources.get(shipment_key, 0.0) + payout
 	var record := GameState.LaunchRecord.new()
 	record.resource_type = pad.resource_type
 	record.quantity = pad.cargo_loaded
@@ -867,6 +871,8 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		prog_delta[res] = prog_delta.get(res, 0.0) + delta
 		if delta > 0.0:
 			state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
+			if res == "cred":
+				state.lifetime_credit_sources[short_name] = state.lifetime_credit_sources.get(short_name, 0.0) + delta
 	for effect in cmd.get("effects", []):
 		match effect.get("effect", ""):
 			"load_pads":
@@ -889,6 +895,7 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		var extra_boredom: float = float(ai_cmd_boredom.get(short_name, 0.0))
 		if extra_boredom != 0.0:
 			_apply_delta(state, "boredom", extra_boredom)
+			state.lifetime_boredom_sources[short_name] = state.lifetime_boredom_sources.get(short_name, 0.0) + extra_boredom
 
 
 func _can_pay_upkeep(state: GameState, bdef: Dictionary, count: int) -> bool:
@@ -1044,42 +1051,12 @@ func can_buy_land(state: GameState) -> bool:
 func buy_land(state: GameState) -> void:
 	if not can_buy_land(state):
 		return
-	state.amounts["cred"] -= float(get_land_purchase_cost(state))
+	var land_cost: float = float(get_land_purchase_cost(state))
+	state.amounts["cred"] -= land_cost
 	state.amounts["land"] = state.amounts.get("land", 0.0) + float(_land_per_purchase)
 	state.land_purchases += 1
+	state.lifetime_credit_sources["land_purchases"] = state.lifetime_credit_sources.get("land_purchases", 0.0) - land_cost
 
-
-func _check_milestones(state: GameState) -> void:
-	for milestone in _milestones:
-		var mid: String = milestone.get("id", "")
-		if mid.is_empty() or state.triggered_milestones.has(mid):
-			continue
-		if _check_milestone_condition(state, milestone.get("condition", {})):
-			state.triggered_milestones.append(mid)
-			var reduction: float = float(milestone.get("boredom_reduction", 0.0))
-			var label: String = milestone.get("label", mid)
-			state.amounts["boredom"] = maxf(0.0, state.amounts.get("boredom", 0.0) - reduction)
-			_on_boredom_reduced(reduction, "milestone:" + mid)
-			pending_milestone_triggers.append({
-				"id": mid,
-				"label": label,
-				"boredom_reduction": reduction,
-			})
-
-
-func _check_milestone_condition(state: GameState, cond: Dictionary) -> bool:
-	if cond.is_empty():
-		return false
-	match cond.get("type", ""):
-		"shipment_completed":
-			return state.total_shipments_completed >= int(cond.get("count", 1))
-		"resource_cumulative":
-			var res: String = cond.get("resource", "")
-			var amount: float = float(cond.get("amount", 0))
-			return state.cumulative_resources_earned.get(res, 0.0) >= amount
-		"research_completed_any":
-			return not state.completed_research.is_empty()
-	return false
 
 
 func _on_boredom_reduced(_amount: float, _source: String) -> void:

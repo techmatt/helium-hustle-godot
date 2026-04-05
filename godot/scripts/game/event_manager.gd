@@ -148,6 +148,20 @@ func get_event_def(event_id: String) -> Dictionary:
 	return _def_map.get(event_id, {})
 
 
+func get_event_body(event_id: String) -> String:
+	var def: Dictionary = _def_map.get(event_id, {})
+	var body: String = def.get("body", "")
+	if not body.contains("{rate}"):
+		return body
+	var trigger: Dictionary = def.get("trigger", {})
+	if trigger.get("type", "") == "boredom_phase":
+		var phase: int = int(trigger.get("phase", 0))
+		if phase >= 1 and phase <= _boredom_curve.size():
+			var rate: float = _boredom_curve[phase - 1][1]
+			body = body.replace("{rate}", str(rate))
+	return body
+
+
 # Returns story-category quest defs in chain order (root first, following quest_complete links).
 func get_quest_chain() -> Array:
 	var chain: Array = []

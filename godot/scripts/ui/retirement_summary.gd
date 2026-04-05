@@ -119,7 +119,6 @@ func _populate(summary: Dictionary) -> void:
 	_add_stat_row("Shipments completed:", _fmt_int(int(summary.get("shipments_completed", 0))))
 	_add_stat_row("Buildings built:", _fmt_int(int(summary.get("buildings_built", 0))))
 	_add_stat_row("Research completed:", _fmt_int(int(summary.get("research_completed", []).size())))
-	_add_stat_row("Milestones reached:", _fmt_int(int(summary.get("milestones_hit", []).size())))
 
 	_add_section_header("Career Totals")
 	_add_stat_row("Total retirements:", _fmt_int(int(summary.get("career_retirements", 1))))

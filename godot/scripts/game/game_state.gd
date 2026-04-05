@@ -152,7 +152,6 @@ var unlocked_buildings: Array[String] = []     # buildings unlocked via event ef
 var enabled_projects: Array[String] = []       # projects enabled via event effects
 var flags: Dictionary = {}                      # named boolean flags set by events
 var unlocked_nav_panels: Array[String] = []    # nav panel ids revealed via event effects
-var triggered_milestones: Array[String] = []   # milestone ids fired this run
 
 # Project system — per-run state (rates/invested reset; see retirement notes)
 var active_project_rates: Dictionary = {}       # { project_id: { resource_id: float } }
@@ -222,6 +221,12 @@ var ideology_values: Dictionary = {
 # Decremented each tick; removed when ticks reach 0.
 var overclock_states: Array = []
 
+# Lifetime per-run accumulators — transient, reset on retirement (not saved/loaded).
+# Boredom: source_key → float (phase_growth, dream, load_pads, cloud_compute, disrupt_spec)
+# Credits: source_key → float (shipment_<res>, cloud_compute, building_purchases, land_purchases)
+var lifetime_boredom_sources: Dictionary = {}
+var lifetime_credit_sources: Dictionary = {}
+
 # Event system — persistent across retirements
 var seen_event_ids: Array[String] = []
 var highest_completed_story_quest: String = ""
@@ -279,9 +284,6 @@ func to_dict() -> Dictionary:
 
 		# Cumulative tracking
 		"cumulative_resources_earned": cumulative_resources_earned.duplicate(),
-
-		# Milestones
-		"triggered_milestones": Array(triggered_milestones),
 
 		# Boredom
 		"current_boredom_phase": current_boredom_phase,
@@ -365,9 +367,6 @@ static func from_dict(data: Dictionary) -> GameState:
 
 	# Cumulative
 	s.cumulative_resources_earned = data.get("cumulative_resources_earned", {})
-
-	# Milestones
-	s.triggered_milestones.assign(data.get("triggered_milestones", []))
 
 	# Boredom
 	s.current_boredom_phase = int(data.get("current_boredom_phase", 1))

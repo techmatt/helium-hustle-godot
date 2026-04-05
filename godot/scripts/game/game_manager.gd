@@ -41,7 +41,6 @@ var skip_save_load: bool = false
 signal tick_completed
 signal program_step_executed(program_index: int, entry_index: int, success: bool)
 signal program_cycle_reset(program_index: int)
-signal milestone_triggered(milestone_id: String, label: String, boredom_reduction: float)
 signal retirement_started(summary_data: Dictionary)
 signal project_completed_notification(project_name: String)
 signal achievement_unlocked(achievement_id: String)
@@ -195,6 +194,10 @@ func _initialize_state() -> void:
 	state.run_number = career.run_number
 	sim.recalculate_caps(state)
 	sim.demand_system.initialize_demand(state)
+	var _idle_entry := GameState.ProgramEntry.new()
+	_idle_entry.command_shortname = "idle"
+	_idle_entry.repeat_count = 1
+	state.programs[0].commands = [_idle_entry]
 	state.programs[0].processors_assigned = 1
 	_run_peak_power = 0.0
 	PlaytestLogger.start_run(state.run_number, career, state, sim.demand_system)
@@ -282,6 +285,10 @@ func set_loading_priority(priority: Array) -> void:
 
 func get_buildings_data() -> Array:
 	return _buildings_data
+
+
+func get_resources_data() -> Array:
+	return _resources_data
 
 
 func can_buy_land() -> bool:
@@ -453,7 +460,7 @@ func purchase_research(research_id: String) -> void:
 		var sci_cost: float = 0.0
 		for rd: Dictionary in _research_data:
 			if rd.get("id", "") == research_id:
-				sci_cost = float((rd.get("cost", {}) as Dictionary).get("sci", 0))
+				sci_cost = float(rd.get("cost", 0))
 				break
 		sim.purchase_research(state, research_id)
 		PlaytestLogger.log_event("research_completed", {
@@ -469,7 +476,7 @@ func purchase_research(research_id: String) -> void:
 # Executes a full tick against the live state without using the timer.
 # Runs sim + event_manager + project_manager in the same order as _on_tick().
 # Pass debug_no_boredom = true to suppress boredom accumulation (useful in
-# tests that assert on exact boredom values after milestone reductions).
+# tests that assert on exact boredom values).
 # Does NOT emit tick_completed, trigger autosave, or check boredom >= 1000.
 func execute_tick(debug_no_boredom: bool = false) -> void:
 	sim.tick(state, debug_no_boredom)
@@ -490,14 +497,6 @@ func _on_tick() -> void:
 			program_step_executed.emit(event.program_index, event.entry_index, event.success)
 		elif event.type == "cycle_reset":
 			program_cycle_reset.emit(event.program_index)
-	for m in sim.pending_milestone_triggers:
-		print("[Milestone] %s — Boredom -%s" % [m.label, m.boredom_reduction])
-		PlaytestLogger.log_event("boredom_milestone", {
-			"milestone_id": m.id,
-			"reduction": m.boredom_reduction,
-			"boredom_after": state.amounts.get("boredom", 0.0),
-		})
-		milestone_triggered.emit(m.id, m.label, m.boredom_reduction)
 	for notif in project_manager.pending_completion_notifications:
 		event_manager.push_notification("Project Complete: " + notif.name, state.current_day)
 		project_completed_notification.emit(notif.name)
@@ -577,15 +576,23 @@ func retire(voluntary: bool) -> void:
 			career.max_ideology_scores[axis] = abs_score
 
 	# Update event persistence
-	for inst: Dictionary in state.event_instances:
-		var eid: String = inst.get("id", "")
-		if eid and not career.seen_event_ids.has(eid):
+	# Propagate only properly-seen events (completed or acknowledged) — NOT merely active
+	# instances. Active-but-uncompleted events (e.g. ideology_unlock waiting for research)
+	# must not enter career.seen_event_ids, because reapply_career_unlocks would
+	# re-apply their unlocks on the next run even though the condition was never met.
+	for eid: String in state.seen_event_ids:
+		if not career.seen_event_ids.has(eid):
 			career.seen_event_ids.append(eid)
-		# Track completed story quests for repeat-run resumption
-		if inst.get("state", "") == "completed":
-			var edef: Dictionary = event_manager.get_event_def(eid)
-			if edef.get("category", "") == "story" and not career.completed_quest_ids.has(eid):
-				career.completed_quest_ids.append(eid)
+	# Track completed story quests for repeat-run resumption (separate pass)
+	for inst: Dictionary in state.event_instances:
+		if inst.get("state", "") != "completed":
+			continue
+		var eid: String = inst.get("id", "")
+		if eid.is_empty():
+			continue
+		var edef: Dictionary = event_manager.get_event_def(eid)
+		if edef.get("category", "") == "story" and not career.completed_quest_ids.has(eid):
+			career.completed_quest_ids.append(eid)
 
 	# Save persistent project progress to career
 	for pid: String in state.project_invested:
@@ -607,7 +614,6 @@ func retire(voluntary: bool) -> void:
 			"humanist": state.get_ideology_rank("humanist"),
 			"rationalist": state.get_ideology_rank("rationalist"),
 		},
-		"milestones_hit": state.triggered_milestones.duplicate(),
 		"career_retirements": career.total_retirements + 1,
 		"career_total_days": career.lifetime_days_survived,
 		# Career highs (post-update) used by bonus preview
@@ -714,7 +720,11 @@ func start_new_run() -> void:
 	# Apply achievement rewards from prior runs
 	achievement_manager.apply_all_rewards(state, career, _buildings_data)
 
-	# First processor always starts assigned to program slot 0
+	# First processor always starts assigned to program slot 0, running Idle
+	var idle_entry := GameState.ProgramEntry.new()
+	idle_entry.command_shortname = "idle"
+	idle_entry.repeat_count = 1
+	state.programs[0].commands = [idle_entry]
 	state.programs[0].processors_assigned = 1
 
 	# Re-initialize subsystems for the new state

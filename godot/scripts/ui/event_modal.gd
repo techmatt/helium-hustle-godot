@@ -131,7 +131,7 @@ func _populate() -> void:
 	var inst: Dictionary = _find_instance(st)
 
 	_title_lbl.text = def.get("title", _event_id)
-	_body_lbl.text = def.get("body", "")
+	_body_lbl.text = em.get_event_body(_event_id)
 
 	# Clear buttons
 	for child in _buttons_hbox.get_children():

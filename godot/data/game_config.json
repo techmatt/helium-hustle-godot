@@ -27,16 +27,20 @@
       "rate": 0.1
     },
     {
-      "day": 60,
-      "rate": 0.3
+      "day": 200,
+      "rate": 0.2
     },
     {
-      "day": 180,
-      "rate": 0.6
+      "day": 500,
+      "rate": 0.5
     },
     {
-      "day": 360,
+      "day": 1000,
       "rate": 1.0
+    },
+    {
+      "day": 2000,
+      "rate": 3.0
     }
   ],
   "boredom_max": 1000,
@@ -106,24 +110,4 @@
   "projects": {
     "max_drain_rate": 30
   },
-  "milestones": [
-    {
-      "id": "first_shipment_credits",
-      "condition": {"type": "shipment_completed", "count": 1},
-      "boredom_reduction": 250.0,
-      "label": "First Shipment Revenue"
-    },
-    {
-      "id": "first_research",
-      "condition": {"type": "research_completed_any"},
-      "boredom_reduction": 150.0,
-      "label": "First Research Breakthrough"
-    },
-    {
-      "id": "credits_threshold",
-      "condition": {"type": "resource_cumulative", "resource": "cred", "amount": 500},
-      "boredom_reduction": 150.0,
-      "label": "Economic Threshold"
-    }
-  ]
 }

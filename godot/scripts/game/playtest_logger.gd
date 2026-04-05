@@ -116,6 +116,24 @@ func log_snapshot(state: GameState, demand_system: DemandSystem) -> void:
 	if not overflow_dict.is_empty():
 		data["overflow"] = overflow_dict
 
+	# Lifetime boredom accumulators (omit zero values)
+	var lbore: Dictionary = {}
+	for key: String in state.lifetime_boredom_sources:
+		var val: float = state.lifetime_boredom_sources[key]
+		if absf(val) >= 0.5:
+			lbore[key] = roundi(val)
+	if not lbore.is_empty():
+		data["lifetime_boredom"] = lbore
+
+	# Lifetime credit accumulators (omit zero values)
+	var lcred: Dictionary = {}
+	for key: String in state.lifetime_credit_sources:
+		var val: float = state.lifetime_credit_sources[key]
+		if absf(val) >= 0.5:
+			lcred[key] = roundi(val)
+	if not lcred.is_empty():
+		data["lifetime_credits"] = lcred
+
 	log_event("snapshot", data)
 
 

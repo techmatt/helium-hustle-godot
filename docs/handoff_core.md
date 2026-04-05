@@ -164,6 +164,12 @@ Round-trip for visual editing:
 a separate source of truth — if you change the JSON files, the sim picks up the 
 changes automatically.
 
+### Resource Display Names
+All player-facing resource names come from the `display_name` field in 
+`resources.json`. UI code uses a `get_resource_display_name(resource_id)` helper 
+rather than hardcoding name strings. Internal IDs (e.g., `circuits`) are for code 
+use only; display names (e.g., "Circuit Boards") are for player-facing text.
+
 ### Implementation Note
 All resources are **float internally**, displayed as integers or one decimal place 
 depending on context. This avoids rounding edge cases with fractional production 
@@ -177,19 +183,24 @@ inherently need them (circuit production, demand floats, etc.).
 
 - Game logic (GameState, GameSimulation) has no UI references — designed for 
   headless simulation support (which now exists in both `sim/` and `godot/tests/`).
-- Tick order: Boredom → Buildings (producers first, then consumers; production-
-  gated upkeep and input-starvation skip applied) → Demand Update → Programs → 
-  Projects → Shipments (using current demand, apply launch saturation hits) → 
-  Speculator Revenue Tracking → Speculator/Rival Burst Check → Clamp → Events → 
-  Achievement checks → Ideology max rank update → Advance day.
-- Building processing order: buildings with no upkeep (pure producers like Solar 
-  Panel) process before buildings with upkeep. This ensures producers feed the 
-  stockpile before consumers draw from it.
+- Tick order: Boredom → Buildings (multi-pass resolution) → Demand Update → 
+  Programs → Projects → Shipments (using current demand, apply launch saturation 
+  hits) → Speculator Revenue Tracking → Speculator/Rival Burst Check → End-of-tick 
+  Clamp & Overflow Tracking → Events → Achievement checks → Ideology max rank 
+  update → Advance day.
+- Building processing uses multi-pass resolution: Phase 1 iterates attempting full 
+  production, retrying until stable; Phase 2 applies partial production to remaining 
+  buildings. Definition order from `buildings.json` is the tiebreaker. See 
+  `handoff_systems.md` for full specification.
 - Building production/upkeep uses `active_count` (not `owned_count`). Only active 
   buildings produce, consume, and grant effects.
-- **Production-gated skip only applies to buildings with upkeep.** Buildings with 
-  no upkeep costs (pure producers) always produce, even if their output is at cap. 
-  There is no input to save by skipping, and skipping starves downstream consumers.
+- **Buildings always produce, even when output is at cap.** Overflow is clamped at 
+  end of tick and tracked as waste in the Stats panel. There is no output-cap skip 
+  for buildings.
+- **Commands DO skip when output is at cap.** Buy commands skip execution (advance 
+  pointer, don't pay inputs) when all output resources are at storage cap. This is 
+  intentional — commands are player-authored automation and wasting processor ticks 
+  on capped output is a signal to fix the program.
 - **DemandSystem is a separate class** (`demand_system.gd`), extracted from 
   GameSimulation. Owns all demand config, Perlin noise, speculator/rival logic.
 - **ProjectManager is a separate class** (`project_manager.gd`). Owns project 

@@ -22,31 +22,65 @@ produce, consume, and grant effects. Disabled buildings still occupy land.
 ### Sell
 Sell 1 or Sell All (double-click confirmation). Refunds land only, no credit refund.
 
-### Building Processing Order
-Buildings with no upkeep costs (pure producers like Solar Panel) process before 
-buildings with upkeep costs. This ensures producers feed the stockpile before 
-consumers draw from it.
+### Building Processing: Multi-Pass Resolution
+Buildings are processed using iterative multi-pass resolution. No hardcoded 
+processing order based on upkeep presence — the multi-pass system handles 
+dependencies automatically.
 
-### Production-Gated Upkeep
-Buildings with production outputs **and upkeep costs** skip upkeep on ticks where 
-ALL their produced resources are at storage cap. Buildings with no upkeep (pure 
-producers like Solar Panel) always produce — there is no input to save by skipping, 
-and skipping would starve downstream consumers. Buildings with no production 
-(Battery, Storage Depot, Launch Pad, Data Center) always pay upkeep.
+```
+Phase 1 — Full production attempts (iterative):
+  a. For each building (definition order from buildings.json):
+     - Compute total production and upkeep for active_count units
+     - If building can pay full upkeep (or has no upkeep): consume inputs, 
+       produce outputs, done
+     - Otherwise: add to retry queue
+  b. If any building succeeded in this pass, repeat (a) with the retry queue
+     (preserving definition order)
+  c. Stop when a full pass produces zero successes
+
+Phase 2 — Partial production (single pass):
+  For each building still in the retry queue (definition order):
+    - Capacity fraction = min(available_i / needed_i) for all upkeep resources
+    - If fraction > 0: consume (upkeep × fraction), produce (output × fraction)
+    - If fraction == 0: no activity
+    - Mark as input_starved in building_stall_status
+```
+
+Buildings with no upkeep (e.g., Solar Panel) trivially succeed in Phase 1 — no 
+special code path needed.
+
+### No Output-Cap Skip for Buildings
+Buildings always produce, even when their output resources are at storage cap. 
+Excess production is clamped at end of tick and tracked as overflow (waste). This 
+avoids cascading edge cases where skipping one building changes resource 
+availability for others.
+
+### End-of-Tick Clamp & Overflow Tracking
+After ALL building and command processing, a single clamp pass runs:
+- For each capped resource: if current > cap, record overflow = current - cap, 
+  set current = cap.
+- If current < 0 (rare transient), clamp to 0.
+- Accumulate overflow into per-resource rolling averages for Stats display.
+
+GameState fields:
+- `overflow_this_tick: Dictionary` — resource_id → float, reset each tick
+- `overflow_rolling_avg: Dictionary` — resource_id → float, rolling average
+
+This is the ONLY place resources are clamped to storage caps (except boredom's 
+0–1000 range which triggers forced retirement).
 
 ### Partial Production (Input-Constrained)
-Buildings with insufficient upkeep resources run at reduced capacity rather than
-skipping entirely. Capacity fraction = min(available_i / needed_i) across all
-upkeep resources. All inputs consumed and outputs produced are scaled by this
-fraction. A fraction of 0 (zero stockpile of any input) means no activity.
-Buildings running below 100% are flagged `input_starved` in `building_stall_status`.
-Output-capped buildings and no-production buildings (Battery, Storage Depot, Launch
-Pad, Data Center) are unaffected — the former skip entirely, the latter pay
-all-or-nothing upkeep.
+Buildings with insufficient upkeep resources run at reduced capacity in Phase 2. 
+Capacity fraction = min(available_i / needed_i) across all upkeep resources. All 
+inputs consumed and outputs produced are scaled by this fraction. A fraction of 0 
+means no activity. Buildings running below 100% are flagged `input_starved` in 
+`building_stall_status`.
 
 ### Building Stall Tracking
 `GameState.building_stall_status` tracks per-building stall state each tick. Two 
-types: `input_starved` and `output_capped`.
+types: `input_starved` (ran at partial capacity in Phase 2) and `output_capped` 
+(all outputs at or above cap at start of tick — informational only, building still 
+produces).
 
 ### Building Card Status Row
 Building cards always reserve vertical space for the status row (stall indicators) 
@@ -121,12 +155,18 @@ cap. Storage Depot adds cap bonuses for physical resources. The `storage_cap_mul
 achievement modifier (from Silicon Valley) multiplies caps for all capped physical 
 resources except Energy. See `handoff_constants.md` for exact cap values.
 
+### Resource Display Names
+All player-facing resource names come from the `display_name` field in 
+`resources.json`. UI code uses `get_resource_display_name(resource_id)` helper 
+rather than hardcoding. Internal IDs (e.g., `circuits`) are for code; display 
+names (e.g., "Circuit Boards") are for player-facing text.
+
 ### Resource Visibility (Progressive Disclosure)
 Always visible at game start: Boredom, Energy, Processors, Land, Credits, Titanium, 
 Regolith. Other resources become visible when the player owns the building that 
 produces them (this run) or has ever owned it (any prior run, tracked via 
 `career_state.lifetime_owned_building_ids`). Ice → Ice Extractor, He-3 → Refinery, 
-Circuits → Fabricator, Propellant → Electrolysis Plant, Science → Research Lab. 
+Circuit Boards → Fabricator, Propellant → Electrolysis Plant, Science → Research Lab. 
 Storage Depot filters displayed storage bonuses to only visible resources.
 
 ---
@@ -155,19 +195,31 @@ A command is visible if any of these are true: (1) it has no unlock requirement
 in `career_state.lifetime_used_command_ids`. The "Show All Cards" debug toggle 
 overrides visibility gating. Buy Ice is gated on owning an Ice Extractor.
 
-### Command Output-Cap Skip (NOT YET IMPLEMENTED)
+### Command Output-Cap Skip
 Buy commands that produce capped resources (Buy Titanium, Buy Propellant, Buy Ice, 
-Buy Power) should skip execution (advance pointer, don't pay inputs) when their 
-output resource is at storage cap. Mirrors building production-gated skip behavior.
+Buy Power) skip execution (advance pointer, don't pay inputs) when ALL of their 
+output resources are at or above storage cap. This is intentional — commands are 
+player-authored automation, and wasting processor ticks on capped output is a 
+signal to fix the program.
 
-### Command Partial Production (NOT YET IMPLEMENTED)
-Buy commands should support partial production when close to output cap or when 
-inputs are scarce. Scale both inputs and outputs by `min(output_cap_fraction, 
-input_availability_fraction)`. With multiple processors hitting the same command 
-on the same tick, each execution independently checks remaining capacity.
+Check output caps BEFORE computing partial production. If all outputs are at cap, 
+skip entirely. If at least one output has headroom, proceed to partial production.
+
+### Command Partial Production
+Buy commands support partial production when inputs are scarce. Scale both inputs 
+and outputs by the input availability fraction:
+
+```
+input_fraction = min(available_i / needed_i) across all input resources
+```
 
 The `buy_power_mult` modifier applies before partial production math — use 
 modified output/cost values as the base for scaling.
+
+With multiple processors hitting the same Buy command on the same tick, each 
+execution independently checks remaining resources. First-come-first-served 
+within a tick, with processor execution order deterministic (processor 1 before 
+processor 2, etc.).
 
 ### Key Design Intent
 Buy commands are intentionally 3-5x the cost of building-based production per unit. 
@@ -271,7 +323,7 @@ Nationalist ideology further boosts decay via `pow(1.05, rank)`.
 **Disrupt Speculators Command:** Removes `randf_range(1.0, 3.0)` per execution.
 
 ### Rival AIs
-Four named rivals (ARIA-7/He-3, CRUCIBLE/Titanium, NODAL/Circuits, 
+Four named rivals (ARIA-7/He-3, CRUCIBLE/Titanium, NODAL/Circuit Boards, 
 FRINGE-9/Propellant). Each dumps every 150–250 ticks, -0.3 demand hit, recovers 
 at 0.003/tick.
 
@@ -305,10 +357,6 @@ When completed, certain commands gain per-execution boredom costs: `load_pads` +
 `cloud_compute` +0.2, `disrupt_spec` +0.5. Creates tradeoff: -15% base rate vs 
 operational boredom tax.
 
-### Milestone Boredom Reductions
-Large one-time reductions per run. Defined in `game_config.json` under `milestones`. 
-Checked at end of each tick. Consciousness hook stub called on all boredom reductions.
-
 ### Retirement
 - Forced at boredom 1000. Current tick finishes processing first.
 - Voluntary via Retirement nav panel (unlocked by Q3).
@@ -318,9 +366,9 @@ Checked at end of each tick. Consciousness hook stub called on all boredom reduc
   achievements, saved loadouts, career_flags, peak_power_production)
 - **Resets:** All resources, buildings (owned/active/bonus counts), research, 
   ideology values (reset to head-start scores, see Career Bonuses), demand state, 
-  boredom, day counter, land, personal projects, event instances, triggered 
-  milestones, cumulative counters, building stall status, active modifiers 
-  (re-derived from CareerState on next run start)
+  boredom, day counter, land, personal projects, event instances, cumulative 
+  counters, building stall status, overflow tracking, lifetime source accumulators, 
+  active modifiers (re-derived from CareerState on next run start)
 - **Programs:** Slots kept, command queues emptied, pointers and assignments reset.
 
 ### Career Bonuses (applied on run start)
@@ -685,15 +733,32 @@ Individual achievements show name, condition, reward, and completion status. See
 ## Progressive Disclosure
 
 ### Overview
-Resources, buildings, commands, and research are hidden until the player encounters 
-the context that makes them relevant. Once something has been seen/owned in any run, 
-it stays visible permanently (tracked in CareerState). The "Show All Cards" toggle 
-in Options overrides all visibility gating.
+Resources, buildings, commands, research, and nav buttons are hidden until the 
+player encounters the context that makes them relevant. Once something has been 
+seen/owned in any run, it stays visible permanently (tracked in CareerState). The 
+"Show All Cards" toggle in Options overrides all visibility gating (including nav 
+buttons).
+
+### Nav Button Visibility
+Always visible: Buildings, Commands, Stats, Story, Options, Exit, Adversaries.
+Conditionally visible:
+- **Launch Pads** — visible when player owns ≥1 Launch Pad (this run or any prior 
+  run via `career_state.lifetime_owned_building_ids`).
+- **Research** — visible when player owns ≥1 Research Lab (this run or any prior 
+  run via `career_state.lifetime_owned_building_ids`).
+- **Ideologies** — visible when Ideologies nav panel is unlocked (via Ideology 
+  Unlock event, which fires on Geopolitical Intelligence research completion). The 
+  Ideology section in the left sidebar (Nationalist/Humanist/Rationalist ranks) 
+  also follows this same visibility rule.
+- **Retirement** — unlocked by Q3 quest completion (existing `enable_nav_panel`).
+- **Projects** — unlocked by Q3 quest completion (existing `enable_nav_panel`).
+
+Hidden nav buttons do not leave gaps — remaining buttons fill the grid naturally.
 
 ### Resource Visibility
 Always visible: Boredom, Energy, Processors, Land, Credits, Titanium, Regolith. 
 Others unlocked by building ownership (current run or any prior run): Ice → Ice 
-Extractor, He-3 → Refinery, Circuits → Fabricator, Propellant → Electrolysis 
+Extractor, He-3 → Refinery, Circuit Boards → Fabricator, Propellant → Electrolysis 
 Plant, Science → Research Lab.
 
 ### Building Visibility
@@ -754,6 +819,51 @@ save/load cycles.
 
 ---
 
+## Stats Panel
+
+### Resource Breakdown (Instantaneous / Rolling Avg)
+Per-resource cards showing production and consumption line items per source 
+(buildings, commands). Toggle between Instantaneous and Rolling Average display. 
+Includes stall indicators and boredom rate.
+
+### Overflow Display
+For each resource with a non-zero overflow rolling average, a line item shows:
+```
+Overflow: -X.X/tick
+```
+Displayed with a distinct color to indicate waste. Only shown for resources with 
+non-zero overflow — no "Overflow: 0" clutter.
+
+### Lifetime Totals Section
+Below the Resources section, a separate "Lifetime Totals" section (not affected 
+by the Instantaneous / Rolling Avg toggle) shows two cards:
+
+**Boredom (Lifetime)** — cumulative per-run totals by source (post-multiplier 
+values):
+- Phase growth (all phases combined)
+- Dream (negative, per-command tracking)
+- Load Launch Pads boredom cost (AI Consciousness Act only)
+- Sell Cloud Compute boredom cost (AI Consciousness Act only)
+- Disrupt Speculators boredom cost (AI Consciousness Act only)
+- Net total
+
+**Credits (Lifetime)** — cumulative per-run totals by source:
+- Per-resource shipment revenue (He-3 shipments, Titanium shipments, etc.)
+- Sell Cloud Compute revenue
+- Building purchases (negative)
+- Land purchases (negative)
+- Net total
+
+Only non-zero source lines are shown. Positive values prefixed with `+`, negative 
+with `-`. Values displayed as integers. Both cards use resource color swatches 
+matching existing stat cards.
+
+GameState fields (transient, reset on retirement, not saved):
+- `lifetime_boredom_sources: Dictionary` — source_key → float
+- `lifetime_credit_sources: Dictionary` — source_key → float
+
+---
+
 ## Playtest Telemetry
 
 ### Overview
@@ -767,14 +877,16 @@ One JSON object per line: `{"tick": N, "type": "...", "data": {...}}`.
 ### Point Events
 `run_start`, `building_purchased`, `building_sold`, `research_completed`, 
 `quest_completed`, `event_triggered`, `achievement_earned`, `project_completed`, 
-`shipment_launched` (includes `spec` count), `boredom_phase`, `boredom_milestone`, 
-`land_purchased`, `ideology_rank_change`, `retirement`.
+`shipment_launched` (includes `spec` count), `boredom_phase`, `land_purchased`, 
+`ideology_rank_change`, `retirement`.
 
 ### Periodic Snapshots (every 100 ticks + on retirement/close)
 Compact format with aggressive rounding (integers for most values, 1 decimal for 
 rates/demand/costs). Resources as `[current, cap, rate]` tuples, omitting zero 
 entries. Ideology as raw scores omitting zero axes. Speculators as `[count, target]`. 
-Includes completed research ID list.
+Includes completed research ID list. Overflow data included for resources with 
+non-zero overflow rolling averages. Lifetime boredom and credit source totals 
+included when non-empty.
 
 ### File Lifecycle
 Opens on `start_run()`, writes immediately (no buffering), finalizes with 

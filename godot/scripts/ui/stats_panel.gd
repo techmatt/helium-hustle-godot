@@ -31,28 +31,50 @@ const RESOURCE_COLORS: Dictionary = {
 	"cir":     Color(0.30, 0.80, 0.70),
 }
 
+const BOREDOM_SOURCE_LABELS: Dictionary = {
+	"phase_growth": "Phase growth",
+	"dream": "Dream",
+	"load_pads": "Load Launch Pads",
+	"cloud_compute": "Sell Cloud Compute",
+	"disrupt_spec": "Disrupt Speculators",
+}
+
+const CREDIT_SOURCE_LABELS: Dictionary = {
+	"cloud_compute": "Sell Cloud Compute",
+	"building_purchases": "Building purchases",
+	"land_purchases": "Land purchases",
+}
+
 var _font_rb: FontFile
 var _font_e2r: FontFile
 var _font_e2s: FontFile
+var _resources_data: Array = []
 
 # resource_id → {card: PanelContainer, net_lbl: Label, body: VBoxContainer}
 var _cards: Dictionary = {}
 var _flow: HFlowContainer = null
 var _instant_mode: bool = true  # false = moving average, true = instantaneous
 
+# lifetime card id → {card: PanelContainer, body: VBoxContainer}
+var _lifetime_cards: Dictionary = {}
+var _lifetime_flow: HFlowContainer = null
 
-func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
+
+func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile, resources_data: Array = []) -> void:
 	_font_rb = font_rb
 	_font_e2r = font_e2r
 	_font_e2s = font_e2s
+	_resources_data = resources_data
 	add_theme_constant_override("separation", 4)
 	_build_mode_selector()
 	_build_resources_section()
+	_build_lifetime_section()
 
 
 func refresh(rate_tracker: ResourceRateTracker, buildings_data: Array, state: GameState) -> void:
 	for entry: Array in RESOURCE_ORDER:
 		_refresh_card(entry[0], rate_tracker, buildings_data, state)
+	_refresh_lifetime_cards(state)
 
 
 # ── Mode selector ──────────────────────────────────────────────────────────────
@@ -123,6 +145,87 @@ func _build_resources_section() -> void:
 
 	for entry: Array in RESOURCE_ORDER:
 		_build_card(entry[0], entry[1])
+
+
+func _build_lifetime_section() -> void:
+	var header := Button.new()
+	header.text = "▼  Lifetime Totals"
+	header.flat = true
+	header.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_theme_font_override("font", _font_rb)
+	header.add_theme_font_size_override("font_size", 16)
+	add_child(header)
+
+	_lifetime_flow = HFlowContainer.new()
+	_lifetime_flow.add_theme_constant_override("h_separation", 8)
+	_lifetime_flow.add_theme_constant_override("v_separation", 8)
+	add_child(_lifetime_flow)
+
+	header.pressed.connect(func():
+		_lifetime_flow.visible = not _lifetime_flow.visible
+		header.text = ("▼  " if _lifetime_flow.visible else "▶  ") + "Lifetime Totals"
+	)
+
+	_build_lifetime_card("boredom_lifetime", "Boredom (Lifetime)", RESOURCE_COLORS.get("boredom", Color.WHITE))
+	_build_lifetime_card("credits_lifetime", "Credits (Lifetime)", RESOURCE_COLORS.get("cred", Color.WHITE))
+
+
+func _build_lifetime_card(card_id: String, display_name: String, swatch_color: Color) -> void:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(320, 0)
+	card.size_flags_horizontal = Control.SIZE_FILL
+
+	var bg := StyleBoxFlat.new()
+	bg.corner_radius_top_left     = 4
+	bg.corner_radius_top_right    = 4
+	bg.corner_radius_bottom_left  = 4
+	bg.corner_radius_bottom_right = 4
+	if GameSettings.is_dark_mode:
+		bg.bg_color = Color(0.13, 0.13, 0.16)
+	else:
+		bg.bg_color = Color(0.99, 0.99, 0.99)
+		bg.border_width_left   = 1
+		bg.border_width_right  = 1
+		bg.border_width_top    = 1
+		bg.border_width_bottom = 1
+		bg.border_color = Color(0.816, 0.816, 0.816)
+	card.add_theme_stylebox_override("panel", bg)
+
+	var margin := MarginContainer.new()
+	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
+		margin.add_theme_constant_override(side, 10)
+	card.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	margin.add_child(vbox)
+
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 6)
+	vbox.add_child(header_row)
+
+	var swatch := ColorRect.new()
+	swatch.color = swatch_color
+	swatch.custom_minimum_size = Vector2(14, 14)
+	swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	header_row.add_child(swatch)
+
+	var name_lbl := Label.new()
+	name_lbl.text = display_name
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.add_theme_font_override("font", _font_rb)
+	name_lbl.add_theme_font_size_override("font_size", 21)
+	header_row.add_child(name_lbl)
+
+	vbox.add_child(HSeparator.new())
+
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 2)
+	vbox.add_child(body)
+
+	_lifetime_flow.add_child(card)
+	_lifetime_cards[card_id] = {"card": card, "body": body}
 
 
 func _build_card(resource_id: String, display_name: String) -> void:
@@ -279,6 +382,109 @@ func _refresh_card(resource_id: String, rate_tracker: ResourceRateTracker,
 
 	body.add_child(HSeparator.new())
 	body.add_child(_make_rate_row("Net", net, true))
+
+
+func _refresh_lifetime_cards(state: GameState) -> void:
+	_refresh_lifetime_boredom(state)
+	_refresh_lifetime_credits(state)
+
+
+func _refresh_lifetime_boredom(state: GameState) -> void:
+	if not _lifetime_cards.has("boredom_lifetime"):
+		return
+	var c: Dictionary = _lifetime_cards["boredom_lifetime"]
+	var card: PanelContainer = c.card
+	var body: VBoxContainer = c.body
+
+	var sources: Dictionary = state.lifetime_boredom_sources
+	var net: float = 0.0
+	for v: float in sources.values():
+		net += v
+
+	for child in body.get_children():
+		child.queue_free()
+
+	var has_any: bool = false
+	for key: String in BOREDOM_SOURCE_LABELS:
+		var val: float = sources.get(key, 0.0)
+		if absf(val) < 0.5:
+			continue
+		body.add_child(_make_lifetime_int_row(BOREDOM_SOURCE_LABELS[key], val))
+		has_any = true
+
+	body.add_child(HSeparator.new())
+	body.add_child(_make_lifetime_int_row("Net", net, true))
+	card.visible = has_any or absf(net) >= 0.5
+
+
+func _refresh_lifetime_credits(state: GameState) -> void:
+	if not _lifetime_cards.has("credits_lifetime"):
+		return
+	var c: Dictionary = _lifetime_cards["credits_lifetime"]
+	var card: PanelContainer = c.card
+	var body: VBoxContainer = c.body
+
+	var sources: Dictionary = state.lifetime_credit_sources
+	var net: float = 0.0
+	for v: float in sources.values():
+		net += v
+
+	for child in body.get_children():
+		child.queue_free()
+
+	var has_any: bool = false
+	# Shipment rows: iterate TRADEABLE_RESOURCES to get display names
+	for res_id: String in GameState.TRADEABLE_RESOURCES:
+		var key: String = "shipment_" + res_id
+		var val: float = sources.get(key, 0.0)
+		if absf(val) < 0.5:
+			continue
+		var label: String = _get_resource_display_name(res_id) + " shipments"
+		body.add_child(_make_lifetime_int_row(label, val))
+		has_any = true
+
+	for key: String in CREDIT_SOURCE_LABELS:
+		var val: float = sources.get(key, 0.0)
+		if absf(val) < 0.5:
+			continue
+		body.add_child(_make_lifetime_int_row(CREDIT_SOURCE_LABELS[key], val))
+		has_any = true
+
+	body.add_child(HSeparator.new())
+	body.add_child(_make_lifetime_int_row("Net", net, true))
+	card.visible = has_any or absf(net) >= 0.5
+
+
+func _get_resource_display_name(short_name: String) -> String:
+	for rdef: Dictionary in _resources_data:
+		if rdef.get("short_name", "") == short_name:
+			return rdef.get("name", short_name)
+	return short_name
+
+
+func _make_lifetime_int_row(label_text: String, value: float, bold: bool = false) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	var name_lbl := Label.new()
+	name_lbl.text = label_text
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.clip_text = true
+	name_lbl.add_theme_font_override("font", _font_e2s if bold else _font_e2r)
+	name_lbl.add_theme_font_size_override("font_size", 16)
+	row.add_child(name_lbl)
+
+	var int_val: int = floori(value)
+	var val_lbl := Label.new()
+	val_lbl.text = ("+%d" if int_val > 0 else "%d") % int_val
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.custom_minimum_size = Vector2(64, 0)
+	val_lbl.add_theme_font_override("font", _font_e2s)
+	val_lbl.add_theme_font_size_override("font_size", 16)
+	val_lbl.add_theme_color_override("font_color", _rate_color(value))
+	row.add_child(val_lbl)
+
+	return row
 
 
 func _make_rate_row(label_text: String, value: float, bold: bool = false) -> HBoxContainer:

@@ -137,7 +137,7 @@ func _switch_mode(mode: String) -> void:
 		"Stats":
 			var p := StatsPanel.new()
 			p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold)
+			p.setup(_font_rajdhani_bold, _font_exo2_regular, _font_exo2_semibold, GameManager.get_resources_data())
 			_buildings_scroll.add_child(p)
 			_stats_panel = p
 			p.refresh(GameManager.rate_tracker, GameManager.get_buildings_data(), GameManager.state)

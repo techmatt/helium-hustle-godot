@@ -251,6 +251,8 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 			var can_launch: bool = is_active and GameManager.can_launch_pad(_pad_idx)
 			_set_launch_btn(can_launch, "Need 20 propellant" if not can_launch else "")
 			_status_label.text = "Full — ready to launch!" if can_launch else "Full — need 20 propellant"
+			_status_label.add_theme_color_override("font_color",
+				Color(0.498, 0.749, 0.498) if can_launch else Color(0.749, 0.498, 0.498))
 		GameState.PAD_LAUNCHING:
 			_set_bar_fill(1.0)
 			_cargo_label.text = "Launching!"

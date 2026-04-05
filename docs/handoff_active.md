@@ -4,25 +4,28 @@
 
 ## Changes Since Last Design Session
 
-- 2026-04-03: Playtest telemetry system designed and prompted (PlaytestLogger 
-  autoload, JSONL output to `<repo>/logs/`, per-run files, 100-tick snapshots)
-- 2026-04-03: Telemetry fixes prompted (aggressive rounding, compact snapshot 
-  format, missing event hooks for land/research/ideology, speculator count in 
-  shipment events)
-- 2026-04-03: Projects panel refactor prompted — tier-first grouping, "Long-Term 
-  Projects" / "Strategic Projects" naming, compact completed display
-- 2026-04-03: Retirement career bonuses designed and prompted — 4 career-high 
-  stats with passive bonuses (starting credits, boredom resilience, buy power 
-  scaling, ideology head start)
-- 2026-04-03: Ideology rank formula reworked — geometric series replacing lookup 
-  table, base cost 100, multiplier 1.5x, rank cap 99
-- 2026-04-03: Pre-retirement panel designed and prompted — this-run stats, career 
-  records with NEW indicators, next-run bonus preview with deltas
-- 2026-04-03: Propellant Discovery event visibility fix prompted — hide 
-  condition_met standalone events from Ongoing until triggered
-- 2026-04-03: Save-on-close verification included in telemetry prompt
-- 2026-04-03: Command partial production and output-cap skip identified as needed 
-  (not yet prompted — design discussion complete, prompt pending)
+- 2026-04-04: Production overhaul designed and prompted — removed output-cap skip 
+  for buildings, implemented multi-pass building resolution (Phase 1 iterative full 
+  production + Phase 2 partial production), end-of-tick clamp with overflow tracking, 
+  command partial production for Buy commands, command output-cap skip (commands DO 
+  skip when output at cap, unlike buildings)
+- 2026-04-04: Nav progressive disclosure prompted — Launch Pads visible when 
+  player owns ≥1 Launch Pad, Research visible when player owns ≥1 Research Lab 
+  (both respect CareerState lifetime tracking)
+- 2026-04-04: Retirement panel bug fixes prompted — dark mode dialog in light mode, 
+  Buy Power scaling format string displayed literally instead of interpolated
+- 2026-04-04: Consistent resource display names prompted — all player-facing names 
+  from `resources.json` `display_name` field via helper, "Circuit Boards" as 
+  canonical name (not "Circuits")
+- 2026-04-04: Ideology nav visibility fix prompted — Ideologies button and sidebar 
+  section hidden until Ideology Unlock event fires (Geopolitical Intelligence 
+  research completion)
+- 2026-04-04: Lifetime stats cards designed and prompted — "Lifetime Totals" 
+  section in Stats panel with Boredom (Lifetime) and Credits (Lifetime) breakdown 
+  cards, per-source tracking
+- 2026-04-04: Milestone boredom reduction system removed — milestones overlapped 
+  with quests and achievements, boredom reduction role to be absorbed into future 
+  achievement batch
 
 ---
 
@@ -32,47 +35,47 @@
 - UI skeleton (three-column layout, light/dark mode)
 - Resource tick loop (GameState, GameSimulation, GameManager)
 - Building system (purchase, enable/disable, sell, stall tracking, cost scaling, 
-  bonus buildings, ideology discounts, unlock gating, partial production, 
-  producers-first processing order, no-upkeep buildings always produce)
-- Program/processor system (5 tabs, command queues, execution model, 20 commands)
+  bonus buildings, ideology discounts, unlock gating, multi-pass resolution with 
+  partial production, overflow tracking)
+- Program/processor system (5 tabs, command queues, execution model, 20 commands, 
+  command partial production for Buy commands, output-cap skip for Buy commands)
 - Launch pad / shipment system (per-pad cards, loading, cooldown, recent launches)
 - Speed controls (pause through 200x)
 - Storage caps & display
-- Boredom system (phase curve, milestone reductions, consciousness stub, Stats 
-  panel rate display)
+- Boredom system (phase curve, consciousness stub, Stats panel rate display)
 - Research system (12 items, 4 categories, per-item visibility gating, cost 
   modifiers, all passive effects verified working)
 - Event system (triggers, conditions, unlock effects, persistence, dynamic 
   notifications, Events panel header, click-to-reread modals)
 - Quest system (Q1–Q8 + Q_END, progress indicators)
-- Stats panel (per-resource breakdown, stall indicators, boredom rate)
+- Stats panel (per-resource breakdown, stall indicators, boredom rate, overflow 
+  display, lifetime totals section with boredom and credits breakdown)
 - Demand system (Perlin noise, 6 forces, DemandSystem class, speculator bleedover, 
   configurable demand ceiling)
 - Speculators & rival AIs (bursts, decay, targeting, Arbitrage Engine, bleedover)
-- Retirement system (forced/voluntary, summary screen, CareerState)
+- Retirement system (forced/voluntary, pre-retirement panel with stats/records/
+  bonus preview, CareerState)
 - Save/load persistence (single file, autosave, version 1)
 - Project system (5 persistent + 5 personal, drain model, modifier framework, 
-  all 6 modifiers verified working)
-- Ideology system (3 axes, continuous bonuses, rank 5 projects)
+  all 6 modifiers verified working, tier-first panel layout)
+- Ideology system (3 axes, continuous bonuses, rank 5 projects, geometric series 
+  formula, rank cap 99)
 - Headless test infrastructure (14+ suites, assertions covering all systems)
 - Options panel (light/dark mode, debug: disable boredom, show all cards, 
   fill resources, clear save data)
 - Propellant gating (event → research → building unlock chain)
-- Progressive disclosure (resources, buildings, commands, research phased in based 
-  on progression; CareerState lifetime tracking; ideology labels hidden until 
-  unlocked; building card status row reserves space)
+- Progressive disclosure (resources, buildings, commands, research, nav buttons 
+  phased in based on progression; CareerState lifetime tracking; ideology labels 
+  and sidebar hidden until unlocked; building card status row reserves space)
 - Story panel (Primary Objectives section with quest chain display, Achievements 
   section with collapsible categories)
 - Achievement system (6 achievements in 2 categories, tick-based and event-driven 
   condition checking, modifier and bonus building rewards, CareerState persistence)
-
-### Prompted but Not Yet Verified
-- Playtest telemetry system (PlaytestLogger autoload, JSONL logging)
-- Telemetry fixes (rounding, compact format, missing hooks)
-- Projects panel refactor (Long-Term / Strategic tier-first grouping)
-- Retirement career bonuses (4 stats, passive bonuses, ideology formula rework)
-- Pre-retirement panel (stats, career records, bonus preview with deltas)
-- Propellant Discovery event visibility fix (hide standalone events from Ongoing)
+- Career bonuses (starting credits, boredom resilience, buy power scaling, 
+  ideology head start — 4 stats derived from career bests)
+- Playtest telemetry (PlaytestLogger autoload, JSONL logging, point events, 
+  periodic snapshots)
+- Consistent resource display names (all from `resources.json` `display_name`)
 
 ### Python Optimizer (`sim/`)
 - Scenario-based architecture
@@ -87,36 +90,36 @@
 ## What's NOT Implemented Yet (rough priority order)
 
 ### Blocking Playtest Quality
-1. **Command partial production & output-cap skip** — Buy commands waste inputs 
-   when output is capped; need building-style skip and partial production logic. 
-   Design complete, prompt not yet written.
-2. **Playtest pass & pacing tuning** — manual Run 1 playthrough needed after 
-   current prompted changes land
-3. **Milestone boredom reduction tuning** — current values provisional
+1. **Playtest pass & pacing tuning** — manual Run 1-2-3 playthrough needed with 
+   telemetry to validate pacing, progressive disclosure flow, career bonus feel
 
 ### Important for Arc 1 Completeness
-4. **More achievements** — Programmer category, additional Miner/Trader, Scholar, 
-   Diplomat, Veteran, Anomaly categories (see `handoff_achievements.md` for design)
-5. **Narrative writing pass** — replace placeholder quest text
-6. **Save/load programs** — loadout system for saving/loading program configs
-7. **Block/Skip toggle** — per-program entry option
-8. **Cross-retirement program persistence** — loadouts persist, active programs 
+2. **More achievements** — Programmer category, additional Miner/Trader, Scholar, 
+   Diplomat, Veteran, Anomaly categories (see `handoff_achievements.md` for design). 
+   Some achievements should include boredom reduction rewards (replacing the removed 
+   milestone system's pacing role).
+3. **Narrative writing pass** — replace placeholder quest text
+4. **Save/load programs** — loadout system for saving/loading program configs
+5. **Block/Skip toggle** — per-program entry option
+6. **Cross-retirement program persistence** — loadouts persist, active programs 
    reset (design details TBD: auto-apply? multiple named loadouts?)
 
 ### Polish & UI Enhancement
-9. **Speculator Intelligence UI** — display burst timing/targets/size after 
+7. **Speculator Intelligence UI** — display burst timing/targets/size after 
    research (data exists in GameState, needs UI design decisions)
-10. **Recent Launches color coding** — color by profitability or demand tier
-11. **Retirement forecast display** — "retire in ~N days" on status bar
-12. **Ideology UI polish** — low priority
-13. **Story panel "Active" label size fix** — currently too small, should match 
+8. **Recent Launches color coding** — color by profitability or demand tier
+9. **Retirement forecast display** — "retire in ~N days" on status bar
+10. **Ideology UI polish** — low priority
+11. **Story panel "Active" label size fix** — currently too small, should match 
     section headers
 
 ### Optimizer & Balancing
-14. **Optimizer demand model sync** — mirror Godot demand system in `sim/economy.py`
-15. **Optimizer scenario refinement** — fix broken `he3_50` objective, sync all 
-    changes including ideology formula
-16. **Run 2+ scenarios** — validate meta-progression pacing with career bonuses
+12. **Optimizer production model sync** — update `sim/economy.py` to use multi-pass 
+    resolution, overflow model, command partial production
+13. **Optimizer demand model sync** — mirror Godot demand system in `sim/economy.py`
+14. **Optimizer scenario refinement** — fix broken `he3_50` objective, sync all 
+    changes including ideology formula, remove milestone references
+15. **Run 2+ scenarios** — validate meta-progression pacing with career bonuses
 
 ---
 
@@ -149,22 +152,25 @@ Run 1 scenario produces build order: Excavator → Smelter → Refinery → firs
 shipment → Data Centers → Research Lab → Retirement ~tick 805.
 
 **Known issues:** Optimizer does not model demand system, ideology bonuses, 
-proportional speculator decay, partial production, or propellant gating. Needs 
-full sync before re-running. The `he3_50` objective is structurally broken 
-(violates objective design principle #6). Boredom parameters need updating. 
-Ideology formula has changed (see handoff_systems.md).
+proportional speculator decay, multi-pass building resolution, overflow model, 
+command partial production, or propellant gating. Needs full sync before 
+re-running. The `he3_50` objective is structurally broken (violates objective 
+design principle #6). Boredom parameters need updating. Ideology formula has 
+changed (see handoff_systems.md). Milestone system has been removed.
 
 ---
 
 ## Claude Code Prompts Produced This Session
 
-1. `projects_panel_refactor.md` — tier-first grouping, Long-Term / Strategic naming
-2. `playtest_telemetry.md` — PlaytestLogger system + save-on-close verification
-3. `retirement_career_bonuses.md` — career-high stats, bonuses, ideology formula 
-   rework, rank cap 99
-4. `retire_panel.md` — pre-retirement panel with stats, records, bonus preview
-5. `telemetry_fixes.md` — rounding, compact snapshots, missing hooks
-6. `fix_propellant_event.md` — hide standalone events from Ongoing until triggered
+1. `production_overhaul.md` — multi-pass building resolution, overflow model, 
+   command partial production, command output-cap skip, end-of-tick clamp
+2. `nav_progressive_disclosure.md` — Launch Pads and Research nav button gating
+3. `fix_retirement_panel.md` — dark mode dialog fix, Buy Power format string fix
+4. `consistent_resource_names.md` — display names from JSON, "Circuit Boards" 
+   canonical name
+5. `fix_ideology_nav.md` — Ideologies button and sidebar hidden until unlock
+6. `lifetime_stats.md` — Boredom and Credits lifetime breakdown cards in Stats
+7. `remove_milestones.md` — remove milestone boredom reduction system
 
 ---
 
@@ -177,11 +183,13 @@ Ideology formula has changed (see handoff_systems.md).
 - **Program Starter Templates:** Built-in templates for empty programs
 - **Status Tracker in Event Panel:** Active conditions display
 
-### Milestone Boredom Reduction Ideas (not yet implemented)
-Major milestones should grant large boredom reductions to create memorable moments:
-- First launch earning more than X credits: -30 boredom
-- First research cluster unlocked: -15 to -20 boredom
-- Crossing a credits-per-tick threshold: -15 boredom
+### Achievement Boredom Rewards (replacing removed milestones)
+Some achievements should grant one-time boredom reductions as rewards, replacing 
+the pacing role that the removed milestone system served. These create visible, 
+discoverable moments rather than invisible mechanics. Candidate triggers:
+- First profitable launch (earning more than X credits): large boredom reduction
+- First research cluster unlocked: moderate boredom reduction
+- Crossing a credits-per-tick threshold: moderate boredom reduction
 
 ### Arc 2+ Ideas
 - **Configurable Storage:** Storage Depots with player-allocated capacity budget
