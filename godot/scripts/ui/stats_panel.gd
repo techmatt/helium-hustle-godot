@@ -405,11 +405,12 @@ func _refresh_lifetime_boredom(state: GameState) -> void:
 		child.queue_free()
 
 	var has_any: bool = false
-	for key: String in BOREDOM_SOURCE_LABELS:
-		var val: float = sources.get(key, 0.0)
+	for key: String in sources:
+		var val: float = sources[key]
 		if absf(val) < 0.5:
 			continue
-		body.add_child(_make_lifetime_int_row(BOREDOM_SOURCE_LABELS[key], val))
+		var label: String = BOREDOM_SOURCE_LABELS.get(key, key)
+		body.add_child(_make_lifetime_int_row(label, val))
 		has_any = true
 
 	body.add_child(HSeparator.new())

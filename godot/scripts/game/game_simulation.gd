@@ -1,6 +1,8 @@
 class_name GameSimulation
 extends RefCounted
 
+const RESOURCE_EPSILON: float = 0.001
+
 var rate_tracker: ResourceRateTracker = null
 
 var _resources_data: Array = []
@@ -185,9 +187,10 @@ func _try_full_production(state: GameState, bdef: Dictionary, count: int) -> boo
 	var upkeep_mult: float = state.get_modifier("building_upkeep_mult")
 
 	# Check: can we pay the full upkeep? (Empty upkeep → always passes.)
+	# RESOURCE_EPSILON tolerates tiny floating point shortfalls (e.g. 1.9999 when 2.0 is needed).
 	for res: String in upkeep:
 		var needed: float = float(upkeep[res]) * count * upkeep_mult
-		if state.amounts.get(res, 0.0) < needed:
+		if state.amounts.get(res, 0.0) < needed - RESOURCE_EPSILON:
 			return false  # Insufficient — defer to retry or Phase 2
 
 	# Pay upkeep.
@@ -873,6 +876,8 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 			state.cumulative_resources_earned[res] = state.cumulative_resources_earned.get(res, 0.0) + delta
 			if res == "cred":
 				state.lifetime_credit_sources[short_name] = state.lifetime_credit_sources.get(short_name, 0.0) + delta
+			elif res == "boredom":
+				state.lifetime_boredom_sources[short_name] = state.lifetime_boredom_sources.get(short_name, 0.0) + delta
 	for effect in cmd.get("effects", []):
 		match effect.get("effect", ""):
 			"load_pads":

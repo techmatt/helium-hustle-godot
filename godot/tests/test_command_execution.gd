@@ -36,12 +36,19 @@ func _test_command_sell_cloud_compute() -> void:
 	sim.execute_command(state, "cloud_compute")
 	_assert_approx(state.amounts.get("cred", 0.0), 5.0, 0.001,
 		"cloud_compute: cred increases by 5")
-	_assert_approx(state.amounts.get("eng", 0.0), 97.0, 0.001,
-		"cloud_compute: eng decreases by 3")
-	_assert_approx(state.amounts.get("boredom", 0.0), 0.4, 0.001,
-		"cloud_compute: boredom increases by 0.4")
+	_assert_approx(state.amounts.get("eng", 0.0), 98.0, 0.001,
+		"cloud_compute: eng decreases by 2")
+	_assert_approx(state.amounts.get("boredom", 0.0), 0.1, 0.001,
+		"cloud_compute: boredom increases by 0.1")
 	_assert_approx(state.cumulative_resources_earned.get("cred", 0.0), 5.0, 0.001,
 		"cloud_compute: cumulative_resources_earned[cred] increases by 5")
+	_assert_approx(state.lifetime_boredom_sources.get("cloud_compute", 0.0), 0.1, 0.001,
+		"cloud_compute: lifetime_boredom_sources[cloud_compute] tracks 0.1 boredom")
+
+	# Execute a second time to verify accumulation.
+	sim.execute_command(state, "cloud_compute")
+	_assert_approx(state.lifetime_boredom_sources.get("cloud_compute", 0.0), 0.2, 0.001,
+		"cloud_compute: lifetime_boredom_sources accumulates across executions")
 
 
 func _test_command_buy_resources() -> void:
