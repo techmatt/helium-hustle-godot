@@ -278,6 +278,12 @@ func set_pad_resource(pad_idx: int, resource_type: String) -> void:
 	tick_completed.emit()
 
 
+func set_pad_paused(pad_idx: int, paused: bool) -> void:
+	if pad_idx >= 0 and pad_idx < state.pads.size():
+		state.pads[pad_idx].paused = paused
+	tick_completed.emit()
+
+
 func set_loading_priority(priority: Array) -> void:
 	state.loading_priority = priority.duplicate()
 	tick_completed.emit()

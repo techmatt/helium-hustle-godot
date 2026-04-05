@@ -7,7 +7,6 @@ var _font_e2s: FontFile
 
 var _completed_snapshot: Array = []
 var _seen_events_snapshot: Array = []
-var _boredom_snapshot: float = -1.0
 var _buildings_snapshot: Dictionary = {}
 var _shipments_snapshot: int = -1
 var _show_completed: bool = true
@@ -27,7 +26,6 @@ func _take_snapshot() -> void:
 	var st: GameState = GameManager.state
 	_completed_snapshot = st.completed_research.duplicate()
 	_seen_events_snapshot = st.seen_event_ids.duplicate()
-	_boredom_snapshot = st.amounts.get("boredom", 0.0)
 	_buildings_snapshot = st.buildings_owned.duplicate()
 	_shipments_snapshot = st.total_shipments_completed + GameManager.career.lifetime_shipments
 
@@ -37,7 +35,6 @@ func on_tick() -> void:
 	var shipments_now: int = st.total_shipments_completed + GameManager.career.lifetime_shipments
 	if (st.completed_research != _completed_snapshot
 			or st.seen_event_ids != _seen_events_snapshot
-			or st.amounts.get("boredom", 0.0) != _boredom_snapshot
 			or st.buildings_owned != _buildings_snapshot
 			or shipments_now != _shipments_snapshot):
 		_take_snapshot()

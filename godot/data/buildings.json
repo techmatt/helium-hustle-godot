@@ -7,14 +7,14 @@
     "requires": {
       "type": "none"
     },
-    "land": 1,
+    "land": 2,
     "cost_scaling": 1.5,
     "costs": {
       "cred": 20.0,
       "ti": 6.0
     },
     "production": {
-      "eng": 6.0
+      "eng": 5.0
     },
     "upkeep": {},
     "effects": [],
@@ -36,10 +36,10 @@
       "cred": 35.0
     },
     "production": {
-      "reg": 1.0
+      "reg": 2.0
     },
     "upkeep": {
-      "eng": 2.0
+      "eng": 1.0
     },
     "effects": [],
     "description": "Digs regolith. No material cost \u2014 easiest first building after panels."
@@ -77,7 +77,7 @@
       "type": "building",
       "value": "excavator"
     },
-    "land": 1,
+    "land": 2,
     "cost_scaling": 1.5,
     "costs": {
       "cred": 40.0,
@@ -180,7 +180,7 @@
       "value": "Q2",
       "label": "First Extraction (Q2)"
     },
-    "land": 3,
+    "land": 4,
     "cost_scaling": 1.5,
     "costs": {
       "cred": 150.0,
@@ -284,11 +284,11 @@
     "requires": {
       "type": "none"
     },
-    "land": 1,
+    "land": 3,
     "cost_scaling": 1.5,
     "costs": {
-      "cred": 50.0,
-      "reg": 20.0
+      "cred": 60.0,
+      "reg": 30.0
     },
     "production": {},
     "upkeep": {},

@@ -14,7 +14,7 @@
     "prop": 0,
     "cred": 0,
     "sci": 0,
-    "land": 40,
+    "land": 30,
     "boredom": 0
   },
   "starting_buildings": {
@@ -110,4 +110,21 @@
   "projects": {
     "max_drain_rate": 30
   },
+  "milestones": [
+    {
+      "id": "first_shipment_credits",
+      "condition": {"type": "shipments_completed", "min": 1},
+      "boredom_reduction": 250
+    },
+    {
+      "id": "first_research",
+      "condition": {"type": "research_count", "min": 1},
+      "boredom_reduction": 150
+    },
+    {
+      "id": "credits_threshold",
+      "condition": {"type": "cumulative_credits", "min": 500},
+      "boredom_reduction": 150
+    }
+  ]
 }

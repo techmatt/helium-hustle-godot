@@ -9,8 +9,8 @@
       "project_id": "foundation_grant"
     },
     "costs": {
-      "cred": 500,
-      "sci": 100
+      "cred": 5000,
+      "sci": 2000
     },
     "reward": {
       "type": "starting_buildings",
@@ -172,8 +172,8 @@
       "research_id": "market_awareness"
     },
     "costs": {
-      "sci": 200,
-      "cred": 300
+      "cir": 100,
+      "cred": 500
     },
     "reward": {
       "type": "modifier",

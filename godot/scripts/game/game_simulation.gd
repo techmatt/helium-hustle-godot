@@ -39,6 +39,9 @@ var _land_cost_scaling: float = 1.5
 var _land_per_purchase: int = 10
 var _land_starting: int = 40
 
+# Milestones (loaded from game_config)
+var _milestones: Array = []
+
 
 func init(resources_data: Array, buildings_data: Array, commands_data: Array, game_config: Dictionary = {}, research_data: Array = []) -> void:
 	_resources_data = resources_data
@@ -69,6 +72,7 @@ func init(resources_data: Array, buildings_data: Array, commands_data: Array, ga
 	_boredom_curve.clear()
 	for entry in game_config.get("boredom_curve", []):
 		_boredom_curve.append([int(entry.get("day", 0)), float(entry.get("rate", 0.0))])
+	_milestones = game_config.get("milestones", [])
 	var lc: Dictionary = game_config.get("land", {})
 	if not lc.is_empty():
 		_land_base_cost = float(lc.get("base_cost", 15))
@@ -90,6 +94,7 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 	recalculate_caps(state)
 
 	_tick_boredom(state, debug_no_boredom)
+	_tick_milestones(state)
 	_tick_buildings(state)
 	demand_system.tick_demand(state)
 	_tick_pad_cooldowns(state)
@@ -111,6 +116,29 @@ func _tick_boredom(state: GameState, debug_no_boredom: bool) -> void:
 	if rate_tracker != null and boredom_rate != 0.0:
 		var phase_idx: int = _get_boredom_phase_index(state.current_day)
 		rate_tracker.record("boredom_phase:" + str(phase_idx), "boredom", boredom_rate)
+
+
+func _tick_milestones(state: GameState) -> void:
+	for m: Dictionary in _milestones:
+		var id: String = m.get("id", "")
+		if id.is_empty() or state.triggered_milestones.has(id):
+			continue
+		if _check_milestone_condition(state, m.get("condition", {})):
+			state.triggered_milestones.append(id)
+			var reduction: float = float(m.get("boredom_reduction", 0.0))
+			if reduction > 0.0:
+				_apply_delta(state, "boredom", -reduction)
+
+
+func _check_milestone_condition(state: GameState, cond: Dictionary) -> bool:
+	match cond.get("type", ""):
+		"shipments_completed":
+			return state.total_shipments_completed >= int(cond.get("min", 0))
+		"research_count":
+			return state.completed_research.size() >= int(cond.get("min", 1))
+		"cumulative_credits":
+			return state.cumulative_resources_earned.get("cred", 0.0) >= float(cond.get("min", 0))
+	return false
 
 
 func _tick_buildings(state: GameState) -> void:
@@ -601,6 +629,8 @@ func _effect_load_pads(state: GameState, load_amount: int) -> void:
 			break
 		for i in range(mini(state.pads.size(), active_count)):
 			var pad: GameState.LaunchPadData = state.pads[i]
+			if pad.paused:
+				continue
 			if pad.resource_type != res:
 				continue
 			if pad.status == GameState.PAD_FULL or pad.status == GameState.PAD_COOLDOWN or pad.status == GameState.PAD_LAUNCHING:
@@ -623,6 +653,8 @@ func _effect_launch_pads(state: GameState) -> void:
 	var active_count: int = state.buildings_active.get("launch_pad", state.buildings_owned.get("launch_pad", 0))
 	for i in range(mini(state.pads.size(), active_count)):
 		var pad: GameState.LaunchPadData = state.pads[i]
+		if pad.paused:
+			continue
 		if pad.status != GameState.PAD_FULL:
 			continue
 		if state.amounts.get("prop", 0.0) < _launch_fuel_cost:
@@ -635,13 +667,14 @@ func _effect_launch_pads(state: GameState) -> void:
 		pad.status = GameState.PAD_LAUNCHING
 
 
-func _effect_boredom_add(state: GameState, effect: Dictionary, command_shortname: String) -> void:
+func _effect_boredom_add(state: GameState, effect: Dictionary, command_shortname: String, prog_delta: Dictionary = {}) -> void:
 	var boredom_val: float = float(effect.get("value", 0.0))
 	# Dream effectiveness: humanist ideology bonus amplifies boredom reduction
 	if command_shortname == "dream" and boredom_val < 0.0:
 		boredom_val *= state.get_ideology_bonus("humanist", 1.0, 1.05)
 	_apply_delta(state, "boredom", boredom_val)
 	if boredom_val != 0.0:
+		prog_delta["boredom"] = prog_delta.get("boredom", 0.0) + boredom_val
 		state.lifetime_boredom_sources[command_shortname] = state.lifetime_boredom_sources.get(command_shortname, 0.0) + boredom_val
 
 
@@ -885,7 +918,7 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 			"launch_full_pads":
 				_effect_launch_pads(state)
 			"boredom_add":
-				_effect_boredom_add(state, effect, short_name)
+				_effect_boredom_add(state, effect, short_name, prog_delta)
 			"demand_nudge":
 				_effect_demand_nudge(state, effect)
 			"spec_reduce":
@@ -900,6 +933,7 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		var extra_boredom: float = float(ai_cmd_boredom.get(short_name, 0.0))
 		if extra_boredom != 0.0:
 			_apply_delta(state, "boredom", extra_boredom)
+			prog_delta["boredom"] = prog_delta.get("boredom", 0.0) + extra_boredom
 			state.lifetime_boredom_sources[short_name] = state.lifetime_boredom_sources.get(short_name, 0.0) + extra_boredom
 
 

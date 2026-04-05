@@ -56,6 +56,7 @@ class LaunchPadData:
 	var cargo_loaded: float = 0.0
 	var status: int = 0   # use GameState.PAD_* constants
 	var cooldown_ticks: int = 0
+	var paused: bool = false
 
 	func to_dict() -> Dictionary:
 		return {
@@ -63,11 +64,18 @@ class LaunchPadData:
 			"cargo_loaded": cargo_loaded,
 			"status": status,
 			"cooldown_ticks": cooldown_ticks,
+			"paused": paused,
 		}
 
 	static func from_dict(data: Dictionary) -> LaunchPadData:
 		var pad := LaunchPadData.new()
 		pad.resource_type = data.get("resource_type", "he3")
+		# Migrate legacy "none" resource_type to paused state
+		if pad.resource_type == "none":
+			pad.resource_type = "he3"
+			pad.paused = true
+		else:
+			pad.paused = bool(data.get("paused", false))
 		pad.cargo_loaded = float(data.get("cargo_loaded", 0.0))
 		pad.status = int(data.get("status", 0))
 		pad.cooldown_ticks = int(data.get("cooldown_ticks", 0))
@@ -221,6 +229,9 @@ var ideology_values: Dictionary = {
 # Decremented each tick; removed when ticks reach 0.
 var overclock_states: Array = []
 
+# Milestones fired this run — reset on retirement.
+var triggered_milestones: Array[String] = []
+
 # Lifetime per-run accumulators — transient, reset on retirement (not saved/loaded).
 # Boredom: source_key → float (phase_growth, dream, load_pads, cloud_compute, disrupt_spec)
 # Credits: source_key → float (shipment_<res>, cloud_compute, building_purchases, land_purchases)
@@ -281,6 +292,7 @@ func to_dict() -> Dictionary:
 
 		# Research
 		"completed_research": Array(completed_research),
+		"triggered_milestones": Array(triggered_milestones),
 
 		# Cumulative tracking
 		"cumulative_resources_earned": cumulative_resources_earned.duplicate(),
@@ -364,6 +376,7 @@ static func from_dict(data: Dictionary) -> GameState:
 
 	# Research
 	s.completed_research.assign(data.get("completed_research", []))
+	s.triggered_milestones.assign(data.get("triggered_milestones", []))
 
 	# Cumulative
 	s.cumulative_resources_earned = data.get("cumulative_resources_earned", {})
