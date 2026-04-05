@@ -904,6 +904,8 @@ func _apply_career_flags_to_run_state() -> void:
 			career.career_flags.get("ai_consciousness_command_boredom", {})
 	if career.career_flags.get("microwave_power_completed", false):
 		state.flags["microwave_power_active"] = true
+	if career.career_flags.get("chemical_energy_completed", false):
+		state.flags["chemical_energy_completed"] = true
 	if career.career_flags.get("research_archive_completed", false):
 		state.flags["research_archive_active"] = true
 		state.set_modifier("research_archive_discount_mult",

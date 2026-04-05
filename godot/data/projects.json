@@ -106,6 +106,26 @@
     }
   },
   {
+    "id": "chemical_energy",
+    "name": "Chemical Energy Initiative",
+    "description": "Research chemical-to-electrical energy conversion using lunar propellant reserves.",
+    "tier": "persistent",
+    "unlock_condition": {
+      "type": "quest_active",
+      "quest_id": "q6_open_horizons"
+    },
+    "costs": {
+      "cred": 2000,
+      "sci": 1000,
+      "prop": 1000
+    },
+    "reward": {
+      "type": "unlock",
+      "flag": "chemical_energy_completed",
+      "description": "Unlocks Fuel Cell Array building"
+    }
+  },
+  {
     "id": "deep_core_survey",
     "name": "Deep Core Survey",
     "description": "Detailed subsurface analysis to optimize extraction yields.",

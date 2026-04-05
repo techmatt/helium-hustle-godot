@@ -265,6 +265,18 @@ func _build_quest_row(
 	title_lbl.add_theme_font_size_override("font_size", 16)
 	title_row.add_child(title_lbl)
 
+	# For all_of quests, show [X/total] counter on the title row
+	if not is_completed:
+		var cond: Dictionary = def.get("condition", {})
+		if cond.get("type", "") == "all_of":
+			var progress_str: String = GameManager.event_manager.get_condition_display(qid, st)
+			var counter_lbl := Label.new()
+			counter_lbl.text = "[%s]" % progress_str
+			counter_lbl.add_theme_font_override("font", _font_e2s)
+			counter_lbl.add_theme_font_size_override("font_size", 15)
+			counter_lbl.add_theme_color_override("font_color", Color(0.20, 0.40, 0.90))
+			title_row.add_child(counter_lbl)
+
 	# Summary / condition row
 	if is_completed:
 		var summary_lbl := Label.new()
@@ -296,24 +308,102 @@ func _build_quest_row(
 		panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
 	elif is_active:
-		var cond_lbl := Label.new()
-		cond_lbl.text = summary
-		cond_lbl.add_theme_font_override("font", _font_e2r)
-		cond_lbl.add_theme_font_size_override("font_size", 14)
-		cond_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		inner.add_child(cond_lbl)
+		var cond: Dictionary = def.get("condition", {})
+		if cond.get("type", "") == "all_of":
+			_build_all_of_checklist(inner, qid, def, st)
+		else:
+			var cond_lbl := Label.new()
+			cond_lbl.text = summary
+			cond_lbl.add_theme_font_override("font", _font_e2r)
+			cond_lbl.add_theme_font_size_override("font_size", 14)
+			cond_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			inner.add_child(cond_lbl)
 
-		var progress_str: String = em.get_condition_display(qid, st)
-		if not progress_str.is_empty():
-			var prog_lbl := Label.new()
-			prog_lbl.text = "Progress: " + progress_str
-			prog_lbl.add_theme_font_override("font", _font_e2s)
-			prog_lbl.add_theme_font_size_override("font_size", 14)
-			prog_lbl.add_theme_color_override("font_color", Color(0.20, 0.40, 0.90))
-			inner.add_child(prog_lbl)
+			var progress_str: String = em.get_condition_display(qid, st)
+			if not progress_str.is_empty():
+				var prog_lbl := Label.new()
+				prog_lbl.text = "Progress: " + progress_str
+				prog_lbl.add_theme_font_override("font", _font_e2s)
+				prog_lbl.add_theme_font_size_override("font_size", 14)
+				prog_lbl.add_theme_color_override("font_color", Color(0.20, 0.40, 0.90))
+				inner.add_child(prog_lbl)
 
 	container.add_child(panel)
 	return container
+
+
+func _build_all_of_checklist(inner: VBoxContainer, qid: String, def: Dictionary, st: GameState) -> void:
+	var career: CareerState = GameManager.career
+	var cond: Dictionary = def.get("condition", {})
+	var sub_objectives: Array = cond.get("sub_objectives", [])
+
+	for sub: Dictionary in sub_objectives:
+		var sub_key: String = qid + ":" + sub.get("id", "")
+		var sub_done: bool = career.completed_sub_objectives.has(sub_key)
+		var label_text: String = sub.get("label", "")
+		var sub_cond: String = sub.get("condition", "")
+		var sub_cond_data: Dictionary = sub.get("condition_data", {})
+
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		inner.add_child(row)
+
+		var icon_lbl := Label.new()
+		icon_lbl.text = "✓" if sub_done else "○"
+		icon_lbl.add_theme_font_override("font", _font_e2s)
+		icon_lbl.add_theme_font_size_override("font_size", 14)
+		if sub_done:
+			icon_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+		else:
+			icon_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
+		row.add_child(icon_lbl)
+
+		var text_lbl := Label.new()
+		text_lbl.text = label_text
+		text_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		text_lbl.add_theme_font_override("font", _font_e2r)
+		text_lbl.add_theme_font_size_override("font_size", 14)
+		if sub_done:
+			text_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
+		row.add_child(text_lbl)
+
+		# Inline progress for quantitative conditions (not yet done)
+		if not sub_done:
+			var prog_text: String = ""
+			match sub_cond:
+				"days_survived":
+					var threshold: int = int(sub_cond_data.get("threshold", 0))
+					prog_text = "Day %s / %s" % [
+						_fmt_int(st.current_day),
+						_fmt_int(threshold)
+					]
+				"credits_earned":
+					var threshold: float = float(sub_cond_data.get("threshold", 0))
+					var current: float = st.cumulative_resources_earned.get("cred", 0.0)
+					prog_text = "¢%s / %s" % [
+						_fmt_int(int(current)),
+						_fmt_int(int(threshold))
+					]
+			if not prog_text.is_empty():
+				var prog_lbl := Label.new()
+				prog_lbl.text = prog_text
+				prog_lbl.add_theme_font_override("font", _font_e2r)
+				prog_lbl.add_theme_font_size_override("font_size", 13)
+				prog_lbl.add_theme_color_override("font_color", Color(0.20, 0.40, 0.90))
+				row.add_child(prog_lbl)
+
+
+func _fmt_int(n: int) -> String:
+	# Format integer with thousands separators
+	var s := str(n)
+	var result := ""
+	var count := 0
+	for i in range(s.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = s[i] + result
+		count += 1
+	return result
 
 
 func _format_unlocks(def: Dictionary) -> String:

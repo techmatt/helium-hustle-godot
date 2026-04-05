@@ -41,6 +41,7 @@ var seen_event_ids: Array[String] = []   # events seen in any prior run
 
 # Quest persistence
 var completed_quest_ids: Array[String] = []  # quests completed in any prior run
+var completed_sub_objectives: Array = []     # e.g., ["q6_open_horizons:ideology_rank_5"]
 
 # Persistent project progress (for future use — empty for now)
 var project_progress: Dictionary = {}    # project_id → float (accumulated drain)
@@ -74,6 +75,7 @@ func to_dict() -> Dictionary:
 		"lifetime_used_command_ids": lifetime_used_command_ids.duplicate(),
 		"seen_event_ids": seen_event_ids.duplicate(),
 		"completed_quest_ids": completed_quest_ids.duplicate(),
+		"completed_sub_objectives": completed_sub_objectives.duplicate(),
 		"project_progress": project_progress.duplicate(),
 		"completed_projects": completed_projects.duplicate(),
 		"achievements": achievements.duplicate(),
@@ -106,6 +108,7 @@ static func from_dict(data: Dictionary) -> CareerState:
 	cs.lifetime_used_command_ids.assign(data.get("lifetime_used_command_ids", []))
 	cs.seen_event_ids.assign(data.get("seen_event_ids", []))
 	cs.completed_quest_ids.assign(data.get("completed_quest_ids", []))
+	cs.completed_sub_objectives.assign(data.get("completed_sub_objectives", []))
 	cs.project_progress = data.get("project_progress", {})
 	cs.completed_projects.assign(data.get("completed_projects", []))
 	cs.achievements.assign(data.get("achievements", []))

@@ -35,7 +35,8 @@
       "Bash(\"C:/claude/Godot_v4.6.1-stable_mono_win64/godot.exe\" --headless --script tests/run_tests.gd)",
       "Bash(\"C:/Program Files/Godot/Godot_v4.4-stable_win64.exe\" --headless --path godot tests/run_tests.gd)",
       "Bash(\"/c/claude/Godot_v4.6.1-stable_mono_win64/Godot_v4.6.1-stable_mono_win64_console.exe\" --headless --path godot --script tests/run_tests.gd)",
-      "Bash(\"/c/claude/Godot_v4.6.1-stable_mono_win64/godot.exe\" --headless --path godot --script tests/run_tests.gd)"
+      "Bash(\"/c/claude/Godot_v4.6.1-stable_mono_win64/godot.exe\" --headless --path godot --script tests/run_tests.gd)",
+      "Bash(\"C:/Program Files/Godot_v4.6-dev4_win64.exe\" --headless --path godot/ --script tests/run_tests.gd)"
     ]
   }
 }

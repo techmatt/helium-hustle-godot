@@ -363,6 +363,31 @@
     "description": "Multiplies speculator pressure decay. Nationalist-aligned."
   },
   {
+    "name": "Fuel Cell Array",
+    "short_name": "fuel_cell",
+    "category": "Power",
+    "ideology": "nationalist",
+    "requires": {
+      "type": "flag",
+      "value": "chemical_energy_completed",
+      "label": "Chemical Energy Initiative (persistent project)"
+    },
+    "land": 2,
+    "cost_scaling": 1.4,
+    "costs": {
+      "cred": 200.0,
+      "cir": 30.0
+    },
+    "production": {
+      "eng": 15.0
+    },
+    "upkeep": {
+      "prop": 3.0
+    },
+    "effects": [],
+    "description": "Converts propellant into energy. High output per unit but propellant-hungry. Nationalist-aligned."
+  },
+  {
     "name": "Microwave Receiver",
     "short_name": "microwave_receiver",
     "category": "Power",

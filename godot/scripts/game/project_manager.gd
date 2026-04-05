@@ -178,4 +178,14 @@ func _check_condition(cond: Dictionary, state: GameState, career: CareerState) -
 			var current_rank: int = state.get_ideology_rank(axis)
 			var career_max: int = int(career.max_ideology_ranks.get(axis, 0))
 			return current_rank >= required_rank or career_max >= required_rank
+		"quest_active":
+			var quest_id: String = cond.get("quest_id", "")
+			if career.completed_quest_ids.has(quest_id):
+				return true
+			if state.seen_event_ids.has(quest_id):
+				return true
+			for inst: Dictionary in state.event_instances:
+				if inst.get("id", "") == quest_id:
+					return true
+			return false
 	return false

@@ -208,24 +208,24 @@ func _test_quest_gate(gm: Node) -> void:
 	gm.state.event_instances.clear()
 
 	_assert_false(gm.is_research_item_visible("geopolitical_intelligence"),
-		"quest gate: geopolitical_intelligence not visible without Q7")
+		"quest gate: geopolitical_intelligence not visible without Q5")
 
 	# Via career (prior-run retirement path)
-	gm.career.completed_quest_ids.append("q7_first_legacy")
+	gm.career.completed_quest_ids.append("q5_market_awareness")
 	_assert_true(gm.is_research_item_visible("geopolitical_intelligence"),
-		"quest gate: geopolitical_intelligence visible after Q7 in career")
+		"quest gate: geopolitical_intelligence visible after Q5 in career")
 
-	# Via current-run event_instances (same run Q7 was completed — before retirement)
+	# Via current-run event_instances (same run Q5 was completed — before retirement)
 	gm.career.completed_quest_ids.clear()
-	gm.state.event_instances.append({"id": "q7_first_legacy", "state": "completed"})
+	gm.state.event_instances.append({"id": "q5_market_awareness", "state": "completed"})
 	_assert_true(gm.is_research_item_visible("geopolitical_intelligence"),
-		"quest gate: geopolitical_intelligence visible when Q7 completed in current run")
+		"quest gate: geopolitical_intelligence visible when Q5 completed in current run")
 
 	# Incomplete instance does not count
 	gm.state.event_instances.clear()
-	gm.state.event_instances.append({"id": "q7_first_legacy", "state": "active"})
+	gm.state.event_instances.append({"id": "q5_market_awareness", "state": "active"})
 	_assert_false(gm.is_research_item_visible("geopolitical_intelligence"),
-		"quest gate: geopolitical_intelligence not visible when Q7 only active (not completed)")
+		"quest gate: geopolitical_intelligence not visible when Q5 only active (not completed)")
 
 	_restore_state(gm, saved)
 

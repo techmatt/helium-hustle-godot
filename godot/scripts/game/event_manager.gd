@@ -218,6 +218,15 @@ func get_condition_display(event_id: String, state: GameState) -> String:
 		"shipment_completed":
 			var count: int = int(cond.get("count", 1))
 			return "%d/%d" % [state.total_shipments_completed, count]
+		"all_of":
+			var done: int = 0
+			var total: int = (cond.get("sub_objectives", []) as Array).size()
+			if _career != null:
+				for sub: Dictionary in cond.get("sub_objectives", []):
+					var sub_key: String = event_id + ":" + sub.get("id", "")
+					if _career.completed_sub_objectives.has(sub_key):
+						done += 1
+			return "%d/%d" % [done, total]
 	return ""
 
 
@@ -297,6 +306,12 @@ func _check_condition(state: GameState, def: Dictionary) -> bool:
 					if int(_career.max_ideology_ranks.get(axis, 0)) >= target_rank:
 						return true
 			return false
+		"all_of":
+			return _check_all_of(def, state)
+		"days_survived":
+			return state.current_day >= int(cond.get("threshold", 0))
+		"credits_earned":
+			return state.cumulative_resources_earned.get("cred", 0.0) >= float(cond.get("threshold", 0))
 	return false
 
 
@@ -346,6 +361,31 @@ func _apply_unlock(state: GameState, effect: Dictionary) -> void:
 			var flag: String = effect.get("flag", "")
 			if flag:
 				state.flags[flag] = bool(effect.get("value", false))
+
+
+func _check_all_of(def: Dictionary, state: GameState) -> bool:
+	if _career == null:
+		return false
+	var cond: Dictionary = def.get("condition", {})
+	var all_done: bool = true
+	for sub: Dictionary in cond.get("sub_objectives", []):
+		var sub_key: String = def.get("id", "") + ":" + sub.get("id", "")
+		if _career.completed_sub_objectives.has(sub_key):
+			continue
+		if _check_sub_objective(state, sub):
+			_career.completed_sub_objectives.append(sub_key)
+		else:
+			all_done = false
+	return all_done
+
+
+func _check_sub_objective(state: GameState, sub: Dictionary) -> bool:
+	var cond_type: String = sub.get("condition", "")
+	var cond_data: Dictionary = sub.get("condition_data", {})
+	var fake_cond: Dictionary = {"type": cond_type}
+	fake_cond.merge(cond_data)
+	var fake_def: Dictionary = {"condition": fake_cond}
+	return _check_condition(state, fake_def)
 
 
 func _get_instance(state: GameState, event_id: String) -> Dictionary:

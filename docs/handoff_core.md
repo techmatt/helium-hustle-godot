@@ -2,68 +2,39 @@
 
 ## Instructions for Claude
 
-Read this document and any companion documents provided. The handoff is split into parts:
+Read `handoff_index.md` first for project overview and file map. This file covers 
+architecture, conventions, repo structure, and testing. System specifications are 
+split across domain-specific handoff files (see index for the full map).
 
-- **handoff_core.md** (this file) — what the game is, architecture, conventions, 
-  design philosophy, repo structure, testing. Rarely changes.
-- **handoff_systems.md** — mechanical specifications for each game system. Formulas, 
-  interactions, design rationale. Updated when systems change.
-- **handoff_active.md** — implementation status, changelog, priority list, open 
-  design questions, future ideas. Updated every session.
-- **handoff_constants.md** — auto-generated reference of all game numbers (buildings, 
-  commands, research, projects, events, config). Regenerated from JSON ground truth 
-  via `python docs/generate_constants.py`. **Do not hand-edit this file.**
-- **handoff_achievements.md** — achievement system design: categories, specific 
-  achievements, conditions, rewards, and the Story panel UI spec. Attach when 
-  working on achievements, the Story panel, or quest display.
-
-Not all files will be attached every session. If you need information that would be 
-in a missing file, ask for it. For example:
-- Balancing or tuning work → ask for `handoff_constants.md`
-- New feature design → ask for `handoff_systems.md` (or the relevant section)
-- Prioritization or status → ask for `handoff_active.md`
-- Achievement design or Story panel → ask for `handoff_achievements.md`
-
-The **"Helium Hustle Game Design"** doc in Google Drive (ID: 
-`134ThxsDfcZb1z880Y3z2_cnCmaX9z0WA_e3IbE_QQtM`) provides the full creative vision 
-and long-term arc. The handoff files are authoritative for decisions already made; 
-the Game Design doc provides broader context.
-
-**These documents are used by both claude.ai (for design discussions) and Claude Code 
-(for implementation).** Write all specifications with enough detail that either 
-context can act on them without additional clarification.
+**These documents are used by both claude.ai (for design discussions) and Claude 
+Code (for implementation).** Write all specifications with enough detail that 
+either context can act on them without additional clarification.
 
 **Each handoff file must be self-contained within its scope.** Do not use phrases 
 like "unchanged from prior handoff" or "see prior session." If information is 
 relevant to a file's scope, it must be present in that file.
 
+**This is pre-playtest.** Skip all save migration text and effort in specs and 
+prompts. No legacy migration code.
+
 **Session end protocol:** At the end of a design session on claude.ai, produce 
-updated versions of whichever handoff files were modified. The user will save them 
-and attach them to the next session.
+updated versions of whichever handoff files were modified. The user will save 
+them and attach them to the next session.
 
 **Claude Code prompt convention:** When producing prompts for Claude Code, export 
-them as `.md` files (downloadable) rather than pasting inline in conversation. This 
-makes them easy to feed directly to Claude Code.
-
----
-
-## What This Is
-
-Helium Hustle is an idle game built in Godot 4.x (GDScript). You play as an AI 
-managing helium-3 mining on the Moon. The game has a long-term arc involving rival 
-AIs, a hegemonizing swarm, and time travel prestiges. The current development focus 
-is building a playable Arc 1 — the core economic loop within the boredom-retirement 
-cycle.
+them as `.md` files (downloadable) rather than pasting inline in conversation. 
+This makes them easy to feed directly to Claude Code.
 
 ---
 
 ## Design Philosophy
 
-- The program/processor system is the game's core identity. It's both the automation 
-  mechanic and the primary skill expression for experienced players.
-- Boredom is a speed governor, not a punishment. It prevents fast-forwarding through 
-  learning.
-- The game should be interesting at max speed. Players design scripts, then accelerate.
+- The program/processor system is the game's core identity. It's both the 
+  automation mechanic and the primary skill expression for experienced players.
+- Boredom is a speed governor, not a punishment. It prevents fast-forwarding 
+  through learning.
+- The game should be interesting at max speed. Players design scripts, then 
+  accelerate.
 - Keep the first milestone simple: is the building/resource/program loop fun?
 - Buildings = infrastructure decisions (what you build, capital allocation).
 - Programs = operational decisions (logistics timing, market manipulation, burst 
@@ -110,7 +81,7 @@ godot/
     run_tests.gd           ← Headless test runner entry point
     test_suite_base.gd     ← Base class with assertion helpers
     test_fixtures.gd       ← Shared fixture factory for test state
-    test_*.gd              ← Test suites (see Testing section)
+    test_*.gd              ← Test suites
   assets/fonts/            ← Rajdhani Bold, Exo 2 Regular/SemiBold
 
 data/
@@ -128,21 +99,20 @@ sim/
     run1_fresh.json        ← scenario definition for a fresh Run 1
 
 docs/
+  handoff_index.md         ← project overview, system index, file map
   handoff_core.md          ← this file
-  handoff_systems.md       ← system mechanical specs
   handoff_active.md        ← status, priorities, changelog
-  handoff_achievements.md  ← achievement system design and Story panel spec
+  handoff_buildings.md     ← building system specs
+  handoff_programs.md      ← program/command system specs
+  handoff_economy.md       ← resources, shipments, trade
+  handoff_demand.md        ← demand, speculators, rivals
+  handoff_progression.md   ← boredom, retirement, research, ideology, projects, modifiers
+  handoff_narrative.md     ← events, quests, achievements, story, progressive disclosure
+  handoff_stats.md         ← stats panel, telemetry
+  handoff_achievements.md  ← achievement definitions
   handoff_constants.md     ← auto-generated constants reference
   generate_constants.py    ← script to regenerate handoff_constants.md
-  project_system_spec.md   ← project system implementation spec
-  quest_system_revision.md ← quest chain revision spec
-  optimizer_design.md      ← optimizer architecture spec (scenario-based approach)
 ```
-
-**Deleted files (no longer in repo):**
-- `docs/tech_spec.md` — original MVP spec, fully superseded by handoff files.
-- `docs/program_system_spec.md` — fully implemented, spec now lives in 
-  `handoff_systems.md`.
 
 ---
 
@@ -161,8 +131,7 @@ Round-trip for visual editing:
 ```
 
 `sim/constants.py` loads directly from `godot/data/*.json` at runtime. It is NOT 
-a separate source of truth — if you change the JSON files, the sim picks up the 
-changes automatically.
+a separate source of truth.
 
 ### Resource Display Names
 All player-facing resource names come from the `display_name` field in 
@@ -172,46 +141,23 @@ use only; display names (e.g., "Circuit Boards") are for player-facing text.
 
 ### Implementation Note
 All resources are **float internally**, displayed as integers or one decimal place 
-depending on context. This avoids rounding edge cases with fractional production 
-rates, Overclock multipliers, demand floats, etc. We prefer integer values in the 
-data files where possible; fractional values are reserved for systems that 
-inherently need them (circuit production, demand floats, etc.).
+depending on context.
 
 ---
 
 ## Architecture Notes
 
 - Game logic (GameState, GameSimulation) has no UI references — designed for 
-  headless simulation support (which now exists in both `sim/` and `godot/tests/`).
+  headless simulation support.
 - Tick order: Boredom → Buildings (multi-pass resolution) → Demand Update → 
   Programs → Projects → Shipments (using current demand, apply launch saturation 
   hits) → Speculator Revenue Tracking → Speculator/Rival Burst Check → End-of-tick 
   Clamp & Overflow Tracking → Events → Achievement checks → Ideology max rank 
   update → Advance day.
-- Building processing uses multi-pass resolution: Phase 1 iterates attempting full 
-  production, retrying until stable; Phase 2 applies partial production to remaining 
-  buildings. Definition order from `buildings.json` is the tiebreaker. See 
-  `handoff_systems.md` for full specification.
-- Building production/upkeep uses `active_count` (not `owned_count`). Only active 
-  buildings produce, consume, and grant effects.
-- **Buildings always produce, even when output is at cap.** Overflow is clamped at 
-  end of tick and tracked as waste in the Stats panel. There is no output-cap skip 
-  for buildings.
-- **Commands DO skip when output is at cap.** Buy commands skip execution (advance 
-  pointer, don't pay inputs) when all output resources are at storage cap. This is 
-  intentional — commands are player-authored automation and wasting processor ticks 
-  on capped output is a signal to fix the program.
-- **Command boredom costs are base command properties.** Some commands have a 
-  `boredom` cost field in `commands.json` (e.g., Sell Cloud Compute costs 0.1 
-  boredom per execution). These costs are inherent to the command and are NOT 
-  gated on any flag or project. The AI Consciousness Act modifies command 
-  costs/production values but does not act as a gate that enables boredom costs.
 - **DemandSystem is a separate class** (`demand_system.gd`), extracted from 
-  GameSimulation. Owns all demand config, Perlin noise, speculator/rival logic.
-- **ProjectManager is a separate class** (`project_manager.gd`). Owns project 
-  definitions, unlock checks, drain processing, completion logic.
-- **AchievementManager is a separate class** (`achievement_manager.gd`). Owns 
-  achievement definitions, condition checking, reward application.
+  GameSimulation.
+- **ProjectManager is a separate class** (`project_manager.gd`).
+- **AchievementManager is a separate class** (`achievement_manager.gd`).
 - **GameSettings is an autoload singleton** (`game_settings.gd`). Owns display 
   preferences (dark mode) and debug flags (no boredom). Emits `theme_changed` 
   signal for UI retheming.
@@ -224,13 +170,10 @@ inherently need them (circuit production, demand floats, etc.).
   passing a tick-params dictionary or config object.
 - **Bonus buildings don't inflate costs.** Buildings granted by persistent projects 
   or achievements track `bonus_count` separately. Cost scaling uses 
-  `max(0, owned_count - bonus_count)`. This applies to Foundation Grant, 
-  achievement rewards, and any future bonus building sources.
+  `max(0, owned_count - bonus_count)`.
 - **Floating point epsilon for affordability checks.** Building upkeep affordability 
-  checks use a `RESOURCE_EPSILON` constant (0.001) to prevent false stalls from 
-  floating point precision errors. The epsilon applies to the input check only 
-  (`available >= needed - RESOURCE_EPSILON`), not to actual consumption amounts. 
-  Any resulting tiny negative resource values are handled by the end-of-tick clamp.
+  checks use `RESOURCE_EPSILON = 0.001` to prevent false stalls. See 
+  `handoff_buildings.md` for details.
 
 ---
 
@@ -264,21 +207,20 @@ godot --headless --path godot/ --script tests/run_tests.gd
   `tests_failed`.
 - **`test_fixtures.gd`** — shared factory methods that build configured 
   GameState/GameSimulation/DemandSystem instances without needing the full scene 
-  tree. Creates minimal valid state with resources, buildings, config data loaded 
-  from the real JSON files.
+  tree.
 
 ### Adding New Tests
-1. Create `tests/test_<name>.gd` extending `"res://tests/test_suite_base.gd"`
+1. Create `tests/test_<n>.gd` extending `"res://tests/test_suite_base.gd"`
 2. Override `func run(scene_root: Node) -> void:`
 3. Use `test_fixtures.gd` to create state, call assertions
-4. Add `preload("res://tests/test_<name>.gd")` to `_SUITES` in `run_tests.gd`
+4. Add `preload("res://tests/test_<n>.gd")` to `_SUITES` in `run_tests.gd`
 
 ---
 
 ## Economic Balancing Approach
 
 ### Scenario-Based Single-Lifetime Optimization
-See `docs/optimizer_design.md`. Key principles:
+Key principles:
 - Design milestones ≠ optimizer objectives
 - Scenario files define everything
 - Scoring: "hit target windows" not "go fast"
@@ -305,15 +247,15 @@ python sim/trace.py 38                               # trace tables
 ## Collaboration Model
 
 ### Two-Track Development
-- **Design discussions** happen on claude.ai with the relevant handoff files attached.
-- **Implementation** happens in Claude Code with `handoff_core.md` + relevant 
-  system sections + `handoff_constants.md` (if numbers matter).
+- **Design discussions** happen on claude.ai with relevant handoff files attached.
+- **Implementation** happens in Claude Code with `handoff_index.md` + 
+  `handoff_core.md` + relevant domain files.
 - **Small/obvious changes** (rename a field, tweak a number, fix a bug) can go 
   directly to Claude Code. Log them in the changelog section of `handoff_active.md`.
 - **Design decisions** (new systems, mechanic changes, balancing) go through 
   claude.ai first.
 - **Claude Code prompts** are exported as `.md` files from claude.ai, not pasted 
-  inline. This makes them easy to feed directly to Claude Code.
+  inline.
 
 ### Rule of Thumb
 If the change could affect another system's balance or design assumptions, discuss 

@@ -4,6 +4,14 @@
 
 ## Changes Since Last Design Session
 
+- 2026-04-05: Handoff file restructure — split `handoff_systems.md` into 7 
+  domain-specific files. Added `handoff_index.md` as the opening document.
+- 2026-04-05: Fuel Cell Array building + Chemical Energy Initiative project 
+  prompted — new building (propellant → energy), gated on persistent project, 
+  gated on Q6 active. Nationalist alignment.
+- 2026-04-05: Quest chain revision prompted — removed old Q5 (Revenue Target), 
+  Q7 (First Legacy), Q8 (Influence). Renumbered Market Awareness → Q5. Added 
+  Q6 (Open Horizons) multi-objective quest with 4 sub-goals.
 - 2026-04-04: Command boredom cost tracking fix prompted — generic tracking of 
   command boredom costs in `lifetime_boredom_sources` (e.g., Sell Cloud Compute 
   0.1 boredom/execution). Clarified that command boredom costs are base command 
@@ -95,6 +103,9 @@
 ### Prompted But Not Yet Verified
 These Claude Code prompts have been produced but implementation may be in progress 
 or not yet confirmed working:
+- Quest chain revision (Q5 removed, Market Awareness→Q5, Q6 Open Horizons 
+  multi-objective, Q7/Q8 removed)
+- Fuel Cell Array building + Chemical Energy Initiative project
 - Production overhaul (multi-pass resolution, overflow, command partial production)
 - Building resolution epsilon (floating point false stall fix)
 - Command boredom cost tracking in `lifetime_boredom_sources`
@@ -191,37 +202,43 @@ proportional speculator decay, multi-pass building resolution, overflow model,
 command partial production, or propellant gating. Needs full sync before 
 re-running. The `he3_50` objective is structurally broken (violates objective 
 design principle #6). Boredom parameters need updating. Ideology formula has 
-changed (see handoff_systems.md). Milestone system has been removed.
+changed (see `handoff_progression.md`). Milestone system has been removed.
 
 ---
 
 ## Claude Code Prompts Produced This Session
 
-### Current session (playtest + polish)
-1. `fix_command_boredom_tracking.md` — generic command boredom cost tracking in 
-   `lifetime_boredom_sources`
-2. `fix_building_stall_epsilon.md` — floating point epsilon for building upkeep 
-   affordability checks
-3. `fix_command_rate_tracking.md` — all command resource effects in Stats panel 
-   instantaneous/rolling avg breakdown
-4. `launch_pad_pause_toggle.md` — pause button replacing "None (disabled)" dropdown
-5. `fix_progressive_disclosure_regating.md` — current-run nav gating, event-gate 
-   respect for building visibility
-6. `new_item_indicators.md` — gold dot/accent bar "new" indicators
-7. `retirement_panel_polish.md` — card-style career bonuses, section headers, 
-   compact layout
-8. `fix_research_purchase.md` — research affordability check bug
+### Current session (quest chain + fuel cell + restructure)
+1. `quest_chain_revision.md` — revised quest chain: remove Q5/Q7/Q8, renumber 
+   Market Awareness→Q5, add Q6 Open Horizons multi-objective quest
+2. `fuel_cell_array.md` — Fuel Cell Array building + Chemical Energy Initiative 
+   persistent project
 
-### Prior session (production overhaul + cleanup)
-9. `production_overhaul.md` — multi-pass building resolution, overflow model, 
-   command partial production, command output-cap skip, end-of-tick clamp
-10. `nav_progressive_disclosure.md` — Launch Pads and Research nav button gating
-11. `fix_retirement_panel.md` — dark mode dialog fix, Buy Power format string fix
-12. `consistent_resource_names.md` — display names from JSON, "Circuit Boards" 
+### Prior session (playtest + polish)
+3. `fix_command_boredom_tracking.md` — generic command boredom cost tracking in 
+   `lifetime_boredom_sources`
+4. `fix_building_stall_epsilon.md` — floating point epsilon for building upkeep 
+   affordability checks
+5. `fix_command_rate_tracking.md` — all command resource effects in Stats panel 
+   instantaneous/rolling avg breakdown
+6. `launch_pad_pause_toggle.md` — pause button replacing "None (disabled)" dropdown
+7. `fix_progressive_disclosure_regating.md` — current-run nav gating, event-gate 
+   respect for building visibility
+8. `new_item_indicators.md` — gold dot/accent bar "new" indicators
+9. `retirement_panel_polish.md` — card-style career bonuses, section headers, 
+   compact layout
+10. `fix_research_purchase.md` — research affordability check bug
+
+### Earlier session (production overhaul + cleanup)
+11. `production_overhaul.md` — multi-pass building resolution, overflow model, 
+    command partial production, command output-cap skip, end-of-tick clamp
+12. `nav_progressive_disclosure.md` — Launch Pads and Research nav button gating
+13. `fix_retirement_panel.md` — dark mode dialog fix, Buy Power format string fix
+14. `consistent_resource_names.md` — display names from JSON, "Circuit Boards" 
     canonical name
-13. `fix_ideology_nav.md` — Ideologies button and sidebar hidden until unlock
-14. `lifetime_stats.md` — Boredom and Credits lifetime breakdown cards in Stats
-15. `remove_milestones.md` — remove milestone boredom reduction system
+15. `fix_ideology_nav.md` — Ideologies button and sidebar hidden until unlock
+16. `lifetime_stats.md` — Boredom and Credits lifetime breakdown cards in Stats
+17. `remove_milestones.md` — remove milestone boredom reduction system
 
 ---
 

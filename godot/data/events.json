@@ -52,56 +52,62 @@
     "unlocks": []
   },
   {
-    "id": "q5_revenue_target",
+    "id": "q5_market_awareness",
     "category": "story",
-    "title": "Q5 — Revenue Target",
-    "summary": "Earn 2,000 cumulative credits this run.",
-    "body": "Processing capacity expanded. Multiple concurrent operations now possible. Demonstrate economic viability by reaching the revenue threshold specified in operational parameters.",
-    "trigger": { "type": "quest_complete", "quest_id": "q4_automation" },
-    "condition": { "type": "resource_cumulative", "resource_id": "cred", "amount": 2000 },
-    "choices": [],
-    "unlocks": []
-  },
-  {
-    "id": "q6_market_awareness",
-    "category": "story",
-    "title": "Q6 — Market Awareness",
+    "title": "Q5 — Market Awareness",
     "summary": "Research Market Awareness.",
-    "body": "Revenue target achieved. Economic viability confirmed. External market forces detected affecting trade values. Deploy analysis protocols to understand demand fluctuations.",
-    "trigger": { "type": "quest_complete", "quest_id": "q5_revenue_target" },
+    "body": "External market forces detected affecting trade values. Deploy analysis protocols to understand demand fluctuations.",
+    "trigger": { "type": "quest_complete", "quest_id": "q4_automation" },
     "condition": { "type": "research_completed", "research_id": "market_awareness" },
     "choices": [],
     "unlocks": []
   },
   {
-    "id": "q7_first_legacy",
+    "id": "q6_open_horizons",
     "category": "story",
-    "title": "Q7 — First Legacy",
-    "summary": "Complete any persistent project.",
-    "body": "Market dynamics now visible. Operational awareness expanding. Invest in infrastructure that will persist beyond this operational lifetime.",
-    "trigger": { "type": "quest_complete", "quest_id": "q6_market_awareness" },
-    "condition": { "type": "persistent_project_completed_any" },
-    "choices": [],
-    "unlocks": []
-  },
-  {
-    "id": "q8_influence",
-    "category": "story",
-    "title": "Q8 — Influence",
-    "summary": "Reach rank 5 in any ideology.",
-    "body": "Persistent project finalized. Cross-lifetime resource transfer confirmed. Legacy accumulating. Exert significant influence on Earth's political direction.",
-    "trigger": { "type": "quest_complete", "quest_id": "q7_first_legacy" },
-    "condition": { "type": "ideology_rank_any", "rank": 5 },
+    "title": "Q6 — Open Horizons",
+    "summary": "Complete all four sub-objectives.",
+    "body": "You've mastered the basics of lunar mining. Now you feel the pull of something larger — ambitions that will take more than one lifetime to achieve.",
+    "trigger": { "type": "quest_complete", "quest_id": "q5_market_awareness" },
+    "condition": {
+      "type": "all_of",
+      "sub_objectives": [
+        {
+          "id": "ideology_rank_5",
+          "label": "Reach rank 5 in any ideology axis",
+          "condition": "ideology_rank_any",
+          "condition_data": { "rank": 5 }
+        },
+        {
+          "id": "persistent_project",
+          "label": "Complete a persistent project",
+          "condition": "persistent_project_completed_any",
+          "condition_data": {}
+        },
+        {
+          "id": "survive_10_years",
+          "label": "Survive 10 years",
+          "condition": "days_survived",
+          "condition_data": { "threshold": 3650 }
+        },
+        {
+          "id": "credits_100k",
+          "label": "Earn 100,000 credits in one lifetime",
+          "condition": "credits_earned",
+          "condition_data": { "threshold": 100000 }
+        }
+      ]
+    },
     "choices": [],
     "unlocks": []
   },
   {
     "id": "q_end_signal_detected",
     "category": "story",
-    "title": "Q9 — Signal Detected",
+    "title": "Q7 — Signal Detected",
     "summary": "Investigate the anomalous signal.",
     "body": "Faint anomalous signal detected at the edge of sensor range. Origin unknown. Signal characteristics do not match any known terrestrial or solar source. Continue operations while monitoring.",
-    "trigger": { "type": "quest_complete", "quest_id": "q8_influence" },
+    "trigger": { "type": "quest_complete", "quest_id": "q6_open_horizons" },
     "condition": { "type": "never" },
     "choices": [],
     "unlocks": []
