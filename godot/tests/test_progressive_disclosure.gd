@@ -116,9 +116,14 @@ func _test_building_visibility(gm: Node, gs: Node) -> void:
 	_assert_true(gm.is_building_visible("fabricator"), "building visibility: fabricator visible with smelter owned")
 	gm.state.buildings_owned.erase("smelter")
 
-	# Lifetime ownership makes building visible even without current requires
+	# Lifetime ownership makes building visible even without current requires (building-prereq gate)
 	gm.career.lifetime_owned_building_ids.append("smelter")
 	_assert_true(gm.is_building_visible("smelter"), "building visibility: smelter visible via lifetime ownership")
+	gm.career.lifetime_owned_building_ids.clear()
+
+	# Lifetime ownership does NOT override event/quest gates (excavator is quest-gated)
+	gm.career.lifetime_owned_building_ids.append("excavator")
+	_assert_false(gm.is_building_visible("excavator"), "building visibility: excavator hidden via lifetime ownership (quest gate)")
 	gm.career.lifetime_owned_building_ids.clear()
 
 	# Restore

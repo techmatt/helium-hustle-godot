@@ -72,7 +72,7 @@ func _build_ui() -> void:
 	outer.add_child(_title_lbl)
 
 	_content_vbox = VBoxContainer.new()
-	_content_vbox.add_theme_constant_override("separation", 14)
+	_content_vbox.add_theme_constant_override("separation", 6)
 	outer.add_child(_content_vbox)
 
 	var btn_row := HBoxContainer.new()
@@ -113,6 +113,7 @@ func _populate(summary: Dictionary) -> void:
 		child.queue_free()
 
 	_add_subtitle("Run %d — %s days survived" % [run_num, _fmt_int(days)])
+	_add_spacer(8)
 
 	_add_section_header("This Run")
 	_add_stat_row("Credits earned:", _fmt_int(int(summary.get("credits_earned", 0.0))))
@@ -120,15 +121,16 @@ func _populate(summary: Dictionary) -> void:
 	_add_stat_row("Buildings built:", _fmt_int(int(summary.get("buildings_built", 0))))
 	_add_stat_row("Research completed:", _fmt_int(int(summary.get("research_completed", []).size())))
 
+	_add_spacer(6)
 	_add_section_header("Career Totals")
 	_add_stat_row("Total retirements:", _fmt_int(int(summary.get("career_retirements", 1))))
 	_add_stat_row("Total days survived:", _fmt_int(int(summary.get("career_total_days", 0))))
 
+	_add_spacer(6)
 	_add_section_header("What Persists")
-	_add_bullet("Event and quest history")
-	_add_bullet("Lifetime statistics")
-	_add_bullet("Persistent project progress")
+	_add_persists_line()
 
+	_add_spacer(6)
 	_add_career_bonuses_section(summary)
 
 
@@ -136,25 +138,44 @@ func _add_subtitle(text: String) -> void:
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 15)
+	lbl.add_theme_font_size_override("font_size", 17)
 	lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.80) if GameSettings.is_dark_mode else Color(0.35, 0.35, 0.35))
 	_content_vbox.add_child(lbl)
 
 
+func _add_spacer(height: int) -> void:
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, height)
+	_content_vbox.add_child(spacer)
+
+
 func _add_section_header(text: String) -> void:
-	var sep := HSeparator.new()
-	_content_vbox.add_child(sep)
+	var pc := PanelContainer.new()
+	var hdr_style := StyleBoxFlat.new()
+	hdr_style.bg_color = Color(0.20, 0.20, 0.26) if GameSettings.is_dark_mode else Color(0.86, 0.86, 0.90)
+	hdr_style.content_margin_left   = 8
+	hdr_style.content_margin_right  = 8
+	hdr_style.content_margin_top    = 4
+	hdr_style.content_margin_bottom = 4
+	pc.add_theme_stylebox_override("panel", hdr_style)
 	var lbl := Label.new()
 	lbl.text = text.to_upper()
 	lbl.add_theme_font_override("font", _font_exo2_semibold)
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", Color(0.55, 0.65, 0.80) if GameSettings.is_dark_mode else Color(0.17, 0.24, 0.31))
-	_content_vbox.add_child(lbl)
+	pc.add_child(lbl)
+	_content_vbox.add_child(pc)
 
 
 func _add_stat_row(label_text: String, value_text: String) -> void:
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", 8)
+	m.add_theme_constant_override("margin_right", 8)
+	m.add_theme_constant_override("margin_top", 2)
+	m.add_theme_constant_override("margin_bottom", 2)
 	var row := HBoxContainer.new()
-	_content_vbox.add_child(row)
+	m.add_child(row)
+	_content_vbox.add_child(m)
 	var lbl := Label.new()
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -171,17 +192,23 @@ func _add_stat_row(label_text: String, value_text: String) -> void:
 	row.add_child(val)
 
 
-func _add_bullet(text: String) -> void:
+func _add_persists_line() -> void:
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", 8)
+	m.add_theme_constant_override("margin_right", 8)
+	m.add_theme_constant_override("margin_top", 2)
+	m.add_theme_constant_override("margin_bottom", 2)
 	var lbl := Label.new()
-	lbl.text = "• " + text
+	lbl.text = "Events, statistics, and project progress carry over to your next run."
 	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 15)
-	lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.80) if GameSettings.is_dark_mode else Color(0.3, 0.3, 0.3))
-	_content_vbox.add_child(lbl)
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", Color(0.65, 0.65, 0.70) if GameSettings.is_dark_mode else Color(0.40, 0.40, 0.40))
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	m.add_child(lbl)
+	_content_vbox.add_child(m)
 
 
 func _fmt_int(n: int) -> String:
-	# Format integer with thousands commas
 	var s: String = str(abs(n))
 	var result: String = ""
 	var count: int = 0
@@ -209,24 +236,39 @@ func _add_career_bonuses_section(summary: Dictionary) -> void:
 	# Bonus 1: Starting Credits
 	var credits_bonus: int = int(floor(best_credits * GameManager.career_credits_bonus_fraction))
 	var new_credits: bool = best_credits > pre_credits
-	var credits_label: String = "+%s credits%s" % [_fmt_int(credits_bonus), " ↑" if new_credits else ""]
-	_add_stat_row("Starting Credits:", credits_label)
-	_add_indent_note("from best revenue: %s" % _fmt_int(int(best_credits)))
+	_add_bonus_card(
+		"Starting Credits",
+		"+%s credits" % _fmt_int(credits_bonus),
+		"from best revenue: %s" % _fmt_int(int(best_credits)),
+		Color(0.30, 0.72, 0.30),
+		new_credits,
+		false
+	)
 
 	# Bonus 2: Boredom Resilience
 	var resilience_mult: float = pow(0.995, best_days / 400.0)
 	var resilience_pct: float = (1.0 - resilience_mult) * 100.0
 	var new_resilience: bool = best_days > pre_days
-	var resilience_label: String = "-%s%% boredom rate%s" % [_fmt_float1(resilience_pct), " ↑" if new_resilience else ""]
-	_add_stat_row("Boredom Resilience:", resilience_label)
-	_add_indent_note("from best survival: %s days" % _fmt_int(best_days))
+	_add_bonus_card(
+		"Boredom Resilience",
+		"-%s%% boredom rate" % _fmt_float1(resilience_pct),
+		"from best survival: %s days" % _fmt_int(best_days),
+		Color(0.55, 0.55, 0.55),
+		new_resilience,
+		false
+	)
 
 	# Bonus 3: Buy Power Scaling
 	var bp_mult: float = 1.0 + floor(peak_power / 20.0) * 0.25
 	var new_power: bool = peak_power > pre_power
-	var bp_label: String = "%sx output & cost%s" % [_fmt_float2(bp_mult), " ↑" if new_power else ""]
-	_add_stat_row("Buy Power Scaling:", bp_label)
-	_add_indent_note("from peak power: %s energy/tick" % _fmt_int(int(peak_power)))
+	_add_bonus_card(
+		"Buy Power Scaling",
+		"%sx output & cost" % _fmt_float2(bp_mult),
+		"from peak power: %s energy/tick" % _fmt_int(int(peak_power)),
+		Color(0.88, 0.66, 0.20),
+		new_power,
+		false
+	)
 
 	# Bonus 4: Ideology Head Start
 	var axis_names: Dictionary = {"nationalist": "Nationalist", "humanist": "Humanist", "rationalist": "Rationalist"}
@@ -234,6 +276,7 @@ func _add_career_bonuses_section(summary: Dictionary) -> void:
 	var head_start_lines: Array[String] = []
 	var best_rank_parts: Array[String] = []
 	var has_any_head_start: bool = false
+	var any_new_ideo: bool = false
 	for axis: String in ["nationalist", "humanist", "rationalist"]:
 		var max_score: float = float(max_ideology.get(axis, 0.0))
 		var starting_score: float = 0.0
@@ -246,29 +289,135 @@ func _add_career_bonuses_section(summary: Dictionary) -> void:
 		var best_rank: int = floori(GameState.continuous_rank_for_score(max_score))
 		best_rank_parts.append("%s%d" % [axis_short[axis], best_rank])
 		var prev_score: float = float(pre_ideology.get(axis, 0.0))
-		var new_ideo: bool = max_score > prev_score
+		if max_score > prev_score:
+			any_new_ideo = true
 		if starting_rank_int >= 1:
 			has_any_head_start = true
-			head_start_lines.append("%s rank %d (+%d score)%s" % [
-				axis_names[axis], starting_rank_int, int(starting_score),
-				" ↑" if new_ideo else ""
+			head_start_lines.append("%s rank %d (+%d score)" % [
+				axis_names[axis], starting_rank_int, int(starting_score)
 			])
+
 	if has_any_head_start:
-		_add_stat_row("Ideology Head Start:", "")
-		for line: String in head_start_lines:
-			_add_indent_note(line)
-		_add_indent_note("from best ranks: %s" % " / ".join(best_rank_parts))
+		var rank_summary: String = " / ".join(best_rank_parts)
+		var note_lines: Array[String] = head_start_lines.duplicate()
+		note_lines.append("best ranks: %s" % rank_summary)
+		_add_bonus_card(
+			"Ideology Head Start",
+			rank_summary,
+			"\n".join(note_lines),
+			Color(0.55, 0.35, 0.80),
+			any_new_ideo,
+			false
+		)
 	else:
-		_add_stat_row("Ideology Head Start:", "none yet")
+		_add_bonus_card(
+			"Ideology Head Start",
+			"none yet",
+			"earn ideology scores across runs",
+			Color(0.40, 0.40, 0.45),
+			false,
+			true
+		)
 
 
-func _add_indent_note(text: String) -> void:
-	var lbl := Label.new()
-	lbl.text = "    (" + text + ")"
-	lbl.add_theme_font_override("font", _font_exo2_regular)
-	lbl.add_theme_font_size_override("font_size", 14)
-	lbl.add_theme_color_override("font_color", Color(0.60, 0.60, 0.65) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.45))
-	_content_vbox.add_child(lbl)
+func _add_bonus_card(
+	bonus_name: String,
+	value_text: String,
+	note_text: String,
+	accent_color: Color,
+	is_new: bool,
+	is_none_yet: bool
+) -> void:
+	var card := PanelContainer.new()
+	card.clip_contents = true
+	var card_bg: Color
+	if is_new:
+		card_bg = Color(0.14, 0.22, 0.16) if GameSettings.is_dark_mode else Color(0.90, 0.97, 0.91)
+	else:
+		card_bg = Color(0.17, 0.17, 0.21) if GameSettings.is_dark_mode else Color(0.93, 0.93, 0.96)
+	var card_style := StyleBoxFlat.new()
+	card_style.bg_color = card_bg
+	card_style.corner_radius_top_left     = 4
+	card_style.corner_radius_top_right    = 4
+	card_style.corner_radius_bottom_left  = 4
+	card_style.corner_radius_bottom_right = 4
+	card_style.content_margin_top    = 0
+	card_style.content_margin_bottom = 0
+	card_style.content_margin_left   = 0
+	card_style.content_margin_right  = 0
+	card.add_theme_stylebox_override("panel", card_style)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 0)
+	card.add_child(row)
+
+	# Left accent bar
+	var accent := ColorRect.new()
+	accent.custom_minimum_size = Vector2(4, 0)
+	accent.color = accent_color
+	accent.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_child(accent)
+
+	# Content area
+	var content_margin := MarginContainer.new()
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.add_theme_constant_override("margin_left", 10)
+	content_margin.add_theme_constant_override("margin_right", 10)
+	content_margin.add_theme_constant_override("margin_top", 7)
+	content_margin.add_theme_constant_override("margin_bottom", 7)
+	row.add_child(content_margin)
+
+	var inner_row := HBoxContainer.new()
+	inner_row.add_theme_constant_override("separation", 8)
+	content_margin.add_child(inner_row)
+
+	# Left column: bonus name + note
+	var name_col := VBoxContainer.new()
+	name_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_col.add_theme_constant_override("separation", 2)
+	inner_row.add_child(name_col)
+
+	var name_lbl := Label.new()
+	name_lbl.text = bonus_name
+	name_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	name_lbl.add_theme_font_size_override("font_size", 15)
+	name_lbl.add_theme_color_override("font_color", Color(0.90, 0.90, 0.90) if GameSettings.is_dark_mode else Color(0.15, 0.15, 0.15))
+	name_col.add_child(name_lbl)
+
+	var note_lbl := Label.new()
+	note_lbl.text = note_text
+	note_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note_lbl.add_theme_font_override("font", _font_exo2_regular)
+	note_lbl.add_theme_font_size_override("font_size", 13)
+	note_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.60) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.45))
+	name_col.add_child(note_lbl)
+
+	# Right column: value + NEW indicator
+	var val_col := VBoxContainer.new()
+	val_col.add_theme_constant_override("separation", 2)
+	inner_row.add_child(val_col)
+
+	var val_lbl := Label.new()
+	val_lbl.text = value_text
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.add_theme_font_override("font", _font_exo2_semibold)
+	val_lbl.add_theme_font_size_override("font_size", 17)
+	if is_none_yet:
+		val_lbl.add_theme_color_override("font_color", Color(0.50, 0.50, 0.55) if GameSettings.is_dark_mode else Color(0.55, 0.55, 0.55))
+	else:
+		val_lbl.add_theme_color_override("font_color", Color.WHITE if GameSettings.is_dark_mode else Color(0.08, 0.08, 0.08))
+	val_col.add_child(val_lbl)
+
+	if is_new:
+		var new_lbl := Label.new()
+		new_lbl.text = "▲ NEW"
+		new_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		new_lbl.add_theme_font_override("font", _font_exo2_semibold)
+		new_lbl.add_theme_font_size_override("font_size", 13)
+		new_lbl.add_theme_color_override("font_color", Color(0.35, 0.85, 0.45))
+		val_col.add_child(new_lbl)
+
+	_content_vbox.add_child(card)
 
 
 func _fmt_float1(v: float) -> String:

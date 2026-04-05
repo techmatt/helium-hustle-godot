@@ -22,6 +22,8 @@ const COLORS_LIGHT: Dictionary = {
 	"count":       Color(0.32, 0.32, 0.36),
 }
 
+const NEW_ACCENT_COLOR: Color = Color(0.961, 0.620, 0.043)  # #F59E0B gold/amber
+
 const RESOURCE_COLORS: Dictionary = {
 	"eng":     Color(1.00, 0.85, 0.00),
 	"reg":     Color(0.60, 0.42, 0.22),
@@ -76,7 +78,28 @@ func setup(bdef: Dictionary, font_rb: FontFile, font_e2r: FontFile, font_e2s: Fo
 	_build_ui()
 
 
+func _update_new_bar(is_new: bool) -> void:
+	if is_new:
+		_bg_style.border_width_left   = 4
+		_bg_style.border_width_right  = 0
+		_bg_style.border_width_top    = 0
+		_bg_style.border_width_bottom = 0
+		_bg_style.border_color = NEW_ACCENT_COLOR
+	elif not GameSettings.is_dark_mode:
+		_bg_style.border_width_left   = 1
+		_bg_style.border_width_right  = 1
+		_bg_style.border_width_top    = 1
+		_bg_style.border_width_bottom = 1
+		_bg_style.border_color = Color(0.816, 0.816, 0.816)
+	else:
+		_bg_style.border_width_left   = 0
+		_bg_style.border_width_right  = 0
+		_bg_style.border_width_top    = 0
+		_bg_style.border_width_bottom = 0
+
+
 func refresh() -> void:
+	_update_new_bar(GameManager.state.newly_revealed_buildings.has(_bdef.short_name))
 	var owned: int = GameManager.state.buildings_owned.get(_bdef.short_name, 0)
 	var active: int = GameManager.get_building_active(_bdef.short_name)
 	var is_locked: bool = GameManager.is_building_locked(_bdef.short_name)
@@ -179,6 +202,11 @@ func _build_ui() -> void:
 	custom_minimum_size = Vector2(310, 0)
 	size_flags_horizontal = Control.SIZE_FILL
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	mouse_entered.connect(func():
+		var sn: String = _bdef.short_name
+		if GameManager.state.newly_revealed_buildings.erase(sn):
+			_update_new_bar(false)
+	)
 
 	_bg_style = StyleBoxFlat.new()
 	_bg_style.corner_radius_top_left     = 4

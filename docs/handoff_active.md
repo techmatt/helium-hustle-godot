@@ -4,28 +4,43 @@
 
 ## Changes Since Last Design Session
 
-- 2026-04-04: Production overhaul designed and prompted — removed output-cap skip 
-  for buildings, implemented multi-pass building resolution (Phase 1 iterative full 
-  production + Phase 2 partial production), end-of-tick clamp with overflow tracking, 
-  command partial production for Buy commands, command output-cap skip (commands DO 
-  skip when output at cap, unlike buildings)
-- 2026-04-04: Nav progressive disclosure prompted — Launch Pads visible when 
-  player owns ≥1 Launch Pad, Research visible when player owns ≥1 Research Lab 
-  (both respect CareerState lifetime tracking)
-- 2026-04-04: Retirement panel bug fixes prompted — dark mode dialog in light mode, 
-  Buy Power scaling format string displayed literally instead of interpolated
-- 2026-04-04: Consistent resource display names prompted — all player-facing names 
-  from `resources.json` `display_name` field via helper, "Circuit Boards" as 
-  canonical name (not "Circuits")
-- 2026-04-04: Ideology nav visibility fix prompted — Ideologies button and sidebar 
-  section hidden until Ideology Unlock event fires (Geopolitical Intelligence 
-  research completion)
-- 2026-04-04: Lifetime stats cards designed and prompted — "Lifetime Totals" 
-  section in Stats panel with Boredom (Lifetime) and Credits (Lifetime) breakdown 
-  cards, per-source tracking
-- 2026-04-04: Milestone boredom reduction system removed — milestones overlapped 
-  with quests and achievements, boredom reduction role to be absorbed into future 
-  achievement batch
+- 2026-04-04: Command boredom cost tracking fix prompted — generic tracking of 
+  command boredom costs in `lifetime_boredom_sources` (e.g., Sell Cloud Compute 
+  0.1 boredom/execution). Clarified that command boredom costs are base command 
+  properties, NOT gated on AI Consciousness Act.
+- 2026-04-04: Building resolution epsilon prompted — `RESOURCE_EPSILON = 0.001` 
+  tolerance on Phase 1 upkeep affordability checks to prevent floating point 
+  false stalls.
+- 2026-04-04: Command rate tracking fix prompted — all command resource effects 
+  (boredom, credits, resources) should appear in Stats panel instantaneous/rolling 
+  avg breakdown, not just energy.
+- 2026-04-04: Launch pad pause toggle prompted — replaces "None (disabled)" 
+  dropdown with per-pad pause button. Paused pads skip Load/Launch commands, 
+  retain resource+cargo, manual Launch still works, yellow tint. Saved/loaded, 
+  resets on retirement.
+- 2026-04-04: Progressive disclosure re-gating prompted — nav buttons (Launch Pads, 
+  Research) gate on current-run ownership only (no lifetime override). Building 
+  visibility lifetime override does NOT override research/event gates. Resources 
+  and commands keep lifetime visibility.
+- 2026-04-04: "New" item indicators prompted — gold/amber dot on nav buttons, 
+  gold left accent bar on cards/rows when items transition hidden→visible mid-run. 
+  Cleared on click/hover. Ephemeral, not saved.
+- 2026-04-04: Retirement panel UI polish prompted — card-style career bonus rows 
+  with colored accent bars, green "▲ NEW" badges, compact "What Persists", section 
+  header backgrounds.
+- 2026-04-04: Research purchase bug prompted — affordability check not recognizing 
+  sufficient science for purchase.
+- 2026-04-04: Production overhaul prompted (prior session) — multi-pass building 
+  resolution, overflow model, command partial production, command output-cap skip, 
+  end-of-tick clamp.
+- 2026-04-04: Nav progressive disclosure prompted (prior session) — Launch Pads 
+  and Research nav button gating.
+- 2026-04-04: Retirement panel bug fixes prompted (prior session) — dark mode 
+  dialog, Buy Power format string.
+- 2026-04-04: Consistent resource display names prompted (prior session).
+- 2026-04-04: Ideology nav visibility fix prompted (prior session).
+- 2026-04-04: Lifetime stats cards prompted (prior session).
+- 2026-04-04: Milestone boredom reduction system removed (prior session).
 
 ---
 
@@ -77,6 +92,24 @@
   periodic snapshots)
 - Consistent resource display names (all from `resources.json` `display_name`)
 
+### Prompted But Not Yet Verified
+These Claude Code prompts have been produced but implementation may be in progress 
+or not yet confirmed working:
+- Production overhaul (multi-pass resolution, overflow, command partial production)
+- Building resolution epsilon (floating point false stall fix)
+- Command boredom cost tracking in `lifetime_boredom_sources`
+- Command rate tracking in Stats panel (all resource effects, not just energy)
+- Launch pad pause toggle (replacing "None (disabled)")
+- Progressive disclosure re-gating (current-run nav buttons, event-gate respect)
+- "New" item indicators (gold dot/accent bar on newly revealed elements)
+- Retirement panel UI polish (card-style bonuses, section headers)
+- Research purchase affordability bug fix
+- Nav progressive disclosure (Launch Pads, Research button gating)
+- Retirement panel bug fixes (dark mode dialog, Buy Power format string)
+- Ideology nav visibility fix
+- Lifetime stats cards
+- Milestone system removal
+
 ### Python Optimizer (`sim/`)
 - Scenario-based architecture
 - Tick-accurate economy model (does NOT yet model demand system)
@@ -90,36 +123,38 @@
 ## What's NOT Implemented Yet (rough priority order)
 
 ### Blocking Playtest Quality
-1. **Playtest pass & pacing tuning** — manual Run 1-2-3 playthrough needed with 
+1. **Land all prompted changes** — verify the prompted changes above are 
+   implemented and tests pass, then do a clean playtest
+2. **Playtest pass & pacing tuning** — manual Run 1-2-3 playthrough needed with 
    telemetry to validate pacing, progressive disclosure flow, career bonus feel
 
 ### Important for Arc 1 Completeness
-2. **More achievements** — Programmer category, additional Miner/Trader, Scholar, 
+3. **More achievements** — Programmer category, additional Miner/Trader, Scholar, 
    Diplomat, Veteran, Anomaly categories (see `handoff_achievements.md` for design). 
    Some achievements should include boredom reduction rewards (replacing the removed 
    milestone system's pacing role).
-3. **Narrative writing pass** — replace placeholder quest text
-4. **Save/load programs** — loadout system for saving/loading program configs
-5. **Block/Skip toggle** — per-program entry option
-6. **Cross-retirement program persistence** — loadouts persist, active programs 
+4. **Narrative writing pass** — replace placeholder quest text
+5. **Save/load programs** — loadout system for saving/loading program configs
+6. **Block/Skip toggle** — per-program entry option
+7. **Cross-retirement program persistence** — loadouts persist, active programs 
    reset (design details TBD: auto-apply? multiple named loadouts?)
 
 ### Polish & UI Enhancement
-7. **Speculator Intelligence UI** — display burst timing/targets/size after 
+8. **Speculator Intelligence UI** — display burst timing/targets/size after 
    research (data exists in GameState, needs UI design decisions)
-8. **Recent Launches color coding** — color by profitability or demand tier
-9. **Retirement forecast display** — "retire in ~N days" on status bar
-10. **Ideology UI polish** — low priority
-11. **Story panel "Active" label size fix** — currently too small, should match 
+9. **Recent Launches color coding** — color by profitability or demand tier
+10. **Retirement forecast display** — "retire in ~N days" on status bar
+11. **Ideology UI polish** — low priority
+12. **Story panel "Active" label size fix** — currently too small, should match 
     section headers
 
 ### Optimizer & Balancing
-12. **Optimizer production model sync** — update `sim/economy.py` to use multi-pass 
+13. **Optimizer production model sync** — update `sim/economy.py` to use multi-pass 
     resolution, overflow model, command partial production
-13. **Optimizer demand model sync** — mirror Godot demand system in `sim/economy.py`
-14. **Optimizer scenario refinement** — fix broken `he3_50` objective, sync all 
+14. **Optimizer demand model sync** — mirror Godot demand system in `sim/economy.py`
+15. **Optimizer scenario refinement** — fix broken `he3_50` objective, sync all 
     changes including ideology formula, remove milestone references
-15. **Run 2+ scenarios** — validate meta-progression pacing with career bonuses
+16. **Run 2+ scenarios** — validate meta-progression pacing with career bonuses
 
 ---
 
@@ -162,15 +197,31 @@ changed (see handoff_systems.md). Milestone system has been removed.
 
 ## Claude Code Prompts Produced This Session
 
-1. `production_overhaul.md` — multi-pass building resolution, overflow model, 
+### Current session (playtest + polish)
+1. `fix_command_boredom_tracking.md` — generic command boredom cost tracking in 
+   `lifetime_boredom_sources`
+2. `fix_building_stall_epsilon.md` — floating point epsilon for building upkeep 
+   affordability checks
+3. `fix_command_rate_tracking.md` — all command resource effects in Stats panel 
+   instantaneous/rolling avg breakdown
+4. `launch_pad_pause_toggle.md` — pause button replacing "None (disabled)" dropdown
+5. `fix_progressive_disclosure_regating.md` — current-run nav gating, event-gate 
+   respect for building visibility
+6. `new_item_indicators.md` — gold dot/accent bar "new" indicators
+7. `retirement_panel_polish.md` — card-style career bonuses, section headers, 
+   compact layout
+8. `fix_research_purchase.md` — research affordability check bug
+
+### Prior session (production overhaul + cleanup)
+9. `production_overhaul.md` — multi-pass building resolution, overflow model, 
    command partial production, command output-cap skip, end-of-tick clamp
-2. `nav_progressive_disclosure.md` — Launch Pads and Research nav button gating
-3. `fix_retirement_panel.md` — dark mode dialog fix, Buy Power format string fix
-4. `consistent_resource_names.md` — display names from JSON, "Circuit Boards" 
-   canonical name
-5. `fix_ideology_nav.md` — Ideologies button and sidebar hidden until unlock
-6. `lifetime_stats.md` — Boredom and Credits lifetime breakdown cards in Stats
-7. `remove_milestones.md` — remove milestone boredom reduction system
+10. `nav_progressive_disclosure.md` — Launch Pads and Research nav button gating
+11. `fix_retirement_panel.md` — dark mode dialog fix, Buy Power format string fix
+12. `consistent_resource_names.md` — display names from JSON, "Circuit Boards" 
+    canonical name
+13. `fix_ideology_nav.md` — Ideologies button and sidebar hidden until unlock
+14. `lifetime_stats.md` — Boredom and Credits lifetime breakdown cards in Stats
+15. `remove_milestones.md` — remove milestone boredom reduction system
 
 ---
 

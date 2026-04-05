@@ -295,9 +295,10 @@ func _test_land_system() -> void:
 	_assert_equal(state.land_purchases, 1,
 		"land: land_purchases increments after buy_land")
 
-	# Building purchase consumes land. Solar panel costs 1 land.
+	# Building purchase consumes land. Read the actual land cost from the building def.
 	var panel_bdef3 := TF.get_building_def("panel")
 	var panel_costs3: Dictionary = panel_bdef3.get("costs", {})
+	var panel_land_cost: float = float(panel_bdef3.get("land", 1))
 	sim = TF.create_fresh_sim()
 	state = TF.fresh_state(sim)
 	state.buildings_owned["panel"] = 0  # ensure purchased=0, costs = base
@@ -305,7 +306,7 @@ func _test_land_system() -> void:
 		state.amounts[res] = float(panel_costs3[res]) * 2.0  # more than enough
 	var land_start: float = state.amounts.get("land", 0.0)
 	sim.buy_building(state, "panel")
-	_assert_approx(state.amounts.get("land", 0.0), land_start - 1.0, 0.001,
-		"land: buying a solar panel consumes 1 land")
+	_assert_approx(state.amounts.get("land", 0.0), land_start - panel_land_cost, 0.001,
+		"land: buying a solar panel consumes %d land" % int(panel_land_cost))
 	_assert_equal(state.buildings_owned.get("panel", 0), 1,
 		"land: panel owned count is 1 after purchase")

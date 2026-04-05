@@ -5,10 +5,13 @@ var _font_rb: FontFile
 var _font_e2r: FontFile
 var _font_e2s: FontFile
 
+const NEW_ACCENT_COLOR: Color = Color(0.961, 0.620, 0.043)  # #F59E0B gold/amber
+
 var _completed_snapshot: Array = []
 var _seen_events_snapshot: Array = []
 var _buildings_snapshot: Dictionary = {}
 var _shipments_snapshot: int = -1
+var _affordable_snapshot: Dictionary = {}  # {item_id: bool} for visible uncompleted items
 var _show_completed: bool = true
 
 
@@ -28,15 +31,33 @@ func _take_snapshot() -> void:
 	_seen_events_snapshot = st.seen_event_ids.duplicate()
 	_buildings_snapshot = st.buildings_owned.duplicate()
 	_shipments_snapshot = st.total_shipments_completed + GameManager.career.lifetime_shipments
+	_affordable_snapshot = _compute_affordable(st)
+
+
+func _compute_affordable(st: GameState) -> Dictionary:
+	var sci: float = st.amounts.get("sci", 0.0)
+	var result: Dictionary = {}
+	for item: Dictionary in GameManager.get_research_data():
+		var item_id: String = item.get("id", "")
+		if st.completed_research.has(item_id):
+			continue
+		if not GameManager.is_research_item_visible(item_id):
+			continue
+		var requires_id: String = item.get("requires", "")
+		var requires_met: bool = requires_id.is_empty() or st.completed_research.has(requires_id)
+		result[item_id] = requires_met and sci >= float(item.get("cost", 0))
+	return result
 
 
 func on_tick() -> void:
 	var st: GameState = GameManager.state
 	var shipments_now: int = st.total_shipments_completed + GameManager.career.lifetime_shipments
+	var affordable_now: Dictionary = _compute_affordable(st)
 	if (st.completed_research != _completed_snapshot
 			or st.seen_event_ids != _seen_events_snapshot
 			or st.buildings_owned != _buildings_snapshot
-			or shipments_now != _shipments_snapshot):
+			or shipments_now != _shipments_snapshot
+			or affordable_now != _affordable_snapshot):
 		_take_snapshot()
 		for child in get_children():
 			child.queue_free()
@@ -154,6 +175,7 @@ func _build_card(item: Dictionary) -> PanelContainer:
 	if is_completed:
 		panel.modulate = Color(1, 1, 1, 0.65)
 
+	var panel_style: StyleBoxFlat = null  # retained for new-item indicator
 	if not GameSettings.is_dark_mode:
 		var card_style := StyleBoxFlat.new()
 		card_style.bg_color = Color(0.941, 0.941, 0.941) if is_completed else Color.WHITE
@@ -167,6 +189,7 @@ func _build_card(item: Dictionary) -> PanelContainer:
 		card_style.border_width_bottom = 1
 		card_style.border_color = Color(0.816, 0.816, 0.816)
 		panel.add_theme_stylebox_override("panel", card_style)
+		panel_style = card_style
 
 	var margin := MarginContainer.new()
 	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -213,7 +236,15 @@ func _build_card(item: Dictionary) -> PanelContainer:
 			gs.corner_radius_bottom_left  = 4
 			gs.corner_radius_bottom_right = 4
 			btn.add_theme_stylebox_override("normal", gs)
+			var gs_hover := StyleBoxFlat.new()
+			gs_hover.bg_color = Color(0.180, 0.490, 0.196)
+			gs_hover.corner_radius_top_left     = 4
+			gs_hover.corner_radius_top_right    = 4
+			gs_hover.corner_radius_bottom_left  = 4
+			gs_hover.corner_radius_bottom_right = 4
+			btn.add_theme_stylebox_override("hover", gs_hover)
 			btn.add_theme_color_override("font_color", Color.WHITE)
+			btn.add_theme_color_override("font_hover_color", Color.WHITE)
 		elif not GameSettings.is_dark_mode:
 			btn.add_theme_color_override("font_disabled_color", Color(0.10, 0.10, 0.10))
 		btn.pressed.connect(func(): GameManager.purchase_research(item_id))
@@ -257,6 +288,25 @@ func _build_card(item: Dictionary) -> PanelContainer:
 		cost_lbl.add_theme_font_size_override("font_size", 15)
 		cost_lbl.add_theme_color_override("font_color", UIPalette.p("text_positive") if can_afford else UIPalette.p("text_negative"))
 		cost_row.add_child(cost_lbl)
+
+	# New item indicator — left accent bar
+	if not is_completed and GameManager.state.newly_revealed_research.has(item_id):
+		if panel_style == null:
+			panel_style = StyleBoxFlat.new()
+			panel_style.corner_radius_top_left     = 4
+			panel_style.corner_radius_top_right    = 4
+			panel_style.corner_radius_bottom_left  = 4
+			panel_style.corner_radius_bottom_right = 4
+			panel.add_theme_stylebox_override("panel", panel_style)
+		panel_style.border_width_left = 4
+		panel_style.border_color = NEW_ACCENT_COLOR
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		panel.mouse_entered.connect(func():
+			if GameManager.state.newly_revealed_research.erase(item_id):
+				panel_style.border_width_left = 1 if not GameSettings.is_dark_mode else 0
+				if not GameSettings.is_dark_mode:
+					panel_style.border_color = Color(0.816, 0.816, 0.816)
+		)
 
 	return panel
 

@@ -83,6 +83,7 @@ func _process(delta: float) -> void:
 
 func _on_tick() -> void:
 	_left_sidebar.update_nav_visibility()
+	_left_sidebar.update_nav_dots()
 	_update_resource_display()
 	_left_sidebar.update_adversaries_display()
 	_left_sidebar.update_ideology_display()

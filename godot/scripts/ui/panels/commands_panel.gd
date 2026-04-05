@@ -45,6 +45,8 @@ var _font_rb: FontFile
 var _font_e2r: FontFile
 var _font_e2s: FontFile
 
+const NEW_ACCENT_COLOR: Color = Color(0.961, 0.620, 0.043)  # #F59E0B gold/amber
+
 var _buildings_snapshot: Dictionary = {}
 var _research_snapshot: Array = []
 var _lifetime_cmds_snapshot: Array = []
@@ -141,6 +143,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 	panel.custom_minimum_size = Vector2(310, 0)
 	panel.size_flags_horizontal = Control.SIZE_FILL
 
+	var panel_style: StyleBoxFlat = null  # retained for new-item indicator
 	if not GameSettings.is_dark_mode:
 		var card_style := StyleBoxFlat.new()
 		card_style.bg_color = UIPalette.p("bg_card_locked") if is_locked else Color.WHITE
@@ -154,6 +157,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 		card_style.border_width_bottom = 1
 		card_style.border_color = Color(0.816, 0.816, 0.816)
 		panel.add_theme_stylebox_override("panel", card_style)
+		panel_style = card_style
 	elif is_locked:
 		var locked_style := StyleBoxFlat.new()
 		locked_style.bg_color = UIPalette.p("bg_card_locked")
@@ -162,6 +166,7 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 		locked_style.corner_radius_bottom_left  = 4
 		locked_style.corner_radius_bottom_right = 4
 		panel.add_theme_stylebox_override("panel", locked_style)
+		panel_style = locked_style
 
 	var margin := MarginContainer.new()
 	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -201,7 +206,15 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 		gs.corner_radius_bottom_left  = 4
 		gs.corner_radius_bottom_right = 4
 		add_btn.add_theme_stylebox_override("normal", gs)
+		var gs_hover := StyleBoxFlat.new()
+		gs_hover.bg_color = Color(0.180, 0.490, 0.196)
+		gs_hover.corner_radius_top_left     = 4
+		gs_hover.corner_radius_top_right    = 4
+		gs_hover.corner_radius_bottom_left  = 4
+		gs_hover.corner_radius_bottom_right = 4
+		add_btn.add_theme_stylebox_override("hover", gs_hover)
 		add_btn.add_theme_color_override("font_color", Color.WHITE)
+		add_btn.add_theme_color_override("font_hover_color", Color.WHITE)
 	var sn: String = cmd.short_name
 	add_btn.pressed.connect(func():
 		command_add_requested.emit(sn)
@@ -284,6 +297,26 @@ func _build_command_card(cmd: Dictionary) -> PanelContainer:
 		lbl.add_theme_color_override("font_color", UIPalette.p("text_requires"))
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		vbox.add_child(lbl)
+
+	# New item indicator — left accent bar
+	var cmd_sn: String = cmd.get("short_name", "")
+	if GameManager.state.newly_revealed_commands.has(cmd_sn):
+		if panel_style == null:
+			panel_style = StyleBoxFlat.new()
+			panel_style.corner_radius_top_left     = 4
+			panel_style.corner_radius_top_right    = 4
+			panel_style.corner_radius_bottom_left  = 4
+			panel_style.corner_radius_bottom_right = 4
+			panel.add_theme_stylebox_override("panel", panel_style)
+		panel_style.border_width_left = 4
+		panel_style.border_color = NEW_ACCENT_COLOR
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		panel.mouse_entered.connect(func():
+			if GameManager.state.newly_revealed_commands.erase(cmd_sn):
+				panel_style.border_width_left = 1 if not GameSettings.is_dark_mode else 0
+				if not GameSettings.is_dark_mode:
+					panel_style.border_color = Color(0.816, 0.816, 0.816)
+		)
 
 	return panel
 

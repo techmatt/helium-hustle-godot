@@ -4,8 +4,51 @@ const TF = preload("res://tests/test_fixtures.gd")
 
 
 func run(_scene_root: Node) -> void:
+	_test_research_purchase()
 	_test_research_effects()
 	_test_command_unlock_wiring()
+
+
+func _test_research_purchase() -> void:
+	print("--- Research Purchase ---")
+
+	var sim: GameSimulation = TF.create_fresh_sim()
+	var st: GameState = TF.fresh_state(sim)
+	TF.add_building(st, "research_lab", 1)
+
+	# With exactly the cost in science, can_purchase_research returns true
+	st.amounts["sci"] = 90.0
+	_assert_true(sim.can_purchase_research(st, "propellant_synthesis"),
+		"purchase: can purchase with exactly enough science (90 >= 90)")
+
+	# Below cost → cannot purchase
+	st.amounts["sci"] = 89.9
+	_assert_true(not sim.can_purchase_research(st, "propellant_synthesis"),
+		"purchase: cannot purchase with insufficient science (89.9 < 90)")
+
+	# With surplus science, purchase deducts cost and marks completed
+	st.amounts["sci"] = 221.0
+	_assert_true(sim.can_purchase_research(st, "propellant_synthesis"),
+		"purchase: can purchase with surplus science (221 >= 90)")
+	sim.purchase_research(st, "propellant_synthesis")
+	_assert_true(st.completed_research.has("propellant_synthesis"),
+		"purchase: item marked completed after purchase")
+	_assert_approx(st.amounts.get("sci", 0.0), 131.0, 0.001,
+		"purchase: science deducted (221 - 90 = 131)")
+
+	# Cannot purchase already-completed item
+	_assert_true(not sim.can_purchase_research(st, "propellant_synthesis"),
+		"purchase: cannot re-purchase completed item")
+
+	# prerequisite not met → cannot purchase (speculator_analysis requires market_awareness)
+	var sim2: GameSimulation = TF.create_fresh_sim()
+	var st2: GameState = TF.fresh_state(sim2)
+	st2.amounts["sci"] = 9999.0
+	_assert_true(not sim2.can_purchase_research(st2, "speculator_analysis"),
+		"purchase: cannot purchase when prerequisite (market_awareness) not met")
+	st2.completed_research.append("market_awareness")
+	_assert_true(sim2.can_purchase_research(st2, "speculator_analysis"),
+		"purchase: can purchase once prerequisite is met")
 
 
 func _test_research_effects() -> void:

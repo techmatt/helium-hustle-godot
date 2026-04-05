@@ -201,6 +201,11 @@ inherently need them (circuit production, demand floats, etc.).
   pointer, don't pay inputs) when all output resources are at storage cap. This is 
   intentional — commands are player-authored automation and wasting processor ticks 
   on capped output is a signal to fix the program.
+- **Command boredom costs are base command properties.** Some commands have a 
+  `boredom` cost field in `commands.json` (e.g., Sell Cloud Compute costs 0.1 
+  boredom per execution). These costs are inherent to the command and are NOT 
+  gated on any flag or project. The AI Consciousness Act modifies command 
+  costs/production values but does not act as a gate that enables boredom costs.
 - **DemandSystem is a separate class** (`demand_system.gd`), extracted from 
   GameSimulation. Owns all demand config, Perlin noise, speculator/rival logic.
 - **ProjectManager is a separate class** (`project_manager.gd`). Owns project 
@@ -221,6 +226,11 @@ inherently need them (circuit production, demand floats, etc.).
   or achievements track `bonus_count` separately. Cost scaling uses 
   `max(0, owned_count - bonus_count)`. This applies to Foundation Grant, 
   achievement rewards, and any future bonus building sources.
+- **Floating point epsilon for affordability checks.** Building upkeep affordability 
+  checks use a `RESOURCE_EPSILON` constant (0.001) to prevent false stalls from 
+  floating point precision errors. The epsilon applies to the input check only 
+  (`available >= needed - RESOURCE_EPSILON`), not to actual consumption amounts. 
+  Any resulting tiny negative resource values are handled by the end-of-tick clamp.
 
 ---
 

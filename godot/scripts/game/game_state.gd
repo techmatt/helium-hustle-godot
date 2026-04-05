@@ -143,6 +143,14 @@ var buildings_bonus: Dictionary = {}  # {short_name: int}  granted free at run s
 # Transient per-tick stall state — NOT saved/loaded.
 # Key: building short_name. Value: {status: "running"|"input_starved"|"output_capped", reason: String, missing_resource: String}
 var building_stall_status: Dictionary = {}
+
+# New item indicators — transient, not saved/loaded. Reset on retirement/new run.
+# Populated by GameManager._check_new_indicators(); cleared on hover/click.
+var newly_revealed_buildings: Dictionary = {}  # short_name → true
+var newly_revealed_commands: Dictionary = {}   # short_name → true
+var newly_revealed_nav: Dictionary = {}        # panel_id → true
+var newly_revealed_research: Dictionary = {}   # research_id → true
+var newly_revealed_projects: Dictionary = {}   # project_id → true
 var current_day: int = 0
 var programs: Array = []              # Array of ProgramData, always 5 slots
 var pads: Array = []                  # Array of LaunchPadData

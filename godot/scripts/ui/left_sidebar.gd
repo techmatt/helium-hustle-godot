@@ -45,6 +45,17 @@ const BUILDING_GATED_NAV_PANELS: Dictionary = {
 	"research_lab": "Research",
 }
 
+# Mapping from nav button label to the panel_id used in newly_revealed_nav.
+const NAV_LABEL_TO_ID: Dictionary = {
+	"Retirement":  "retirement",
+	"Projects":    "projects",
+	"Ideologies":  "ideologies",
+	"Launch Pads": "launch_pad",
+	"Research":    "research_lab",
+}
+
+const NEW_ACCENT_COLOR: Color = Color(0.961, 0.620, 0.043)  # #F59E0B gold/amber
+
 const SPEEDS: Array = ["||", "1x", "3x", "10x", "50x", "200x"]
 
 const TRADEABLE_DISPLAY: Dictionary = {
@@ -66,6 +77,7 @@ var _font_e2r: FontFile
 var _font_e2s: FontFile
 
 var _nav_buttons: Dictionary = {}
+var _nav_dots: Dictionary = {}  # button label → Panel (the notification dot)
 var _resource_labels: Dictionary = {}
 var _spec_count_lbl: Label = null
 var _spec_name_lbl: Label = null
@@ -87,6 +99,7 @@ func rebuild() -> void:
 	for child in _nav_vbox.get_children():
 		child.queue_free()
 	_nav_buttons.clear()
+	_nav_dots.clear()
 	_resource_labels.clear()
 	_spec_count_lbl = null
 	_spec_name_lbl = null
@@ -152,7 +165,15 @@ func _make_nav_button(label: String, color: Color) -> Button:
 	if label == "Exit":
 		btn.pressed.connect(func(): get_tree().quit())
 	else:
-		btn.pressed.connect(func(): mode_requested.emit(label))
+		var nav_id: String = NAV_LABEL_TO_ID.get(label, "")
+		btn.pressed.connect(func():
+			mode_requested.emit(label)
+			if not nav_id.is_empty():
+				if GameManager.state.newly_revealed_nav.erase(nav_id):
+					var dot: Panel = _nav_dots.get(label) as Panel
+					if dot != null and is_instance_valid(dot):
+						dot.visible = false
+		)
 
 	var vbox := VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -183,6 +204,28 @@ func _make_nav_button(label: String, color: Color) -> Button:
 	lbl.add_theme_font_override("font", _font_e2s)
 	lbl.add_theme_font_size_override("font_size", 15)
 	vbox.add_child(lbl)
+
+	# Notification dot — top-right corner, shown when this nav panel is newly revealed
+	var dot_style := StyleBoxFlat.new()
+	dot_style.bg_color = NEW_ACCENT_COLOR
+	dot_style.corner_radius_top_left     = 5
+	dot_style.corner_radius_top_right    = 5
+	dot_style.corner_radius_bottom_left  = 5
+	dot_style.corner_radius_bottom_right = 5
+	var dot := Panel.new()
+	dot.add_theme_stylebox_override("panel", dot_style)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dot.visible = false
+	dot.set_anchor(SIDE_LEFT, 1.0)
+	dot.set_anchor(SIDE_RIGHT, 1.0)
+	dot.set_anchor(SIDE_TOP, 0.0)
+	dot.set_anchor(SIDE_BOTTOM, 0.0)
+	dot.set_offset(SIDE_LEFT, -13)
+	dot.set_offset(SIDE_RIGHT, -3)
+	dot.set_offset(SIDE_TOP, 3)
+	dot.set_offset(SIDE_BOTTOM, 13)
+	btn.add_child(dot)
+	_nav_dots[label] = dot
 
 	return btn
 
@@ -235,13 +278,20 @@ func update_nav_visibility() -> void:
 			_nav_buttons[btn_label].visible = _is_building_gated_visible(bsn)
 
 
+func update_nav_dots() -> void:
+	var newly: Dictionary = GameManager.state.newly_revealed_nav
+	for label: String in _nav_dots:
+		var nav_id: String = NAV_LABEL_TO_ID.get(label, "")
+		var dot: Panel = _nav_dots[label] as Panel
+		if dot != null and is_instance_valid(dot):
+			dot.visible = not nav_id.is_empty() and newly.has(nav_id)
+
+
 func _is_building_gated_visible(building_short_name: String) -> bool:
 	if GameSettings.show_all_cards:
 		return true
 	var st: GameState = GameManager.state
-	if st.buildings_owned.get(building_short_name, 0) > 0:
-		return true
-	return GameManager.career.lifetime_owned_building_ids.has(building_short_name)
+	return st.buildings_owned.get(building_short_name, 0) > 0
 
 
 # ── Speed section ─────────────────────────────────────────────────────────────

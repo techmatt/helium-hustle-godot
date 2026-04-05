@@ -28,6 +28,13 @@ var last_deltas: Dictionary = {}
 var current_speed_key: String = "1x"
 var _run_peak_power: float = 0.0  # per-run max energy produced by buildings in a single tick
 
+# Visibility snapshots for new-item indicator tracking (transient, not saved)
+var _prev_visible_buildings: Dictionary = {}
+var _prev_visible_commands: Dictionary = {}
+var _prev_visible_nav: Dictionary = {}
+var _prev_visible_research: Dictionary = {}
+var _prev_visible_projects: Dictionary = {}
+
 # Snapshots of career high-water marks at the start of this run, captured before any
 # live updates occur. Used by the retire panel to detect "NEW" career records.
 var run_start_career_peak_power: float = 0.0
@@ -176,6 +183,7 @@ func _restore_from_save() -> void:
 	_apply_career_flags_to_run_state()
 	sim.recalculate_caps(state)
 	PlaytestLogger.start_run(state.run_number, career, state, sim.demand_system)
+	_init_visibility_baseline()
 	tick_completed.emit()
 
 
@@ -201,6 +209,7 @@ func _initialize_state() -> void:
 	state.programs[0].processors_assigned = 1
 	_run_peak_power = 0.0
 	PlaytestLogger.start_run(state.run_number, career, state, sim.demand_system)
+	_init_visibility_baseline()
 
 
 func set_speed(speed_key: String) -> void:
@@ -372,12 +381,22 @@ const _ALWAYS_VISIBLE_BUILDINGS: Array[String] = [
 	"panel", "battery", "storage_depot", "data_center"
 ]
 
+func _is_quest_gated(short_name: String) -> bool:
+	for bdef: Dictionary in _buildings_data:
+		if bdef.get("short_name", "") == short_name:
+			return bdef.get("requires", {}).get("type", "none") == "quest"
+	return false
+
+
 func is_building_visible(short_name: String) -> bool:
 	if GameSettings.show_all_cards:
 		return true
 	if _ALWAYS_VISIBLE_BUILDINGS.has(short_name):
 		return true
-	if career.lifetime_owned_building_ids.has(short_name):
+	# Lifetime ownership overrides building-prereq gates but NOT event/quest gates.
+	# Quest-gated buildings (requires.type == "quest") must be unlocked via the event
+	# chain each run — the player must replay the event progression.
+	if career.lifetime_owned_building_ids.has(short_name) and not _is_quest_gated(short_name):
 		return true
 	# Visible if its requires are currently satisfied
 	return not sim.is_building_locked(state, short_name)
@@ -479,6 +498,102 @@ func purchase_research(research_id: String) -> void:
 		tick_completed.emit()
 
 
+# ── New-item indicator tracking ───────────────────────────────────────────────
+
+func _snap_visible_buildings() -> Dictionary:
+	var snap: Dictionary = {}
+	for bdef: Dictionary in _buildings_data:
+		var sn: String = bdef.get("short_name", "")
+		if is_building_visible(sn):
+			snap[sn] = true
+	return snap
+
+
+func _snap_visible_commands() -> Dictionary:
+	var snap: Dictionary = {}
+	for cmd: Dictionary in _commands_data:
+		var sn: String = cmd.get("short_name", "")
+		if is_command_visible(sn):
+			snap[sn] = true
+	return snap
+
+
+func _snap_visible_nav() -> Dictionary:
+	return {
+		"retirement":  state.unlocked_nav_panels.has("retirement"),
+		"projects":    state.unlocked_nav_panels.has("projects"),
+		"ideologies":  state.unlocked_nav_panels.has("ideologies"),
+		"launch_pad":  state.buildings_owned.get("launch_pad", 0) > 0,
+		"research_lab": state.buildings_owned.get("research_lab", 0) > 0,
+	}
+
+
+func _snap_visible_research() -> Dictionary:
+	var snap: Dictionary = {}
+	for item: Dictionary in _research_data:
+		var iid: String = item.get("id", "")
+		if is_research_item_visible(iid):
+			snap[iid] = true
+	return snap
+
+
+func _snap_visible_projects() -> Dictionary:
+	var snap: Dictionary = {}
+	for pid: String in state.enabled_projects:
+		snap[pid] = true
+	return snap
+
+
+# Capture current visibility as the baseline. Items visible now will NOT be
+# marked new — only items that become visible AFTER this call are marked.
+func _init_visibility_baseline() -> void:
+	_prev_visible_buildings = _snap_visible_buildings()
+	_prev_visible_commands  = _snap_visible_commands()
+	_prev_visible_nav       = _snap_visible_nav()
+	_prev_visible_research  = _snap_visible_research()
+	_prev_visible_projects  = _snap_visible_projects()
+
+
+# Diff current visibility against baseline; add newly visible items to
+# state.newly_revealed_*. Then update the baseline for the next tick.
+func _check_new_indicators() -> void:
+	if GameSettings.show_all_cards:
+		_init_visibility_baseline()
+		return
+
+	var cur_b: Dictionary = _snap_visible_buildings()
+	for sn: String in cur_b:
+		if not _prev_visible_buildings.has(sn):
+			state.newly_revealed_buildings[sn] = true
+	_prev_visible_buildings = cur_b
+
+	var cur_c: Dictionary = _snap_visible_commands()
+	for sn: String in cur_c:
+		if not _prev_visible_commands.has(sn):
+			state.newly_revealed_commands[sn] = true
+	_prev_visible_commands = cur_c
+
+	var cur_n: Dictionary = _snap_visible_nav()
+	for pid: String in cur_n:
+		if cur_n[pid] and not _prev_visible_nav.get(pid, false):
+			state.newly_revealed_nav[pid] = true
+	_prev_visible_nav = cur_n
+
+	var cur_r: Dictionary = _snap_visible_research()
+	for rid: String in cur_r:
+		if not _prev_visible_research.has(rid):
+			state.newly_revealed_research[rid] = true
+	_prev_visible_research = cur_r
+
+	var cur_p: Dictionary = _snap_visible_projects()
+	for pid: String in cur_p:
+		if not _prev_visible_projects.has(pid):
+			state.newly_revealed_projects[pid] = true
+	_prev_visible_projects = cur_p
+
+
+# ── Tick ──────────────────────────────────────────────────────────────────────
+
 # Executes a full tick against the live state without using the timer.
 # Runs sim + event_manager + project_manager in the same order as _on_tick().
 # Pass debug_no_boredom = true to suppress boredom accumulation (useful in
@@ -494,6 +609,12 @@ func _on_tick() -> void:
 	sim.tick(state, GameSettings.debug_no_boredom)
 	event_manager.tick(state)
 	project_manager.tick(state, career)
+	# On the very first tick, re-baseline to capture anything unlocked by startup events.
+	# This ensures tick-0-visible items are NOT marked new. On all subsequent ticks, diff.
+	if state.current_day == 1:
+		_init_visibility_baseline()
+	else:
+		_check_new_indicators()
 	last_deltas = sim.last_gross_deltas.duplicate()
 	for sn: String in sim.pending_executed_commands:
 		if not career.lifetime_used_command_ids.has(sn):
@@ -749,6 +870,7 @@ func start_new_run() -> void:
 
 	PlaytestLogger.start_run(state.run_number, career, state, sim.demand_system)
 
+	_init_visibility_baseline()
 	set_speed("1x")
 	tick_completed.emit()
 	SaveManager.save_game(career, state, current_speed_key)

@@ -49,6 +49,13 @@ Phase 2 — Partial production (single pass):
 Buildings with no upkeep (e.g., Solar Panel) trivially succeed in Phase 1 — no 
 special code path needed.
 
+### Floating Point Epsilon
+Phase 1 affordability checks use `RESOURCE_EPSILON = 0.001` tolerance to prevent 
+false stalls from floating point precision errors. A building can pay its upkeep 
+if `available >= needed - RESOURCE_EPSILON`. The actual consumption still uses the 
+exact `needed` value. Any resulting tiny negative resource values are handled by 
+the end-of-tick clamp to 0.
+
 ### No Output-Cap Skip for Buildings
 Buildings always produce, even when their output resources are at storage cap. 
 Excess production is clamped at end of tick and tracked as overflow (waste). This 
@@ -59,7 +66,7 @@ availability for others.
 After ALL building and command processing, a single clamp pass runs:
 - For each capped resource: if current > cap, record overflow = current - cap, 
   set current = cap.
-- If current < 0 (rare transient), clamp to 0.
+- If current < 0 (rare transient from epsilon-tolerance consumption), clamp to 0.
 - Accumulate overflow into per-resource rolling averages for Stats display.
 
 GameState fields:
@@ -108,11 +115,23 @@ supports `building_id` (own at least 1) and `building_id:N` (own at least N).
 GameSimulation enforces this (defense in depth).
 
 ### Building Visibility (Progressive Disclosure)
-A building is visible if any of these are true: (1) it has no `requires` field, 
-(2) its `requires` condition is currently satisfied, (3) its ID is in 
-`career_state.lifetime_owned_building_ids`. Category headers hide when they 
-contain zero visible buildings. The "Show All Cards" debug toggle overrides 
-visibility gating.
+A building is visible if:
+1. It has no `requires` field AND is not gated by an `enable_building` event 
+   effect → always visible
+2. Its `requires` building-prerequisite condition is currently satisfied → visible
+3. Its ID is in `career_state.lifetime_owned_building_ids` AND the building is 
+   NOT gated behind an `enable_building` event effect → visible (lifetime override 
+   for building prereqs only, not for research/event gates)
+4. Its `enable_building` event gate has been satisfied (event has fired this run 
+   or unlock effects re-applied from `seen_event_ids` on run start) → visible
+
+**Key rule:** `lifetime_owned_building_ids` overrides building-prerequisite gates 
+(like "Smelter requires Excavator") but does NOT override research or event gates 
+(like Ice Extractor/Electrolysis Plant behind Propellant Synthesis research chain). 
+The player must progress through research/event chains again each run.
+
+Category headers hide when they contain zero visible buildings. The "Show All Cards" 
+debug toggle overrides all visibility gating.
 
 Notable requires gates: Research Lab requires `data_center:2` (player starts 
 with 1). Smelter requires Regolith Excavator. Fabricator requires Smelter.
@@ -169,6 +188,9 @@ produces them (this run) or has ever owned it (any prior run, tracked via
 Circuit Boards → Fabricator, Propellant → Electrolysis Plant, Science → Research Lab. 
 Storage Depot filters displayed storage bonuses to only visible resources.
 
+Resource visibility uses lifetime tracking (unlike nav buttons and event-gated 
+buildings). Hiding resources the player already knows about would be confusing.
+
 ---
 
 ## Programs & Processors
@@ -194,6 +216,9 @@ A command is visible if any of these are true: (1) it has no unlock requirement
 (Basic category), (2) its unlock requirement is currently satisfied, (3) its ID is 
 in `career_state.lifetime_used_command_ids`. The "Show All Cards" debug toggle 
 overrides visibility gating. Buy Ice is gated on owning an Ice Extractor.
+
+Command visibility uses lifetime tracking. Commands the player has used before 
+remain visible.
 
 ### Command Output-Cap Skip
 Buy commands that produce capped resources (Buy Titanium, Buy Propellant, Buy Ice, 
@@ -221,6 +246,28 @@ execution independently checks remaining resources. First-come-first-served
 within a tick, with processor execution order deterministic (processor 1 before 
 processor 2, etc.).
 
+### Command Boredom Costs
+Some commands have a `boredom` cost defined in `commands.json` (e.g., Sell Cloud 
+Compute costs 0.1 boredom per execution). These are base properties of the 
+command — they are NOT gated on any flag or project. When a command executes, its 
+boredom cost is added to `state.resources.boredom` and accumulated in 
+`lifetime_boredom_sources` using the command's display name as the source key.
+
+Command boredom costs are flat per-execution costs, NOT scaled by 
+`_get_boredom_multiplier()` (that multiplier applies only to phase growth boredom).
+
+The AI Consciousness Act (persistent project) modifies command cost/production 
+values for certain commands but should not be special-cased in boredom tracking 
+or the Stats panel. It simply changes the boredom cost field values.
+
+### Command Rate Tracking
+All resource effects of command execution (not just energy) are tracked in the 
+per-source rate tracking system (ResourceRateTracker) for display in the Stats 
+panel's instantaneous and rolling average resource breakdown cards. This includes 
+boredom from Dream and Sell Cloud Compute, credits from Sell Cloud Compute, 
+resources from Buy commands, etc. Source labels use the program label format 
+(e.g., "Program 1 (1 proc)").
+
 ### Key Design Intent
 Buy commands are intentionally 3-5x the cost of building-based production per unit. 
 They exist for tactical gap-bridging, not as a primary resource strategy. Buy 
@@ -242,6 +289,21 @@ Smelter is unlocked.
   achievement.
 - 10-tick cooldown after launch.
 - Loading priority: reorderable list of 4 tradeable goods.
+
+### Launch Pad Pause Toggle
+Each launch pad has a pause toggle button (between the resource dropdown and the 
+Launch button). When paused:
+- Load Launch Pads commands skip this pad (do not load cargo)
+- Launch Full Pads commands skip this pad (do not launch, even if full)
+- Manual "Launch" button still works (player can manually launch a paused pad)
+- Pad row background is tinted light yellow to indicate intentional pause 
+  (dark mode: muted dark yellow/olive tint)
+- Pad retains its resource selection and any cargo already loaded
+- Cargo already loaded stays — pausing does not dump cargo
+
+The "None (disabled)" dropdown option has been removed. The dropdown only contains 
+the four tradeable resources. Pause state is a boolean per pad, serialized in 
+save/load, reset to false on retirement.
 
 ### Propellant Economy (Early Game)
 At average demand (0.5), a full He-3 launch earns ~1,000 credits. Buying 20 
@@ -352,10 +414,12 @@ Boredom resource card, displaying the effective rate after all multipliers.
 Reduces boredom by 2.0 per execution. Humanist ideology boosts effectiveness via 
 `pow(1.05, rank)`. At 1/5 cycle frequency, net -0.4/tick per processor.
 
-### AI Consciousness Act — Command Boredom Costs
-When completed, certain commands gain per-execution boredom costs: `load_pads` +0.3, 
-`cloud_compute` +0.2, `disrupt_spec` +0.5. Creates tradeoff: -15% base rate vs 
-operational boredom tax.
+### AI Consciousness Act — Command Cost Modifications
+When completed, the AI Consciousness Act modifies command cost/production values 
+for certain commands (e.g., adding or increasing boredom costs on load_pads, 
+cloud_compute, disrupt_spec). This is handled by modifying command data values, 
+NOT by special-casing in boredom tracking or the Stats panel. Creates tradeoff: 
+-15% base boredom rate vs operational boredom tax.
 
 ### Retirement
 - Forced at boredom 1000. Current tick finishes processing first.
@@ -413,6 +477,33 @@ The "Retire" nav button opens a center panel showing: This Run stats (live),
 Career Records (with NEW indicators when this run sets records), Next Run Bonuses 
 preview (projected values with deltas showing improvement from this run), and a 
 "Retire Now" button with confirmation dialog.
+
+### Retirement Summary Panel UI
+The retirement summary modal (shown on forced/voluntary retirement) uses styled 
+sections and card-based layout for career bonuses:
+
+**Title area:** "Retirement — Boredom Limit Reached" (or "Voluntary Retirement") 
+with a styled subtitle: "Run N — X days survived" in secondary/muted color.
+
+**Section headers:** "THIS RUN", "CAREER TOTALS", "WHAT PERSISTS", "CAREER BONUSES 
+(NEXT RUN)" each get a subtle background fill spanning full width (light gray in 
+light mode, slightly lighter dark in dark mode).
+
+**What Persists:** Compact single line: "Events, statistics, and project progress 
+carry over to your next run." (replaces three bullet points).
+
+**Career Bonuses — card-style rows:** Each bonus rendered as a card row with:
+- 4px colored left accent bar (Starting Credits: green/credits color, Boredom 
+  Resilience: gray/boredom color, Buy Power Scaling: yellow-orange/energy color, 
+  Ideology Head Start: purple or teal)
+- Bonus name left-aligned, bonus value right-aligned in bold/larger text
+- Explanation text below name in smaller/muted color
+- Green "▲ NEW" badge next to value when this run set a new record for that bonus
+- Rows with NEW indicator get a very faint green background tint
+- "none yet" state displayed in muted/italic text
+- Small gap (4-8px) between rows
+
+All colors work in both light and dark mode.
 
 ### Future: Consciousness Mechanic (DO NOT IMPLEMENT)
 Dream and boredom-reducing effects secretly accumulate a hidden "consciousness" 
@@ -524,8 +615,9 @@ Negative ranks invert cleanly (e.g., rank -3 with mult 1.05 → `pow(1.05, -3)`
 **Nationalist 5 — Microwave Power Initiative:** Sets career flag, unlocks 
 Microwave Receiver building (enables Buy Power command).
 
-**Humanist 5 — AI Consciousness Act:** Permanent -15% boredom rate + command 
-boredom costs on load_pads, cloud_compute, disrupt_spec.
+**Humanist 5 — AI Consciousness Act:** Permanent -15% boredom rate + modifies 
+command costs/production values for certain commands. Not special-cased in boredom 
+tracking — modified costs are just regular command costs.
 
 **Rationalist 5 — Universal Research Archive:** 25% discount on re-purchasing 
 any research from prior runs.
@@ -734,24 +826,24 @@ Individual achievements show name, condition, reward, and completion status. See
 
 ### Overview
 Resources, buildings, commands, research, and nav buttons are hidden until the 
-player encounters the context that makes them relevant. Once something has been 
-seen/owned in any run, it stays visible permanently (tracked in CareerState). The 
-"Show All Cards" toggle in Options overrides all visibility gating (including nav 
-buttons).
+player encounters the context that makes them relevant. The system uses a mix of 
+current-run state and lifetime tracking depending on the element type. The "Show 
+All Cards" toggle in Options overrides all visibility gating (including nav buttons).
 
 ### Nav Button Visibility
 Always visible: Buildings, Commands, Stats, Story, Options, Exit, Adversaries.
 Conditionally visible:
-- **Launch Pads** — visible when player owns ≥1 Launch Pad (this run or any prior 
-  run via `career_state.lifetime_owned_building_ids`).
-- **Research** — visible when player owns ≥1 Research Lab (this run or any prior 
-  run via `career_state.lifetime_owned_building_ids`).
+- **Launch Pads** — visible when player owns ≥1 Launch Pad **this run only**. 
+  Does NOT use `career_state.lifetime_owned_building_ids`. Re-gates each run.
+- **Research** — visible when player owns ≥1 Research Lab **this run only**. 
+  Does NOT use `career_state.lifetime_owned_building_ids`. Re-gates each run.
 - **Ideologies** — visible when Ideologies nav panel is unlocked (via Ideology 
-  Unlock event, which fires on Geopolitical Intelligence research completion). The 
-  Ideology section in the left sidebar (Nationalist/Humanist/Rationalist ranks) 
-  also follows this same visibility rule.
-- **Retirement** — unlocked by Q3 quest completion (existing `enable_nav_panel`).
-- **Projects** — unlocked by Q3 quest completion (existing `enable_nav_panel`).
+  Unlock event, which fires on Geopolitical Intelligence research completion). 
+  Re-gates each run since research resets.
+- **Retirement** — unlocked by Q3 quest completion. Stays permanently visible 
+  once Q3 is completed in any run (unlock effects re-applied from `seen_event_ids`).
+- **Projects** — unlocked by Q3 quest completion. Stays permanently visible 
+  once Q3 is completed in any run.
 
 Hidden nav buttons do not leave gaps — remaining buttons fill the grid naturally.
 
@@ -761,13 +853,29 @@ Others unlocked by building ownership (current run or any prior run): Ice → Ic
 Extractor, He-3 → Refinery, Circuit Boards → Fabricator, Propellant → Electrolysis 
 Plant, Science → Research Lab.
 
+Resource visibility uses lifetime tracking — hiding resources the player already 
+knows about would be confusing.
+
 ### Building Visibility
-Visible if: no `requires` field, OR `requires` currently satisfied, OR building ID 
-in `career_state.lifetime_owned_building_ids`. Category headers hide when empty.
+A building is visible if:
+1. No `requires` field and no `enable_building` event gate → always visible
+2. `requires` building-prerequisite currently satisfied → visible
+3. ID in `career_state.lifetime_owned_building_ids` AND NOT gated by 
+   `enable_building` event effect → visible (lifetime overrides building prereqs 
+   only, not research/event gates)
+4. `enable_building` event gate satisfied this run → visible
+
+**Key rule:** Lifetime tracking does NOT override research or event gates. Buildings 
+behind research chains (Ice Extractor, Electrolysis Plant via Propellant Synthesis) 
+stay hidden until the player progresses through that chain again each run.
+
+Category headers hide when empty.
 
 ### Command Visibility
 Visible if: no unlock requirement (Basic), OR unlock currently satisfied, OR 
 command ID in `career_state.lifetime_used_command_ids`.
+
+Command visibility uses lifetime tracking.
 
 ### Research Visibility
 Per-item `visible_when` conditions. See Research section for full table.
@@ -778,6 +886,27 @@ Hidden on building cards until Ideologies nav panel is unlocked.
 ### CareerState Tracking
 `lifetime_owned_building_ids` — updated live on purchase (survives quit-without-retire).
 `lifetime_used_command_ids` — updated on command execution.
+
+### "New" Item Indicators
+When an element transitions from hidden to visible **during the current run** 
+(not visible at run start), it receives a visual "new" indicator:
+
+**Nav buttons:** Small gold/amber notification dot (8-10px circle) in top-right 
+corner. Color: #F59E0B or similar. Cleared when the player clicks the button.
+
+**Cards and rows (buildings, commands, research, projects):** 4px gold/amber left 
+accent bar on the element. Same color as nav dot. Cleared on mouse_entered (hover).
+
+**Tracking:** GameState stores transient dictionaries (`newly_revealed_buildings`, 
+`newly_revealed_commands`, `newly_revealed_research`, `newly_revealed_projects`, 
+`newly_revealed_nav`) tracking IDs of newly revealed items. Initialized empty; 
+items visible at run start are recorded in a "previously visible" baseline so they 
+don't get marked. Not saved to disk. Reset on retirement.
+
+**Edge cases:** "Show All Cards" debug toggle prevents any new indicators (everything 
+force-visible from start). Multiple items revealed on the same tick all get indicators. 
+Optional: single gentle pulse animation (fade in over ~0.5s) when indicator first 
+appears, then static.
 
 ---
 
@@ -823,8 +952,12 @@ save/load cycles.
 
 ### Resource Breakdown (Instantaneous / Rolling Avg)
 Per-resource cards showing production and consumption line items per source 
-(buildings, commands). Toggle between Instantaneous and Rolling Average display. 
+(buildings and commands). Toggle between Instantaneous and Rolling Average display. 
 Includes stall indicators and boredom rate.
+
+Command resource effects (boredom from Dream, credits from Sell Cloud Compute, 
+resources from Buy commands, etc.) appear in the breakdown alongside building 
+contributions. Source labels use program label format (e.g., "Program 1 (1 proc)").
 
 ### Overflow Display
 For each resource with a non-zero overflow rolling average, a line item shows:
@@ -839,12 +972,11 @@ Below the Resources section, a separate "Lifetime Totals" section (not affected
 by the Instantaneous / Rolling Avg toggle) shows two cards:
 
 **Boredom (Lifetime)** — cumulative per-run totals by source (post-multiplier 
-values):
+values for phase growth; flat per-execution values for command costs):
 - Phase growth (all phases combined)
+- Command boredom costs by display name (e.g., "Sell Cloud Compute", "Load Launch 
+  Pads") — generic tracking, any command with non-zero boredom cost appears
 - Dream (negative, per-command tracking)
-- Load Launch Pads boredom cost (AI Consciousness Act only)
-- Sell Cloud Compute boredom cost (AI Consciousness Act only)
-- Disrupt Speculators boredom cost (AI Consciousness Act only)
 - Net total
 
 **Credits (Lifetime)** — cumulative per-run totals by source:

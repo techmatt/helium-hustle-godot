@@ -1,6 +1,7 @@
 class_name ProjectCard
 extends PanelContainer
 
+const NEW_ACCENT_COLOR: Color = Color(0.961, 0.620, 0.043)  # #F59E0B gold/amber
 
 var _pdef: Dictionary = {}
 var _font_rb: FontFile
@@ -18,6 +19,8 @@ var _row_styles: Dictionary = {}
 # Per-resource stepper containers (resource_id → HBoxContainer) for show/hide
 var _stepper_containers: Dictionary = {}
 
+var _bg_style: StyleBoxFlat = null
+
 # Hold-to-repeat state
 var _hold_res: String = ""
 var _hold_dir: float = 0.0
@@ -33,6 +36,16 @@ func setup(pdef: Dictionary, font_rb: FontFile, font_e2r: FontFile, font_e2s: Fo
 	_font_e2r = font_e2r
 	_font_e2s = font_e2s
 	_build()
+	var pid: String = _pdef.get("id", "")
+	if GameManager.state.newly_revealed_projects.has(pid) and _bg_style != null:
+		_bg_style.border_width_left = 4
+		_bg_style.border_color = NEW_ACCENT_COLOR
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_entered.connect(func():
+			if GameManager.state.newly_revealed_projects.erase(pid) and _bg_style != null:
+				_bg_style.border_width_left = 1
+				_bg_style.border_color = Color(0.25, 0.25, 0.25) if GameSettings.is_dark_mode else Color(0.816, 0.816, 0.816)
+		)
 
 
 func refresh() -> void:
@@ -82,7 +95,8 @@ func refresh() -> void:
 
 func _build() -> void:
 	var dark: bool = GameSettings.is_dark_mode
-	var bg_style := StyleBoxFlat.new()
+	_bg_style = StyleBoxFlat.new()
+	var bg_style: StyleBoxFlat = _bg_style
 	bg_style.bg_color = Color(0.12, 0.12, 0.12) if dark else Color.WHITE
 	bg_style.border_width_left   = 1
 	bg_style.border_width_right  = 1
