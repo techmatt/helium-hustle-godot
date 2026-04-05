@@ -55,7 +55,7 @@ func _build() -> void:
 
 	var max_rate_lbl := Label.new()
 	var max_rate: float = GameManager.project_manager.get_max_drain_rate()
-	max_rate_lbl.text = "Maximum Funding Rate: %d/tick per resource" % int(max_rate)
+	max_rate_lbl.text = "Maximum Funding Rate: %d/day per resource" % int(max_rate)
 	max_rate_lbl.add_theme_font_override("font", _font_e2r)
 	max_rate_lbl.add_theme_font_size_override("font_size", 15)
 	max_rate_lbl.add_theme_color_override("font_color",

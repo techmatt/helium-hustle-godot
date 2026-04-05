@@ -143,7 +143,7 @@ func _populate(summary: Dictionary) -> void:
 	var pre_power: float = float(summary.get("pre_peak_power", 0.0))
 	_add_stat_row_with_record(
 		"Peak energy production:",
-		"%.1f/tick" % peak_power_val,
+		"%.1f/day" % peak_power_val,
 		show_records and peak_power_val > pre_power,
 		"%.1f" % pre_power
 	)

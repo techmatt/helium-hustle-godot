@@ -342,7 +342,7 @@ func _refresh_card(resource_id: String, rate_tracker: ResourceRateTracker,
 	)
 
 	# Update net label in header
-	net_lbl.text = _fmt_rate(net) + "/s"
+	net_lbl.text = _fmt_rate(net) + "/day"
 	net_lbl.add_theme_color_override("font_color", _rate_color(net))
 
 	# Rebuild body rows

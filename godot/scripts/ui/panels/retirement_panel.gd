@@ -195,9 +195,9 @@ func _refresh() -> void:
 	var run_peak: float = GameManager.get_run_peak_power()
 	_set_stat_record(
 		_stat_power,
-		"%.1f energy/tick" % run_peak,
+		"%.1f energy/day" % run_peak,
 		show_records and run_peak > GameManager.run_start_career_peak_power,
-		"%.1f energy/tick" % GameManager.run_start_career_peak_power
+		"%.1f energy/day" % GameManager.run_start_career_peak_power
 	)
 
 	var research_total: int = GameManager.get_research_data().size()

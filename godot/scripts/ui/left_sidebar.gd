@@ -395,7 +395,7 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 	var rate_lbl: Label = null
 	if sn != "proc" and sn != "land":
 		rate_lbl = Label.new()
-		rate_lbl.text = "0/s"
+		rate_lbl.text = "0/day"
 		rate_lbl.custom_minimum_size = Vector2(72, 0)
 		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		rate_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -657,8 +657,8 @@ func _make_collapsible_section(parent: VBoxContainer, title: String, start_open:
 
 func fmt_sidebar_rate(value: float) -> String:
 	if absf(value) < 0.005:
-		return "0/s"
+		return "0/day"
 	var whole: bool = absf(value - roundf(value)) < 0.05
 	if value > 0.0:
-		return ("+%d/s" if whole else "+%.1f/s") % value
-	return ("%d/s" if whole else "%.1f/s") % value
+		return ("+%d/day" if whole else "+%.1f/day") % value
+	return ("%d/day" if whole else "%.1f/day") % value

@@ -325,7 +325,7 @@ func _setup_status_bar() -> void:
 	boredom_hbox.add_child(bd[3])
 
 	_boredom_rate_lbl = Label.new()
-	_boredom_rate_lbl.text = "0/s"
+	_boredom_rate_lbl.text = "0/day"
 	_boredom_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
 	_boredom_rate_lbl.add_theme_font_size_override("font_size", 14)
 	_boredom_rate_lbl.custom_minimum_size.x = 90
@@ -351,7 +351,7 @@ func _setup_status_bar() -> void:
 	energy_hbox.add_child(en[3])
 
 	_energy_rate_lbl = Label.new()
-	_energy_rate_lbl.text = "0/s"
+	_energy_rate_lbl.text = "0/day"
 	_energy_rate_lbl.add_theme_font_override("font", _font_exo2_regular)
 	_energy_rate_lbl.add_theme_font_size_override("font_size", 14)
 	_energy_rate_lbl.custom_minimum_size.x = 72
