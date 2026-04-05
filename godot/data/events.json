@@ -35,8 +35,7 @@
     "condition": { "type": "shipment_completed", "count": 1 },
     "choices": [],
     "unlocks": [
-      { "type": "enable_nav_panel", "panel": "retirement" },
-      { "type": "enable_nav_panel", "panel": "projects" }
+      { "type": "enable_nav_panel", "panel": "retirement" }
     ]
   },
   {
@@ -60,7 +59,8 @@
     "condition": { "type": "research_completed", "research_id": "market_awareness" },
     "choices": [],
     "unlocks": [
-      { "type": "enable_project", "project_id": "foundation_grant" }
+      { "type": "enable_project", "project_id": "foundation_grant" },
+      { "type": "enable_nav_panel", "panel": "projects" }
     ]
   },
   {

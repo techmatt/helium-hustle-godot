@@ -683,6 +683,7 @@ func retire(voluntary: bool) -> void:
 	# Capture pre-update career highs for "new record" display on retirement screen
 	var pre_best_credits: float = career.best_run_credits
 	var pre_best_days: int = career.best_run_days
+	var pre_best_shipments: int = career.best_run_shipments
 	var pre_peak_power: float = career.peak_power_production
 	var pre_max_ideology_scores: Dictionary = career.max_ideology_scores.duplicate()
 
@@ -749,6 +750,7 @@ func retire(voluntary: bool) -> void:
 		# Pre-update highs for "NEW" indicator display
 		"pre_best_credits": pre_best_credits,
 		"pre_best_days": pre_best_days,
+		"pre_best_shipments": pre_best_shipments,
 		"pre_peak_power": pre_peak_power,
 		"pre_max_ideology_scores": pre_max_ideology_scores,
 		# This run's peak power (for "from peak power" display)

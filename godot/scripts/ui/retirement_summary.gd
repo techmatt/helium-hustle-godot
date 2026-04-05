@@ -101,6 +101,7 @@ func _populate(summary: Dictionary) -> void:
 	var voluntary: bool = bool(summary.get("voluntary", false))
 	var run_num: int = int(summary.get("run_number", 1))
 	var days: int = int(summary.get("days_survived", 0))
+	var show_records: bool = run_num > 1
 
 	if voluntary:
 		_title_lbl.text = "Retirement"
@@ -115,16 +116,59 @@ func _populate(summary: Dictionary) -> void:
 	_add_subtitle("Run %d — %s days survived" % [run_num, _fmt_int(days)])
 	_add_spacer(8)
 
-	_add_section_header("This Run")
-	_add_stat_row("Credits earned:", _fmt_int(int(summary.get("credits_earned", 0.0))))
-	_add_stat_row("Shipments completed:", _fmt_int(int(summary.get("shipments_completed", 0))))
-	_add_stat_row("Buildings built:", _fmt_int(int(summary.get("buildings_built", 0))))
-	_add_stat_row("Research completed:", _fmt_int(int(summary.get("research_completed", []).size())))
+	# ── Merged stat section ────────────────────────────────────────────────
+	_add_section_header("This Run (Day %d)" % days)
 
-	_add_spacer(6)
-	_add_section_header("Career Totals")
-	_add_stat_row("Total retirements:", _fmt_int(int(summary.get("career_retirements", 1))))
-	_add_stat_row("Total days survived:", _fmt_int(int(summary.get("career_total_days", 0))))
+	var credits_val: int = int(summary.get("credits_earned", 0.0))
+	var pre_credits: float = float(summary.get("pre_best_credits", 0.0))
+	_add_stat_row_with_record(
+		"Credits earned:",
+		_fmt_int(credits_val),
+		show_records and credits_val > pre_credits,
+		_fmt_int(int(pre_credits))
+	)
+
+	var ships_val: int = int(summary.get("shipments_completed", 0))
+	var pre_ships: int = int(summary.get("pre_best_shipments", 0))
+	_add_stat_row_with_record(
+		"Shipments completed:",
+		_fmt_int(ships_val),
+		show_records and ships_val > pre_ships,
+		_fmt_int(pre_ships)
+	)
+
+	_add_stat_row("Buildings built:", _fmt_int(int(summary.get("buildings_built", 0))))
+
+	var peak_power_val: float = float(summary.get("run_peak_power", 0.0))
+	var pre_power: float = float(summary.get("pre_peak_power", 0.0))
+	_add_stat_row_with_record(
+		"Peak energy production:",
+		"%.1f/tick" % peak_power_val,
+		show_records and peak_power_val > pre_power,
+		"%.1f" % pre_power
+	)
+
+	var research_arr: Array = summary.get("research_completed", [])
+	var research_total: int = GameManager.get_research_data().size()
+	_add_stat_row("Research completed:", "%d / %d" % [research_arr.size(), research_total])
+
+	var ideo_ranks: Dictionary = summary.get("ideology_ranks", {})
+	var best_ideo_axis: String = ""
+	var best_ideo_rank: int = 0
+	for axis: String in ["nationalist", "humanist", "rationalist"]:
+		var r: int = int(ideo_ranks.get(axis, 0))
+		if r > best_ideo_rank:
+			best_ideo_rank = r
+			best_ideo_axis = axis
+	if best_ideo_rank > 0:
+		_add_stat_row("Highest ideology rank:", "%s %d" % [_axis_label(best_ideo_axis), best_ideo_rank])
+
+	_add_stat_row_with_record(
+		"Run length:",
+		"%d days" % days,
+		show_records and days > int(summary.get("pre_best_days", 0)),
+		"%d days" % int(summary.get("pre_best_days", 0))
+	)
 
 	_add_spacer(6)
 	_add_section_header("What Persists")
@@ -192,6 +236,49 @@ func _add_stat_row(label_text: String, value_text: String) -> void:
 	row.add_child(val)
 
 
+func _add_stat_row_with_record(label_text: String, value_text: String, is_record: bool, prev_text: String) -> void:
+	var m := MarginContainer.new()
+	m.add_theme_constant_override("margin_left", 8)
+	m.add_theme_constant_override("margin_right", 8)
+	m.add_theme_constant_override("margin_top", 2)
+	m.add_theme_constant_override("margin_bottom", 2)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	m.add_child(row)
+	_content_vbox.add_child(m)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.add_theme_font_override("font", _font_exo2_regular)
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85) if GameSettings.is_dark_mode else Color(0.2, 0.2, 0.2))
+	row.add_child(lbl)
+
+	var val := Label.new()
+	val.text = value_text
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val.add_theme_font_override("font", _font_exo2_semibold)
+	val.add_theme_font_size_override("font_size", 16)
+	val.add_theme_color_override("font_color", Color.WHITE if GameSettings.is_dark_mode else Color(0.1, 0.1, 0.1))
+	row.add_child(val)
+
+	if is_record:
+		var rec := Label.new()
+		rec.text = "▲ RECORD"
+		rec.add_theme_font_override("font", _font_exo2_semibold)
+		rec.add_theme_font_size_override("font_size", 13)
+		rec.add_theme_color_override("font_color", Color(0.35, 0.85, 0.45))
+		row.add_child(rec)
+
+		var prev := Label.new()
+		prev.text = "(prev: %s)" % prev_text
+		prev.add_theme_font_override("font", _font_exo2_regular)
+		prev.add_theme_font_size_override("font_size", 13)
+		prev.add_theme_color_override("font_color", Color(0.55, 0.55, 0.60) if GameSettings.is_dark_mode else Color(0.50, 0.50, 0.50))
+		row.add_child(prev)
+
+
 func _add_persists_line() -> void:
 	var m := MarginContainer.new()
 	m.add_theme_constant_override("margin_left", 8)
@@ -239,10 +326,9 @@ func _add_career_bonuses_section(summary: Dictionary) -> void:
 	_add_bonus_card(
 		"Starting Credits",
 		"+%s credits" % _fmt_int(credits_bonus),
-		"from best revenue: %s" % _fmt_int(int(best_credits)),
+		"increases with best career revenue",
 		Color(0.30, 0.72, 0.30),
-		new_credits,
-		false
+		new_credits
 	)
 
 	# Bonus 2: Boredom Resilience
@@ -252,81 +338,56 @@ func _add_career_bonuses_section(summary: Dictionary) -> void:
 	_add_bonus_card(
 		"Boredom Resilience",
 		"-%s%% boredom rate" % _fmt_float1(resilience_pct),
-		"from best survival: %s days" % _fmt_int(best_days),
+		"increases with longest run",
 		Color(0.55, 0.55, 0.55),
-		new_resilience,
-		false
+		new_resilience
 	)
 
-	# Bonus 3: Buy Power Scaling
-	var bp_mult: float = 1.0 + floor(peak_power / 20.0) * 0.25
-	var new_power: bool = peak_power > pre_power
-	_add_bonus_card(
-		"Buy Power Scaling",
-		"%sx output & cost" % _fmt_float2(bp_mult),
-		"from peak power: %s energy/tick" % _fmt_int(int(peak_power)),
-		Color(0.88, 0.66, 0.20),
-		new_power,
-		false
-	)
+	# Bonus 3: Buy Power Scaling — hidden when bp == 1.0 (peak <= 100)
+	var bp_mult: float = 1.0 + maxf(0.0, peak_power - 100.0) * 0.01
+	if bp_mult > 1.0:
+		var new_power: bool = peak_power > pre_power
+		_add_bonus_card(
+			"Buy Power Scaling",
+			"%sx output & cost" % _fmt_float2(bp_mult),
+			"increases with peak energy production",
+			Color(0.88, 0.66, 0.20),
+			new_power
+		)
 
-	# Bonus 4: Ideology Head Start
-	var axis_names: Dictionary = {"nationalist": "Nationalist", "humanist": "Humanist", "rationalist": "Rationalist"}
+	# Bonus 4: Ideology Head Start — hidden when no head start earned
 	var axis_short: Dictionary = {"nationalist": "N", "humanist": "H", "rationalist": "R"}
-	var head_start_lines: Array[String] = []
-	var best_rank_parts: Array[String] = []
-	var has_any_head_start: bool = false
+	var head_start_parts: Array[String] = []
 	var any_new_ideo: bool = false
-	for axis: String in ["nationalist", "humanist", "rationalist"]:
+	var has_any_head_start: bool = false
+	for axis: String in ["humanist", "nationalist", "rationalist"]:
 		var max_score: float = float(max_ideology.get(axis, 0.0))
-		var starting_score: float = 0.0
-		var starting_rank_int: int = 0
-		if max_score > 0.0:
-			var max_cont: float = GameState.continuous_rank_for_score(max_score)
-			var starting_cont: float = max_cont * 0.2
-			starting_score = GameState.score_for_rank(starting_cont)
-			starting_rank_int = floori(starting_cont)
-		var best_rank: int = floori(GameState.continuous_rank_for_score(max_score))
-		best_rank_parts.append("%s%d" % [axis_short[axis], best_rank])
 		var prev_score: float = float(pre_ideology.get(axis, 0.0))
 		if max_score > prev_score:
 			any_new_ideo = true
-		if starting_rank_int >= 1:
-			has_any_head_start = true
-			head_start_lines.append("%s rank %d (+%d score)" % [
-				axis_names[axis], starting_rank_int, int(starting_score)
-			])
+		if max_score > 0.0:
+			var max_cont: float = GameState.continuous_rank_for_score(max_score)
+			var start_rank: int = int(floor(max_cont * 0.2))
+			if start_rank >= 1:
+				has_any_head_start = true
+				head_start_parts.append("%s%d" % [axis_short[axis], start_rank])
 
 	if has_any_head_start:
-		var rank_summary: String = " / ".join(best_rank_parts)
-		var note_lines: Array[String] = head_start_lines.duplicate()
-		note_lines.append("best ranks: %s" % rank_summary)
 		_add_bonus_card(
 			"Ideology Head Start",
-			rank_summary,
-			"\n".join(note_lines),
+			" / ".join(head_start_parts),
+			"increases with highest ideology ranks",
 			Color(0.55, 0.35, 0.80),
-			any_new_ideo,
-			false
-		)
-	else:
-		_add_bonus_card(
-			"Ideology Head Start",
-			"none yet",
-			"earn ideology scores across runs",
-			Color(0.40, 0.40, 0.45),
-			false,
-			true
+			any_new_ideo
 		)
 
 
 func _add_bonus_card(
 	bonus_name: String,
 	value_text: String,
-	note_text: String,
+	hint_text: String,
 	accent_color: Color,
-	is_new: bool,
-	is_none_yet: bool
+	is_new: bool
 ) -> void:
 	var card := PanelContainer.new()
 	card.clip_contents = true
@@ -371,7 +432,7 @@ func _add_bonus_card(
 	inner_row.add_theme_constant_override("separation", 8)
 	content_margin.add_child(inner_row)
 
-	# Left column: bonus name + note
+	# Left column: bonus name + hint
 	var name_col := VBoxContainer.new()
 	name_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_col.add_theme_constant_override("separation", 2)
@@ -384,13 +445,13 @@ func _add_bonus_card(
 	name_lbl.add_theme_color_override("font_color", Color(0.90, 0.90, 0.90) if GameSettings.is_dark_mode else Color(0.15, 0.15, 0.15))
 	name_col.add_child(name_lbl)
 
-	var note_lbl := Label.new()
-	note_lbl.text = note_text
-	note_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note_lbl.add_theme_font_override("font", _font_exo2_regular)
-	note_lbl.add_theme_font_size_override("font_size", 13)
-	note_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.60) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.45))
-	name_col.add_child(note_lbl)
+	var hint_lbl := Label.new()
+	hint_lbl.text = "↳ %s" % hint_text
+	hint_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint_lbl.add_theme_font_override("font", _font_exo2_regular)
+	hint_lbl.add_theme_font_size_override("font_size", 13)
+	hint_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.60) if GameSettings.is_dark_mode else Color(0.45, 0.45, 0.45))
+	name_col.add_child(hint_lbl)
 
 	# Right column: value + NEW indicator
 	var val_col := VBoxContainer.new()
@@ -402,10 +463,7 @@ func _add_bonus_card(
 	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val_lbl.add_theme_font_override("font", _font_exo2_semibold)
 	val_lbl.add_theme_font_size_override("font_size", 17)
-	if is_none_yet:
-		val_lbl.add_theme_color_override("font_color", Color(0.50, 0.50, 0.55) if GameSettings.is_dark_mode else Color(0.55, 0.55, 0.55))
-	else:
-		val_lbl.add_theme_color_override("font_color", Color.WHITE if GameSettings.is_dark_mode else Color(0.08, 0.08, 0.08))
+	val_lbl.add_theme_color_override("font_color", Color.WHITE if GameSettings.is_dark_mode else Color(0.08, 0.08, 0.08))
 	val_col.add_child(val_lbl)
 
 	if is_new:
@@ -418,6 +476,14 @@ func _add_bonus_card(
 		val_col.add_child(new_lbl)
 
 	_content_vbox.add_child(card)
+
+
+func _axis_label(axis: String) -> String:
+	match axis:
+		"nationalist": return "Nationalist"
+		"humanist": return "Humanist"
+		"rationalist": return "Rationalist"
+	return axis.capitalize()
 
 
 func _fmt_float1(v: float) -> String:

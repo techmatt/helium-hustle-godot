@@ -7,33 +7,27 @@ var _font_e2s: FontFile
 
 # ── This Run labels ───────────────────────────────────────────────────────────
 var _run_section_hdr: Label = null
-var _run_credits_val: Label = null
-var _run_shipments_val: Label = null
-var _run_buildings_val: Label = null
-var _run_research_val: Label = null
-var _run_power_val: Label = null
+var _stat_credits: Array = []       # [val_lbl, record_lbl, prev_lbl]
+var _stat_shipments: Array = []
+var _stat_buildings: Array = []
+var _stat_power: Array = []
+var _run_research_val: Label = null # no career record tracked
+var _run_ideology_row: HBoxContainer = null  # hidden when best rank == 0
 var _run_ideology_val: Label = null
+var _stat_days: Array = []
 
-# ── Career Records labels and NEW badges ──────────────────────────────────────
-var _career_revenue_val: Label = null
-var _career_revenue_new: Label = null
-var _career_days_val: Label = null
-var _career_days_new: Label = null
-var _career_power_val: Label = null
-var _career_power_new: Label = null
-var _career_ideology_val: Label = null
-var _career_ideology_new: Label = null
-
-# ── Next Run Bonus labels (value + optional green delta) ─────────────────────
+# ── Next Run Bonus labels ─────────────────────────────────────────────────────
 var _bonus_credits_val: Label = null
 var _bonus_credits_delta: Label = null
 var _bonus_boredom_val: Label = null
 var _bonus_boredom_delta: Label = null
+var _bonus_power_container: VBoxContainer = null   # hidden when bp == 1.0
 var _bonus_power_val: Label = null
 var _bonus_power_delta: Label = null
+var _bonus_ideology_container: VBoxContainer = null  # hidden when no head start
 var _bonus_ideology_val: Label = null
 
-# ── Retire button state ───────────────────────────────────────────────────────
+# ── Retire button ─────────────────────────────────────────────────────────────
 var _retire_btn: Button = null
 
 
@@ -47,7 +41,7 @@ func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
 
 
 func on_tick() -> void:
-	if _run_credits_val == null or not is_instance_valid(_run_credits_val):
+	if _run_section_hdr == null or not is_instance_valid(_run_section_hdr):
 		return
 	_refresh()
 
@@ -56,7 +50,6 @@ func on_tick() -> void:
 
 func _build() -> void:
 	_build_this_run_section()
-	_build_career_records_section()
 	_build_next_run_bonuses_section()
 	_build_retire_button()
 	_refresh()
@@ -70,37 +63,29 @@ func _build_this_run_section() -> void:
 	vbox.add_theme_constant_override("separation", 4)
 	add_child(vbox)
 
-	_run_credits_val  = _make_stat_row("Credits earned",       vbox)
-	_run_shipments_val = _make_stat_row("Shipments completed", vbox)
-	_run_buildings_val = _make_stat_row("Buildings built",     vbox)
-	_run_research_val  = _make_stat_row("Research completed",  vbox)
-	_run_power_val     = _make_stat_row("Peak power",          vbox)
-	_run_ideology_val  = _make_stat_row("Highest ideology rank", vbox)
+	_stat_credits   = _make_stat_row_with_record("Credits earned",          vbox)
+	_stat_shipments = _make_stat_row_with_record("Shipments completed",      vbox)
+	_stat_buildings = _make_stat_row_with_record("Buildings built",          vbox)
+	_stat_power     = _make_stat_row_with_record("Peak energy production",   vbox)
+	_run_research_val = _make_stat_row("Research completed", vbox)
 
+	# Ideology row — hidden when no rank achieved this run
+	var ideo_row := HBoxContainer.new()
+	vbox.add_child(ideo_row)
+	_run_ideology_row = ideo_row
+	var ideo_lbl := Label.new()
+	ideo_lbl.text = "Highest ideology rank"
+	ideo_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ideo_lbl.add_theme_font_override("font", _font_e2r)
+	ideo_lbl.add_theme_font_size_override("font_size", 16)
+	ideo_row.add_child(ideo_lbl)
+	_run_ideology_val = Label.new()
+	_run_ideology_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_run_ideology_val.add_theme_font_override("font", _font_e2s)
+	_run_ideology_val.add_theme_font_size_override("font_size", 16)
+	ideo_row.add_child(_run_ideology_val)
 
-func _build_career_records_section() -> void:
-	add_child(HSeparator.new())
-	add_child(_make_section_header("Career Records"))
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 4)
-	add_child(vbox)
-
-	var rev_row := _make_stat_row_with_badge("Best revenue", vbox)
-	_career_revenue_val = rev_row[0]
-	_career_revenue_new = rev_row[1]
-
-	var days_row := _make_stat_row_with_badge("Longest run", vbox)
-	_career_days_val = days_row[0]
-	_career_days_new = days_row[1]
-
-	var pwr_row := _make_stat_row_with_badge("Peak power", vbox)
-	_career_power_val = pwr_row[0]
-	_career_power_new = pwr_row[1]
-
-	var ideo_row := _make_stat_row_with_badge("Best ideology", vbox)
-	_career_ideology_val = ideo_row[0]
-	_career_ideology_new = ideo_row[1]
+	_stat_days = _make_stat_row_with_record("Run length", vbox)
 
 
 func _build_next_run_bonuses_section() -> void:
@@ -111,19 +96,42 @@ func _build_next_run_bonuses_section() -> void:
 	vbox.add_theme_constant_override("separation", 4)
 	add_child(vbox)
 
-	var credits_row := _make_bonus_row("Starting credits", vbox)
-	_bonus_credits_val = credits_row[0]
-	_bonus_credits_delta = credits_row[1]
+	# Starting credits — always visible
+	var cr := _make_bonus_row_with_hint(
+		"Starting credits",
+		"↳ increases with best career revenue",
+		vbox
+	)
+	_bonus_credits_val   = cr[0]
+	_bonus_credits_delta = cr[1]
 
-	var boredom_row := _make_bonus_row("Boredom resilience", vbox)
-	_bonus_boredom_val = boredom_row[0]
-	_bonus_boredom_delta = boredom_row[1]
+	# Boredom resilience — always visible
+	var br := _make_bonus_row_with_hint(
+		"Boredom resilience",
+		"↳ increases with longest run",
+		vbox
+	)
+	_bonus_boredom_val   = br[0]
+	_bonus_boredom_delta = br[1]
 
-	var power_row := _make_bonus_row("Buy Power scaling", vbox)
-	_bonus_power_val = power_row[0]
-	_bonus_power_delta = power_row[1]
+	# Buy Power scaling — hidden when mult == 1.0
+	_bonus_power_container = VBoxContainer.new()
+	_bonus_power_container.add_theme_constant_override("separation", 2)
+	vbox.add_child(_bonus_power_container)
+	var bp := _make_bonus_row_with_hint(
+		"Buy Power scaling",
+		"↳ increases with peak energy production",
+		_bonus_power_container
+	)
+	_bonus_power_val   = bp[0]
+	_bonus_power_delta = bp[1]
 
-	_bonus_ideology_val = _make_stat_row("Ideology head start", vbox)
+	# Ideology head start — hidden when all start ranks == 0
+	_bonus_ideology_container = VBoxContainer.new()
+	_bonus_ideology_container.add_theme_constant_override("separation", 2)
+	vbox.add_child(_bonus_ideology_container)
+	_bonus_ideology_val = _make_stat_row("Ideology head start", _bonus_ideology_container)
+	_make_hint_label("↳ increases with highest ideology ranks", _bonus_ideology_container)
 
 
 func _build_retire_button() -> void:
@@ -157,24 +165,43 @@ func _build_retire_button() -> void:
 func _refresh() -> void:
 	var st: GameState = GameManager.state
 	var career: CareerState = GameManager.career
+	var run_num: int = st.run_number
+	var show_records: bool = run_num > 1
 
-	# ── This Run ──────────────────────────────────────────────────────────────
 	_run_section_hdr.text = "THIS RUN (DAY %d)" % st.current_day
 
+	# ── Stat rows ─────────────────────────────────────────────────────────────
 	var this_credits: float = st.cumulative_resources_earned.get("cred", 0.0)
-	_run_credits_val.text  = _fmt_int(int(this_credits))
-	_run_shipments_val.text = _fmt_int(st.total_shipments_completed)
+	_set_stat_record(
+		_stat_credits,
+		_fmt_int(int(this_credits)),
+		show_records and this_credits > career.best_run_credits,
+		_fmt_int(int(career.best_run_credits))
+	)
+
+	_set_stat_record(
+		_stat_shipments,
+		_fmt_int(st.total_shipments_completed),
+		show_records and st.total_shipments_completed > career.best_run_shipments,
+		_fmt_int(career.best_run_shipments)
+	)
 
 	var total_buildings: int = 0
 	for cnt: int in st.buildings_owned.values():
 		total_buildings += cnt
-	_run_buildings_val.text = _fmt_int(total_buildings)
+	# No career record for buildings owned — never show badge
+	_set_stat_record(_stat_buildings, _fmt_int(total_buildings), false, "")
+
+	var run_peak: float = GameManager.get_run_peak_power()
+	_set_stat_record(
+		_stat_power,
+		"%.1f energy/tick" % run_peak,
+		show_records and run_peak > GameManager.run_start_career_peak_power,
+		"%.1f energy/tick" % GameManager.run_start_career_peak_power
+	)
 
 	var research_total: int = GameManager.get_research_data().size()
 	_run_research_val.text = "%d / %d" % [st.completed_research.size(), research_total]
-
-	var run_peak: float = GameManager.get_run_peak_power()
-	_run_power_val.text = "%.1f energy/tick" % run_peak
 
 	var best_axis: String = ""
 	var best_rank: int = 0
@@ -183,61 +210,47 @@ func _refresh() -> void:
 		if r > best_rank:
 			best_rank = r
 			best_axis = axis
+	_run_ideology_row.visible = best_rank > 0
 	if best_rank > 0:
 		_run_ideology_val.text = "%s %d" % [_axis_label(best_axis), best_rank]
-	else:
-		_run_ideology_val.text = "None"
 
-	# ── Career Records ────────────────────────────────────────────────────────
-	# best_run_credits / best_run_days are only updated in retire(), so during a
-	# run they represent the career best BEFORE this run — correct for "NEW" detection.
-	_career_revenue_val.text = _fmt_int(int(career.best_run_credits))
-	_set_new_badge(_career_revenue_new, this_credits > career.best_run_credits)
-
-	_career_days_val.text = "%s days" % _fmt_int(career.best_run_days)
-	_set_new_badge(_career_days_new, st.current_day > career.best_run_days)
-
-	# peak_power_production and max_ideology_scores are updated live each tick;
-	# compare against the snapshots taken at run start to detect NEW.
-	_career_power_val.text = "%.1f energy/tick" % career.peak_power_production
-	_set_new_badge(_career_power_new,
-		run_peak > GameManager.run_start_career_peak_power)
-
-	var ideo_parts: Array[String] = []
-	var ideo_is_new: bool = false
-	for axis: String in ["humanist", "nationalist", "rationalist"]:
-		var score: float = float(career.max_ideology_scores.get(axis, 0.0))
-		var rank: int = floori(GameState.continuous_rank_for_score(score) + 1e-9)
-		var abbr: String = _axis_abbr(axis)
-		ideo_parts.append("%s%d" % [abbr, rank])
-		var start_score: float = float(GameManager.run_start_career_ideology_scores.get(axis, 0.0))
-		var start_rank: int = floori(GameState.continuous_rank_for_score(start_score) + 1e-9)
-		if rank > start_rank:
-			ideo_is_new = true
-	_career_ideology_val.text = " / ".join(ideo_parts)
-	_set_new_badge(_career_ideology_new, ideo_is_new)
+	_set_stat_record(
+		_stat_days,
+		"%d days" % st.current_day,
+		show_records and st.current_day > career.best_run_days,
+		"%d days" % career.best_run_days
+	)
 
 	# ── Next Run Bonuses ──────────────────────────────────────────────────────
 	_refresh_bonuses(st, career)
+
+
+func _set_stat_record(stat: Array, value_text: String, is_record: bool, prev_text: String) -> void:
+	if stat.size() < 3:
+		return
+	var val_lbl: Label = stat[0]
+	var record_lbl: Label = stat[1]
+	var prev_lbl: Label = stat[2]
+	val_lbl.text = value_text
+	record_lbl.visible = is_record
+	prev_lbl.visible = is_record
+	if is_record:
+		prev_lbl.text = "(prev: %s)" % prev_text
 
 
 func _refresh_bonuses(st: GameState, career: CareerState) -> void:
 	var this_credits: float = st.cumulative_resources_earned.get("cred", 0.0)
 	var run_peak: float = GameManager.get_run_peak_power()
 
-	# --- Starting credits ---
+	# Starting credits
 	var frac: float = GameManager.career_credits_bonus_fraction
 	var proj_credits: int = int(floor(maxf(career.best_run_credits, this_credits) * frac))
 	var cur_credits: int  = int(floor(career.best_run_credits * frac))
 	var delta_credits: int = proj_credits - cur_credits
-	if proj_credits > 0:
-		_bonus_credits_val.text = "+%d credits" % proj_credits
-		_set_delta_label(_bonus_credits_delta, delta_credits > 0, "(+%d)" % delta_credits)
-	else:
-		_bonus_credits_val.text = "None yet"
-		_set_delta_label(_bonus_credits_delta, false, "")
+	_bonus_credits_val.text = "+%d credits" % proj_credits if proj_credits > 0 else "None yet"
+	_set_delta_label(_bonus_credits_delta, delta_credits > 0, "(+%d)" % delta_credits)
 
-	# --- Boredom resilience ---
+	# Boredom resilience
 	var proj_days: int = maxi(career.best_run_days, st.current_day)
 	var proj_boredom_pct: float = (1.0 - pow(0.995, proj_days / 400.0)) * 100.0
 	var cur_boredom_pct: float  = (1.0 - pow(0.995, career.best_run_days / 400.0)) * 100.0
@@ -249,35 +262,33 @@ func _refresh_bonuses(st: GameState, career: CareerState) -> void:
 		_bonus_boredom_val.text = "-%.1f%% boredom rate" % proj_boredom_pct
 		_set_delta_label(_bonus_boredom_delta, delta_boredom > 0.005, "(+%.1f%%)" % delta_boredom)
 
-	# --- Buy Power scaling ---
+	# Buy Power scaling — hide when mult would be 1.0
 	var proj_power_peak: float = maxf(career.peak_power_production, run_peak)
 	var proj_bp: float = 1.0 + maxf(0.0, proj_power_peak - 100.0) * 0.01
 	var cur_bp: float  = 1.0 + maxf(0.0, GameManager.run_start_career_peak_power - 100.0) * 0.01
 	var delta_bp: float = proj_bp - cur_bp
-	_bonus_power_val.text = "%.2fx output & cost" % proj_bp
-	_set_delta_label(_bonus_power_delta, delta_bp > 0.005, "(+%.2fx)" % delta_bp)
+	_bonus_power_container.visible = proj_bp > 1.0
+	if proj_bp > 1.0:
+		_bonus_power_val.text = "%.2fx output & cost" % proj_bp
+		_set_delta_label(_bonus_power_delta, delta_bp > 0.005, "(+%.2fx)" % delta_bp)
 
-	# --- Ideology head start ---
+	# Ideology head start — hide when all start ranks == 0
 	var ideo_lines: Array[String] = []
 	for axis: String in ["humanist", "nationalist", "rationalist"]:
 		var proj_score: float = float(career.max_ideology_scores.get(axis, 0.0))
 		var proj_cont: float = GameState.continuous_rank_for_score(proj_score)
 		var proj_start_rank: int = int(floor(proj_cont * 0.2))
-
 		var cur_score: float = float(GameManager.run_start_career_ideology_scores.get(axis, 0.0))
 		var cur_cont: float = GameState.continuous_rank_for_score(cur_score)
 		var cur_start_rank: int = int(floor(cur_cont * 0.2))
-
 		if proj_start_rank >= 1:
 			var delta_rank: int = proj_start_rank - cur_start_rank
 			if delta_rank > 0:
 				ideo_lines.append("%s rank %d  (+%d)" % [_axis_label(axis), proj_start_rank, delta_rank])
 			else:
 				ideo_lines.append("%s rank %d" % [_axis_label(axis), proj_start_rank])
-
-	if ideo_lines.is_empty():
-		_bonus_ideology_val.text = "None yet"
-	else:
+	_bonus_ideology_container.visible = not ideo_lines.is_empty()
+	if not ideo_lines.is_empty():
 		_bonus_ideology_val.text = "  ".join(ideo_lines)
 
 
@@ -400,7 +411,7 @@ func _make_section_header(title: String) -> Label:
 
 
 # Returns a value Label added to an HBoxContainer row inside parent.
-func _make_stat_row(label_text: String, parent: VBoxContainer) -> Label:
+func _make_stat_row(label_text: String, parent: Control) -> Label:
 	var row := HBoxContainer.new()
 	parent.add_child(row)
 	var lbl := Label.new()
@@ -417,57 +428,82 @@ func _make_stat_row(label_text: String, parent: VBoxContainer) -> Label:
 	return val
 
 
-# Returns [value_label, new_badge_label].
-func _make_stat_row_with_badge(label_text: String, parent: VBoxContainer) -> Array:
+# Returns [val_lbl, record_lbl, prev_lbl].
+# record_lbl shows "▲ RECORD" in green; prev_lbl shows "(prev: X)" in muted.
+# Both are hidden until _set_stat_record sets is_record = true.
+func _make_stat_row_with_record(label_text: String, parent: VBoxContainer) -> Array:
 	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
 	parent.add_child(row)
+
 	var lbl := Label.new()
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_override("font", _font_e2r)
 	lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(lbl)
+
 	var val := Label.new()
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.add_theme_font_override("font", _font_e2s)
 	val.add_theme_font_size_override("font_size", 16)
 	row.add_child(val)
-	var badge := Label.new()
-	badge.text = " NEW"
-	badge.add_theme_font_override("font", _font_e2s)
-	badge.add_theme_font_size_override("font_size", 16)
-	badge.add_theme_color_override("font_color", UIPalette.p("text_positive"))
-	badge.visible = false
-	row.add_child(badge)
-	return [val, badge]
+
+	var record_lbl := Label.new()
+	record_lbl.text = "▲ RECORD"
+	record_lbl.add_theme_font_override("font", _font_e2s)
+	record_lbl.add_theme_font_size_override("font_size", 14)
+	record_lbl.add_theme_color_override("font_color", UIPalette.p("text_positive"))
+	record_lbl.visible = false
+	row.add_child(record_lbl)
+
+	var prev_lbl := Label.new()
+	prev_lbl.add_theme_font_override("font", _font_e2r)
+	prev_lbl.add_theme_font_size_override("font_size", 14)
+	prev_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
+	prev_lbl.visible = false
+	row.add_child(prev_lbl)
+
+	return [val, record_lbl, prev_lbl]
 
 
-func _set_new_badge(badge: Label, show: bool) -> void:
-	badge.visible = show
-
-
-# Returns [value_label, delta_label] — delta_label is initially hidden.
-func _make_bonus_row(label_text: String, parent: VBoxContainer) -> Array:
+# Returns [val_lbl, delta_lbl]. Adds the bonus row + hint label to parent.
+func _make_bonus_row_with_hint(label_text: String, hint_text: String, parent: Control) -> Array:
 	var row := HBoxContainer.new()
 	parent.add_child(row)
+
 	var lbl := Label.new()
 	lbl.text = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_override("font", _font_e2r)
 	lbl.add_theme_font_size_override("font_size", 16)
 	row.add_child(lbl)
+
 	var val := Label.new()
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	val.add_theme_font_override("font", _font_e2s)
 	val.add_theme_font_size_override("font_size", 16)
 	row.add_child(val)
+
 	var delta := Label.new()
 	delta.add_theme_font_override("font", _font_e2r)
 	delta.add_theme_font_size_override("font_size", 15)
 	delta.add_theme_color_override("font_color", UIPalette.p("text_positive"))
 	delta.visible = false
 	row.add_child(delta)
+
+	_make_hint_label(hint_text, parent)
+
 	return [val, delta]
+
+
+func _make_hint_label(hint_text: String, parent: Control) -> void:
+	var hint := Label.new()
+	hint.text = hint_text
+	hint.add_theme_font_override("font", _font_e2r)
+	hint.add_theme_font_size_override("font_size", 13)
+	hint.add_theme_color_override("font_color", UIPalette.p("text_muted"))
+	parent.add_child(hint)
 
 
 func _set_delta_label(delta: Label, show: bool, text: String) -> void:
@@ -496,11 +532,3 @@ func _axis_label(axis: String) -> String:
 		"humanist":    return "Humanist"
 		"rationalist": return "Rationalist"
 	return axis.capitalize()
-
-
-func _axis_abbr(axis: String) -> String:
-	match axis:
-		"nationalist": return "N"
-		"humanist":    return "H"
-		"rationalist": return "R"
-	return axis.left(1).to_upper()
