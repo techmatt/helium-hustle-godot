@@ -251,8 +251,8 @@ func _refresh_bonuses(st: GameState, career: CareerState) -> void:
 
 	# --- Buy Power scaling ---
 	var proj_power_peak: float = maxf(career.peak_power_production, run_peak)
-	var proj_bp: float = 1.0 + floor(proj_power_peak / 20.0) * 0.25
-	var cur_bp: float  = 1.0 + floor(GameManager.run_start_career_peak_power / 20.0) * 0.25
+	var proj_bp: float = 1.0 + maxf(0.0, proj_power_peak - 100.0) * 0.01
+	var cur_bp: float  = 1.0 + maxf(0.0, GameManager.run_start_career_peak_power - 100.0) * 0.01
 	var delta_bp: float = proj_bp - cur_bp
 	_bonus_power_val.text = "%.2fx output & cost" % proj_bp
 	_set_delta_label(_bonus_power_delta, delta_bp > 0.005, "(+%.2fx)" % delta_bp)

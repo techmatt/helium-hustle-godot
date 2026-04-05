@@ -79,8 +79,8 @@ var _font_e2s: FontFile
 var _nav_buttons: Dictionary = {}
 var _nav_dots: Dictionary = {}  # button label → Panel (the notification dot)
 var _resource_labels: Dictionary = {}
-var _spec_count_lbl: Label = null
-var _spec_name_lbl: Label = null
+var _adversaries_section: Control = null
+var _spec_rows: Dictionary = {}  # resource → {row: HBoxContainer, count_lbl: Label}
 var _ideology_section: VBoxContainer = null
 var _ideology_axis_rows: Dictionary = {}
 var _ideology_prev_values: Dictionary = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -101,8 +101,8 @@ func rebuild() -> void:
 	_nav_buttons.clear()
 	_nav_dots.clear()
 	_resource_labels.clear()
-	_spec_count_lbl = null
-	_spec_name_lbl = null
+	_adversaries_section = null
+	_spec_rows.clear()
 	_ideology_section = null
 	_ideology_axis_rows = {}
 	_ideology_prev_values = {"nationalist": 0.0, "humanist": 0.0, "rationalist": 0.0}
@@ -459,51 +459,70 @@ func update_resource_display() -> void:
 # ── Adversaries section ───────────────────────────────────────────────────────
 
 func _build_adversaries_section() -> void:
-	var body := _make_collapsible_section(_nav_vbox, "Adversaries")
+	# Wrap header+body in a container so the entire section can be hidden
+	var wrapper := VBoxContainer.new()
+	wrapper.add_theme_constant_override("separation", 0)
+	_nav_vbox.add_child(wrapper)
+	_adversaries_section = wrapper
+	wrapper.visible = false  # hidden until at least one resource has ever had speculators
 
-	var spec_row := HBoxContainer.new()
-	spec_row.add_theme_constant_override("separation", 6)
-	body.add_child(spec_row)
+	var body := _make_collapsible_section(wrapper, "Adversaries")
+	_spec_rows.clear()
 
-	var icon_wrap := CenterContainer.new()
-	icon_wrap.custom_minimum_size = Vector2(22, 22)
-	spec_row.add_child(icon_wrap)
-	var icon := ColorRect.new()
-	icon.color = Color(0.90, 0.60, 0.10)
-	icon.custom_minimum_size = Vector2(14, 14)
-	icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	icon_wrap.add_child(icon)
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var display: Array = TRADEABLE_DISPLAY.get(res, [res.capitalize(), Color(0.90, 0.60, 0.10)])
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		row.visible = false
+		body.add_child(row)
 
-	_spec_name_lbl = Label.new()
-	_spec_name_lbl.text = "Speculators"
-	_spec_name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_spec_name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_spec_name_lbl.add_theme_font_override("font", _font_e2r)
-	_spec_name_lbl.add_theme_font_size_override("font_size", 16)
-	spec_row.add_child(_spec_name_lbl)
+		var icon_wrap := CenterContainer.new()
+		icon_wrap.custom_minimum_size = Vector2(22, 22)
+		row.add_child(icon_wrap)
+		var icon := ColorRect.new()
+		icon.color = display[1]
+		icon.custom_minimum_size = Vector2(14, 14)
+		icon.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		icon_wrap.add_child(icon)
 
-	_spec_count_lbl = Label.new()
-	_spec_count_lbl.text = "0"
-	_spec_count_lbl.custom_minimum_size = Vector2(40, 0)
-	_spec_count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_spec_count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_spec_count_lbl.add_theme_font_override("font", _font_e2s)
-	_spec_count_lbl.add_theme_font_size_override("font_size", 16)
-	spec_row.add_child(_spec_count_lbl)
+		var name_lbl := Label.new()
+		name_lbl.text = "Speculators (%s)" % str(display[0])
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		name_lbl.add_theme_font_override("font", _font_e2r)
+		name_lbl.add_theme_font_size_override("font_size", 16)
+		row.add_child(name_lbl)
+
+		var count_lbl := Label.new()
+		count_lbl.text = "0"
+		count_lbl.custom_minimum_size = Vector2(40, 0)
+		count_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		count_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		count_lbl.add_theme_font_override("font", _font_e2s)
+		count_lbl.add_theme_font_size_override("font_size", 16)
+		row.add_child(count_lbl)
+
+		_spec_rows[res] = {"row": row, "count_lbl": count_lbl}
 
 
 func update_adversaries_display() -> void:
-	if _spec_count_lbl == null or not is_instance_valid(_spec_count_lbl):
+	if _adversaries_section == null or not is_instance_valid(_adversaries_section):
 		return
 	var st: GameState = GameManager.state
-	var count: int = int(st.speculator_count)
-	_spec_count_lbl.text = "%d" % count
-	if count == 0 or st.speculator_target.is_empty():
-		_spec_name_lbl.text = "Speculators"
-	else:
-		var res_display: Array = TRADEABLE_DISPLAY.get(st.speculator_target, [st.speculator_target, Color.WHITE])
-		_spec_name_lbl.text = "Speculators (%s)" % str(res_display[0])
+	var any_seen: bool = false
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var ever_seen: bool = st.speculators_ever_seen.get(res, false)
+		if ever_seen:
+			any_seen = true
+		var entry: Dictionary = _spec_rows.get(res, {})
+		var row_node = entry.get("row")
+		var count_lbl: Label = entry.get("count_lbl")
+		if row_node != null and is_instance_valid(row_node):
+			row_node.visible = ever_seen
+		if count_lbl != null and is_instance_valid(count_lbl):
+			count_lbl.text = "%d" % int(st.speculators.get(res, 0.0))
+	_adversaries_section.visible = any_seen
 
 
 # ── Ideology section (sidebar) ────────────────────────────────────────────────

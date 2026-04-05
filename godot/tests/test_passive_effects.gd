@@ -178,8 +178,7 @@ func _test_promote_effectiveness_mult() -> void:
 	state.amounts["eng"] = 100.0
 	state.amounts["cred"] = 100.0
 	state.demand_promote["he3"] = 0.0
-	state.speculator_count = 0.0
-	state.speculator_target = ""
+	state.speculators["he3"] = 0.0
 	sim.execute_command(state, "promote_he3")
 	_assert_approx(state.demand_promote.get("he3", 0.0), 0.03, 0.0001,
 		"promote_effectiveness_mult: base promote adds 0.03 to demand_promote (mult=1.0)")
@@ -191,8 +190,7 @@ func _test_promote_effectiveness_mult() -> void:
 	state.amounts["eng"] = 100.0
 	state.amounts["cred"] = 100.0
 	state.demand_promote["he3"] = 0.0
-	state.speculator_count = 0.0
-	state.speculator_target = ""
+	state.speculators["he3"] = 0.0
 	state.active_modifiers["promote_effectiveness_mult"] = 1.30
 	sim.execute_command(state, "promote_he3")
 	_assert_approx(state.demand_promote.get("he3", 0.0), 0.03 * 1.30, 0.0001,

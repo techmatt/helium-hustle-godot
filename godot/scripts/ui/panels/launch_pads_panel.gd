@@ -43,8 +43,7 @@ var _demand_has_ma: bool = false
 var _spec_intel_body: VBoxContainer = null
 var _spec_intel_countdown_lbl: Label = null
 var _spec_intel_size_lbl: Label = null
-var _spec_intel_prob_labels: Dictionary = {}
-var _spec_intel_bar_fill_rects: Dictionary = {}
+var _spec_intel_pool_labels: Dictionary = {}   # resource → Label showing "Name: N (demand -0.XX)"
 var _spec_intel_has_sa: bool = false
 
 
@@ -82,8 +81,7 @@ func _reset_state() -> void:
 	_spec_intel_body = null
 	_spec_intel_countdown_lbl = null
 	_spec_intel_size_lbl = null
-	_spec_intel_prob_labels.clear()
-	_spec_intel_bar_fill_rects.clear()
+	_spec_intel_pool_labels.clear()
 	_spec_intel_has_sa = false
 
 
@@ -98,8 +96,7 @@ func _build() -> void:
 	_populate_demand_section(st, st.completed_research.has("market_awareness"))
 
 	_spec_intel_has_sa = false
-	_spec_intel_prob_labels.clear()
-	_spec_intel_bar_fill_rects.clear()
+	_spec_intel_pool_labels.clear()
 	_spec_intel_body = _make_collapsible_section(self, "Speculator Intelligence", true)
 	_build_spec_intel_section(_spec_intel_body)
 
@@ -201,51 +198,17 @@ func _build_spec_intel_section(body: VBoxContainer) -> void:
 	_spec_intel_size_lbl.add_theme_font_size_override("font_size", 15)
 	body.add_child(_spec_intel_size_lbl)
 
-	var prob_hdr := Label.new()
-	prob_hdr.text = "Target probabilities:"
-	prob_hdr.add_theme_font_override("font", _font_e2r)
-	prob_hdr.add_theme_font_size_override("font_size", 15)
-	body.add_child(prob_hdr)
-
-	var bar_wrap := PanelContainer.new()
-	bar_wrap.custom_minimum_size = Vector2(0, 16)
-	var bar_bg := StyleBoxFlat.new()
-	bar_bg.bg_color = Color(0.22, 0.22, 0.26) if GameSettings.is_dark_mode else Color(0.78, 0.78, 0.78)
-	bar_bg.corner_radius_top_left     = 4
-	bar_bg.corner_radius_top_right    = 4
-	bar_bg.corner_radius_bottom_left  = 4
-	bar_bg.corner_radius_bottom_right = 4
-	bar_wrap.add_theme_stylebox_override("panel", bar_bg)
-	body.add_child(bar_wrap)
-
-	var bar_hbox := HBoxContainer.new()
-	bar_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar_hbox.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	bar_hbox.add_theme_constant_override("separation", 0)
-	bar_wrap.add_child(bar_hbox)
-
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		var seg := ColorRect.new()
-		seg.color = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])[1]
-		seg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		seg.size_flags_stretch_ratio = 0.25
-		seg.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-		bar_hbox.add_child(seg)
-		_spec_intel_bar_fill_rects[res] = seg
-
-	var prob_row := HBoxContainer.new()
-	prob_row.add_theme_constant_override("separation", 8)
-	body.add_child(prob_row)
-
+	# Per-resource pool counts with suppression amounts (progressive disclosure)
+	_spec_intel_pool_labels.clear()
 	for res: String in GameState.TRADEABLE_RESOURCES:
 		var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
-		var prob_lbl := Label.new()
-		prob_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		prob_lbl.add_theme_font_override("font", _font_e2s)
-		prob_lbl.add_theme_font_size_override("font_size", 14)
-		prob_lbl.add_theme_color_override("font_color", display[1])
-		prob_row.add_child(prob_lbl)
-		_spec_intel_prob_labels[res] = prob_lbl
+		var lbl := Label.new()
+		lbl.add_theme_font_override("font", _font_e2r)
+		lbl.add_theme_font_size_override("font_size", 15)
+		lbl.add_theme_color_override("font_color", display[1])
+		lbl.visible = st.speculators_ever_seen.get(res, false)
+		body.add_child(lbl)
+		_spec_intel_pool_labels[res] = lbl
 
 	_refresh_spec_intel_content(st)
 
@@ -260,8 +223,7 @@ func _refresh_spec_intel_section() -> void:
 			child.queue_free()
 		_spec_intel_countdown_lbl = null
 		_spec_intel_size_lbl = null
-		_spec_intel_prob_labels.clear()
-		_spec_intel_bar_fill_rects.clear()
+		_spec_intel_pool_labels.clear()
 		_build_spec_intel_section(_spec_intel_body)
 		return
 	if not has_sa:
@@ -282,18 +244,23 @@ func _refresh_spec_intel_content(st: GameState) -> void:
 		var scale: float = pow(growth, float(st.speculator_burst_number))
 		_spec_intel_size_lbl.text = "Estimated burst size: %d–%d speculators" % [int(size_min * scale), int(size_max * scale)]
 
-	var total: float = 0.0
+	# Per-resource pool lines — shown only for resources ever seen
+	var ds: DemandSystem = GameManager.sim.demand_system
 	for res: String in GameState.TRADEABLE_RESOURCES:
-		total += st.speculator_target_scores.get(res, 0.0)
-	for res: String in GameState.TRADEABLE_RESOURCES:
-		var score: float = st.speculator_target_scores.get(res, 0.0)
-		var pct: int = int(round(score / total * 100.0)) if total > 0.0 else 25
-		if _spec_intel_prob_labels.has(res):
+		if not _spec_intel_pool_labels.has(res):
+			continue
+		var lbl: Label = _spec_intel_pool_labels[res]
+		if lbl == null or not is_instance_valid(lbl):
+			continue
+		var ever_seen: bool = st.speculators_ever_seen.get(res, false)
+		lbl.visible = ever_seen
+		if ever_seen:
+			var pool: float = st.speculators.get(res, 0.0)
+			var max_sup: float = ds.get_config("speculator_max_suppression")
+			var half_pt: float = ds.get_config("speculator_half_point")
+			var suppression: float = max_sup * (pool / (pool + half_pt)) if pool > 0.0 else 0.0
 			var display: Array = TRADEABLE_DISPLAY.get(res, [res, Color.WHITE])
-			(_spec_intel_prob_labels[res] as Label).text = "%s: %d%%" % [display[0], pct]
-		if _spec_intel_bar_fill_rects.has(res):
-			var ratio: float = score / total if total > 0.0 else 0.25
-			(_spec_intel_bar_fill_rects[res] as ColorRect).size_flags_stretch_ratio = ratio
+			lbl.text = "%s: %d (demand −%.2f)" % [display[0], int(pool), suppression]
 
 
 # ── Demand section ────────────────────────────────────────────────────────────
@@ -369,7 +336,7 @@ func _populate_demand_section(st: GameState, has_ma: bool) -> void:
 				var tier_arr: Array = _demand_tier(demand_val)
 				if tier_arr[2] != Color(0, 0, 0, 0):
 					val_lbl.add_theme_color_override("font_color", tier_arr[2])
-				if st.speculator_target == res and st.speculator_count > 0.0:
+				if st.speculators.get(res, 0.0) > 0.0:
 					val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
 				block.add_child(val_lbl)
 				_demand_value_labels[res] = val_lbl
@@ -407,7 +374,7 @@ func _refresh_demand_section() -> void:
 			if _demand_value_labels.has(res):
 				var val_lbl: Label = _demand_value_labels[res]
 				val_lbl.text = "%.2f" % demand_val
-				if st.speculator_target == res and st.speculator_count > 0.0:
+				if st.speculators.get(res, 0.0) > 0.0:
 					val_lbl.add_theme_color_override("font_color", Color(0.90, 0.55, 0.10))
 				elif tier_arr[2] != Color(0, 0, 0, 0):
 					val_lbl.add_theme_color_override("font_color", tier_arr[2])

@@ -69,24 +69,24 @@ func _test_buy_power_scaling() -> void:
 	var career := CareerState.new()
 
 	career.peak_power_production = 0.0
-	var bp_mult: float = 1.0 + floor(career.peak_power_production / 20.0) * 0.25
+	var bp_mult: float = 1.0 + maxf(0.0, career.peak_power_production - 100.0) * 0.01
 	_assert_approx(bp_mult, 1.0, 0.0001, "buy_power_mult = 1.0 at peak 0")
 
-	career.peak_power_production = 20.0
-	bp_mult = 1.0 + floor(career.peak_power_production / 20.0) * 0.25
-	_assert_approx(bp_mult, 1.25, 0.0001, "buy_power_mult = 1.25 at peak 20")
+	career.peak_power_production = 100.0
+	bp_mult = 1.0 + maxf(0.0, career.peak_power_production - 100.0) * 0.01
+	_assert_approx(bp_mult, 1.0, 0.0001, "buy_power_mult = 1.0 at peak 100 (threshold)")
 
-	career.peak_power_production = 40.0
-	bp_mult = 1.0 + floor(career.peak_power_production / 20.0) * 0.25
-	_assert_approx(bp_mult, 1.5, 0.0001, "buy_power_mult = 1.5 at peak 40")
+	career.peak_power_production = 150.0
+	bp_mult = 1.0 + maxf(0.0, career.peak_power_production - 100.0) * 0.01
+	_assert_approx(bp_mult, 1.5, 0.0001, "buy_power_mult = 1.5 at peak 150")
 
-	career.peak_power_production = 60.0
-	bp_mult = 1.0 + floor(career.peak_power_production / 20.0) * 0.25
-	_assert_approx(bp_mult, 1.75, 0.0001, "buy_power_mult = 1.75 at peak 60")
+	career.peak_power_production = 200.0
+	bp_mult = 1.0 + maxf(0.0, career.peak_power_production - 100.0) * 0.01
+	_assert_approx(bp_mult, 2.0, 0.0001, "buy_power_mult = 2.0 at peak 200")
 
-	career.peak_power_production = 80.0
-	bp_mult = 1.0 + floor(career.peak_power_production / 20.0) * 0.25
-	_assert_approx(bp_mult, 2.0, 0.0001, "buy_power_mult = 2.0 at peak 80")
+	career.peak_power_production = 300.0
+	bp_mult = 1.0 + maxf(0.0, career.peak_power_production - 100.0) * 0.01
+	_assert_approx(bp_mult, 3.0, 0.0001, "buy_power_mult = 3.0 at peak 300")
 
 
 func _test_ideology_head_start() -> void:

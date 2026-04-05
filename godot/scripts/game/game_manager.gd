@@ -54,7 +54,6 @@ signal achievement_unlocked(achievement_id: String)
 
 var career_credits_bonus_fraction: float = 0.02
 var career_ideology_headstart_fraction: float = 0.2
-var career_buy_power_per_20_energy: float = 0.25
 var career_boredom_resilience_base: float = 0.995
 var career_boredom_resilience_period: float = 400.0
 
@@ -83,7 +82,6 @@ func _ready() -> void:
 	_game_config = _load_json("res://data/game_config.json")
 	career_credits_bonus_fraction = float(_game_config.get("career_credits_bonus_fraction", 0.02))
 	career_ideology_headstart_fraction = float(_game_config.get("career_ideology_headstart_fraction", 0.2))
-	career_buy_power_per_20_energy = float(_game_config.get("career_buy_power_per_20_energy", 0.25))
 	career_boredom_resilience_base = float(_game_config.get("career_boredom_resilience_base", 0.995))
 	career_boredom_resilience_period = float(_game_config.get("career_boredom_resilience_period", 400.0))
 	_commands_data = _load_json("res://data/commands.json")
@@ -634,7 +632,7 @@ func _on_tick() -> void:
 			"cargo": shipment.get("cargo", 0.0),
 			"demand": shipment.demand,
 			"revenue": shipment.revenue,
-			"spec": state.speculator_count,
+			"spec": state.speculators.get(shipment.resource, 0.0),
 		})
 		var newly: Array[String] = achievement_manager.check_shipment_conditions(
 			state, career, float(shipment.revenue), float(shipment.demand)
@@ -804,7 +802,7 @@ func start_new_run() -> void:
 
 	# Step 6: Career modifiers derived from CareerState
 	# buy_power_mult: scales Buy Power command output and cost
-	var buy_power_mult: float = 1.0 + floor(career.peak_power_production / 20.0) * career_buy_power_per_20_energy
+	var buy_power_mult: float = 1.0 + maxf(0.0, career.peak_power_production - 100.0) * 0.01
 	state.set_modifier("buy_power_mult", buy_power_mult)
 	# boredom_resilience_mult: reduces boredom rate based on best survival
 	var boredom_resilience_mult: float = pow(career_boredom_resilience_base, career.best_run_days / career_boredom_resilience_period)
@@ -991,7 +989,6 @@ func debug_boost() -> void:
 	var owned_pads: int = state.buildings_owned.get("launch_pad", 0)
 	while state.pads.size() < owned_pads:
 		var pad := GameState.LaunchPadData.new()
-		pad.resource_type = state.loading_priority[0] if not state.loading_priority.is_empty() else "he3"
 		state.pads.append(pad)
 	state.amounts["land"] = maxf(state.amounts.get("land", 0.0), 200.0)
 	sim.recalculate_caps(state)
@@ -1019,7 +1016,6 @@ func _debug_setup_ui_state() -> void:
 
 	for i in range(3):
 		var pad := GameState.LaunchPadData.new()
-		pad.resource_type = state.loading_priority[0] if not state.loading_priority.is_empty() else "he3"
 		state.pads.append(pad)
 
 	sim.recalculate_caps(state)

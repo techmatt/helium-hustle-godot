@@ -52,8 +52,7 @@ func _test_demand_bounds() -> void:
 
 	# Min floor holds under extreme speculator suppression
 	var state_extreme := TF.fresh_state_demand_isolated(sim)
-	state_extreme.speculator_count = 10000.0
-	state_extreme.speculator_target = "he3"
+	state_extreme.speculators["he3"] = 10000.0
 	sim.demand_system.tick_demand(state_extreme)
 	_assert_true(state_extreme.demand.get("he3", 0.0) >= 0.01,
 		"bounds: min floor holds under extreme speculator suppression (count=10000)")
@@ -67,41 +66,36 @@ func _test_demand_bounds() -> void:
 
 
 func _test_demand_speculator_suppression() -> void:
-	print("--- Demand: Speculator Suppression ---")
+	print("--- Demand: Speculator Suppression (per-resource pools) ---")
 	var sim := TF.create_fresh_sim()
 
 	# Verify the suppression value directly via get_suppression()
 	var state_sup := TF.fresh_state_demand_isolated(sim)
-	state_sup.speculator_target = "he3"
-
-	state_sup.speculator_count = 50.0
+	state_sup.speculators["he3"] = 50.0
 	_assert_approx(sim.demand_system.get_suppression(state_sup, "he3"), 0.25, 0.001,
-		"suppression: count=50 (half-point) returns suppression 0.25")
+		"suppression: he3 pool=50 (half-point) returns suppression 0.25")
 
-	state_sup.speculator_count = 200.0
+	state_sup.speculators["he3"] = 200.0
 	_assert_approx(sim.demand_system.get_suppression(state_sup, "he3"), 0.4, 0.001,
-		"suppression: count=200 returns suppression 0.4")
+		"suppression: he3 pool=200 returns suppression 0.4")
 
-	state_sup.speculator_count = 10000.0
+	state_sup.speculators["he3"] = 10000.0
 	var max_sup: float = sim.demand_system.get_config("speculator_max_suppression")
 	_assert_lt(sim.demand_system.get_suppression(state_sup, "he3"), max_sup,
-		"suppression: asymptotic — count=10000 never reaches max_suppression")
+		"suppression: asymptotic — he3 pool=10000 never reaches max_suppression")
 
-	# Non-target resource is unaffected
+	# Resource with zero pool has zero suppression
+	state_sup.speculators["ti"] = 0.0
 	_assert_approx(sim.demand_system.get_suppression(state_sup, "ti"), 0.0, 0.001,
-		"suppression: non-target resource has zero suppression")
+		"suppression: ti pool=0 has zero suppression")
 
-	# Verify suppression effect on demand using identical noise (fixed seeds, same day).
-	# All three states use the same seeds and day=0, so noise is identical.
-	# Only difference is speculator_count — demand delta equals suppression delta exactly.
+	# Each resource's pool only suppresses its own demand.
+	# All three states use same seeds/day=0 so noise is identical.
 	var state_0 := TF.fresh_state_demand_isolated(sim)
 	var state_50 := TF.fresh_state_demand_isolated(sim)
 	var state_200 := TF.fresh_state_demand_isolated(sim)
-	for s: GameState in [state_0, state_50, state_200]:
-		s.speculator_target = "he3"
-	state_0.speculator_count = 0.0
-	state_50.speculator_count = 50.0
-	state_200.speculator_count = 200.0
+	state_50.speculators["he3"] = 50.0
+	state_200.speculators["he3"] = 200.0
 	sim.demand_system.tick_demand(state_0)
 	sim.demand_system.tick_demand(state_50)
 	sim.demand_system.tick_demand(state_200)
@@ -109,45 +103,68 @@ func _test_demand_speculator_suppression() -> void:
 	var d0: float = state_0.demand["he3"]
 	var d50: float = state_50.demand["he3"]
 	var d200: float = state_200.demand["he3"]
-	_assert_gt(d0, d50, "suppression: demand at count=50 is less than at count=0")
-	_assert_gt(d50, d200, "suppression: demand at count=200 is less than at count=50")
+	_assert_gt(d0, d50, "suppression: he3 demand with pool=50 < pool=0")
+	_assert_gt(d50, d200, "suppression: he3 demand with pool=200 < pool=50")
 	_assert_approx(d0 - d50, 0.25, 0.005,
 		"suppression: demand delta at half-point matches get_suppression")
 	_assert_approx(d0 - d200, 0.4, 0.005,
 		"suppression: demand delta at count=200 matches get_suppression")
 
+	# Independent pools: ti suppression does not affect he3
+	var state_ti := TF.fresh_state_demand_isolated(sim)
+	state_ti.speculators["ti"] = 200.0
+	sim.demand_system.tick_demand(state_ti)
+	# he3 should be at baseline (no he3 pool), ti should be suppressed
+	_assert_approx(state_ti.demand.get("he3", 0.0), state_0.demand.get("he3", 0.0), 0.05,
+		"suppression: ti pool does not suppress he3 demand")
+	_assert_lt(state_ti.demand.get("ti", 0.0), state_0.demand.get("ti", 0.0),
+		"suppression: ti pool suppresses ti demand")
+
 
 func _test_demand_speculator_decay() -> void:
-	print("--- Demand: Speculator Decay ---")
+	print("--- Demand: Speculator Decay (per-resource pools) ---")
 	var sim := TF.create_fresh_sim()
 
 	# Single tick proportional decay: 100 * 0.006 = 0.6 removed → 99.4
 	var state := TF.fresh_state_demand_isolated(sim)
-	state.speculator_count = 100.0
+	state.speculators["he3"] = 100.0
 	sim.demand_system.tick_speculators(state)
-	_assert_approx(state.speculator_count, 99.4, 0.001,
+	_assert_approx(state.speculators.get("he3", 0.0), 99.4, 0.001,
 		"decay: single tick removes 0.6 (100 * 0.006)")
 
 	# 200 ticks: geometric decay — 100 * (1 - 0.006)^200 ≈ 29.9
 	state = TF.fresh_state_demand_isolated(sim)
-	state.speculator_count = 100.0
+	state.speculators["he3"] = 100.0
 	for _i in range(200):
 		sim.demand_system.tick_speculators(state)
-	_assert_lt(state.speculator_count, 50.0,
+	_assert_lt(state.speculators.get("he3", 0.0), 50.0,
 		"decay: count drops significantly after 200 ticks")
-	_assert_gt(state.speculator_count, 0.0,
+	_assert_gt(state.speculators.get("he3", 0.0), 0.0,
 		"decay: proportional decay never reaches exactly zero")
-	_assert_approx(state.speculator_count, 100.0 * pow(1.0 - 0.006, 200.0), 0.1,
+	_assert_approx(state.speculators.get("he3", 0.0), 100.0 * pow(1.0 - 0.006, 200.0), 0.1,
 		"decay: 200-tick count matches geometric decay formula")
 
-	# Arbitrage Engine bonus: adds 0.04 per active engine per tick
-	# Expected: 100 - 0.6 (proportional) - 0.04 (arbitrage) = 99.36
+	# Pools decay independently: filling he3 and ti simultaneously, ti stays the same
 	state = TF.fresh_state_demand_isolated(sim)
-	state.speculator_count = 100.0
+	state.speculators["he3"] = 100.0
+	state.speculators["ti"] = 200.0
+	sim.demand_system.tick_speculators(state)
+	_assert_approx(state.speculators.get("he3", 0.0), 99.4, 0.001,
+		"decay: independent — he3 pool decays at its own rate")
+	_assert_approx(state.speculators.get("ti", 0.0), 198.8, 0.001,
+		"decay: independent — ti pool decays at its own rate")
+
+	# Arbitrage Engine: flat decay applies to ALL pools each tick
+	# Expected per pool: 100 - 0.6 (proportional) - 0.04 (arbitrage) = 99.36
+	state = TF.fresh_state_demand_isolated(sim)
+	state.speculators["he3"] = 100.0
+	state.speculators["ti"] = 100.0
 	TF.add_building(state, "arbitrage_engine", 1)
 	sim.demand_system.tick_speculators(state)
-	_assert_approx(state.speculator_count, 99.36, 0.001,
-		"decay: arbitrage engine contributes 0.04 extra decay per tick")
+	_assert_approx(state.speculators.get("he3", 0.0), 99.36, 0.001,
+		"decay: arbitrage engine applies 0.04 flat decay to he3 pool")
+	_assert_approx(state.speculators.get("ti", 0.0), 99.36, 0.001,
+		"decay: arbitrage engine applies 0.04 flat decay to ti pool")
 
 
 func _test_demand_rival_dumps() -> void:
@@ -193,7 +210,7 @@ func _test_demand_promote_effect() -> void:
 	var state := TF.fresh_state_with_research(sim, ["trade_promotion"])
 	state.amounts["eng"] = 100.0
 	state.amounts["cred"] = 100.0
-	state.speculator_count = 0.0
+	state.speculators["he3"] = 0.0
 	var promote_before: float = state.demand_promote.get("he3", 0.0)
 	sim.execute_command(state, "promote_he3")
 	_assert_approx(state.demand_promote.get("he3", 0.0), promote_before + 0.03, 0.001,
@@ -232,8 +249,8 @@ func _test_demand_perlin_noise() -> void:
 	var sim := TF.create_fresh_sim()
 	var state := TF.fresh_state(sim)
 	TF.defer_random_events(state)
-	state.speculator_count = 0.0
-	state.speculator_target = ""
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		state.speculators[res] = 0.0
 
 	var values: Array = []
 	for i in range(500):

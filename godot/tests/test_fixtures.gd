@@ -125,8 +125,9 @@ static func fresh_state_demand_isolated(sim: GameSimulation) -> GameState:
 		state.demand_rival[res] = 0.0
 		state.demand_launch[res] = 0.0
 		state.demand_history[res] = []
-	state.speculator_count = 0.0
-	state.speculator_target = ""
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		state.speculators[res] = 0.0
+		state.speculators_ever_seen[res] = false
 	defer_random_events(state)
 	return state
 

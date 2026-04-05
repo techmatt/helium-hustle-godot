@@ -18,16 +18,17 @@ func get_config(key: String) -> float:
 
 
 # Returns the speculator suppression component for a resource this tick.
-# Formula: max_suppression * (count / (count + half_point)).
-# Returns 0.0 if this resource is not the current speculator target.
+# Formula: max_suppression * (pool_count / (pool_count + half_point)).
+# Each resource has its own independent pool.
 # Useful for tests that want to assert the suppression value directly
 # without reconstructing it from a demand delta.
 func get_suppression(state: GameState, resource: String) -> float:
-	if state.speculator_target != resource or state.speculator_count <= 0.0:
+	var pool: float = state.speculators.get(resource, 0.0)
+	if pool <= 0.0:
 		return 0.0
 	var max_sup: float = _dcfg("speculator_max_suppression")
 	var half_pt: float = _dcfg("speculator_half_point")
-	return max_sup * (state.speculator_count / (state.speculator_count + half_pt))
+	return max_sup * (pool / (pool + half_pt))
 
 
 # Initializes per-resource demand state (seeds, accumulators, history) and
@@ -49,6 +50,9 @@ func initialize_demand(state: GameState) -> void:
 		var rid: String = rival.get("id", "")
 		if rid:
 			state.rival_next_dump_tick[rid] = randi_range(150, 250)
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		state.speculators[res] = 0.0
+		state.speculators_ever_seen[res] = false
 	var burst_min: int = int(_dcfg("speculator_burst_interval_min"))
 	var burst_max: int = int(_dcfg("speculator_burst_interval_max"))
 	state.speculator_next_burst_tick = randi_range(burst_min, burst_max)
@@ -79,8 +83,6 @@ func tick_demand(state: GameState) -> void:
 			state.demand_history[res] = hist
 		return
 
-	var spec_count: float = state.speculator_count
-	var spec_target: String = state.speculator_target
 	var max_sup: float = _dcfg("speculator_max_suppression")
 	var half_pt: float = _dcfg("speculator_half_point")
 	var promote_decay: float = _dcfg("promote_decay_rate")
@@ -90,20 +92,14 @@ func tick_demand(state: GameState) -> void:
 	var max_d: float = _dcfg("max_demand")
 	var coupling: float = _dcfg("coupling_fraction")
 
-	# Speculator suppression on the target resource
-	var spec_sup_on_target: float = 0.0
-	if spec_target != "" and spec_count > 0.0:
-		spec_sup_on_target = max_sup * (spec_count / (spec_count + half_pt))
-
-	# Bleedover: above threshold, non-targeted resources receive partial suppression
-	var bleedover_threshold: float = _dcfg("speculator_bleedover_threshold")
-	var bleedover_half_pt: float = _dcfg("speculator_bleedover_half_point")
-	var bleedover_max_frac: float = _dcfg("speculator_bleedover_max_fraction")
-	var excess: float = maxf(0.0, spec_count - bleedover_threshold)
-	var bleedover_fraction: float = 0.0
-	if excess > 0.0:
-		bleedover_fraction = (excess / (excess + bleedover_half_pt)) * bleedover_max_frac
-	var bleedover_suppression: float = spec_sup_on_target * bleedover_fraction
+	# Pre-compute per-resource speculator suppression
+	var spec_suppression: Dictionary = {}
+	var total_suppression: float = 0.0
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var pool: float = state.speculators.get(res, 0.0)
+		var sup: float = max_sup * (pool / (pool + half_pt)) if pool > 0.0 else 0.0
+		spec_suppression[res] = sup
+		total_suppression += sup
 
 	for res: String in GameState.TRADEABLE_RESOURCES:
 		# Decay accumulators each tick
@@ -123,17 +119,11 @@ func tick_demand(state: GameState) -> void:
 		)
 		var base_demand: float = 0.5 + perlin_val * amplitude
 
-		# Speculator suppression: direct on target, bleedover on all others
-		var spec_sup: float
-		if spec_target == res:
-			spec_sup = spec_sup_on_target
-		else:
-			spec_sup = bleedover_suppression
+		# Per-resource speculator suppression (each pool suppresses only its own resource)
+		var spec_sup: float = spec_suppression.get(res, 0.0)
 
-		# Coupling bonus: other resources get a small lift when one is suppressed
-		var coupling_bonus: float = 0.0
-		if spec_target != "" and spec_target != res:
-			coupling_bonus = spec_sup_on_target * coupling / 3.0
+		# Coupling bonus: lift from suppression on OTHER resources' pools
+		var coupling_bonus: float = (total_suppression - spec_sup) * coupling / 3.0
 
 		# Nationalist ideology bonus — multiplies final demand
 		var nationalist_mult: float = state.get_ideology_bonus("nationalist", 1.0, 1.05)
@@ -160,12 +150,16 @@ func tick_demand(state: GameState) -> void:
 # Called once per tick after shipments. Test with defer_random_events() to
 # prevent burst side effects.
 func tick_speculators(state: GameState) -> void:
-	# Decay speculators — proportional base rate (boosted by Nationalist ideology + Arbitrage Engines)
+	# Decay all per-resource pools independently.
+	# Proportional rate and Arbitrage Engine flat decay are both boosted by Nationalist ideology.
 	var active_arb: int = state.buildings_active.get("arbitrage_engine", state.buildings_owned.get("arbitrage_engine", 0))
 	var nationalist_decay_mult: float = state.get_ideology_bonus("nationalist", 1.0, 1.05)
-	var proportional_decay: float = state.speculator_count * _dcfg("speculator_proportional_decay") * nationalist_decay_mult
-	var arbitrage_decay: float = float(active_arb) * _dcfg("arbitrage_decay_bonus_per_building")
-	state.speculator_count = maxf(0.0, state.speculator_count - proportional_decay - arbitrage_decay)
+	var proportional_rate: float = _dcfg("speculator_proportional_decay") * nationalist_decay_mult
+	var arbitrage_flat: float = float(active_arb) * _dcfg("arbitrage_decay_bonus_per_building") * nationalist_decay_mult
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var pool: float = state.speculators.get(res, 0.0)
+		var prop_decay: float = pool * proportional_rate
+		state.speculators[res] = maxf(0.0, pool - prop_decay - arbitrage_flat)
 	# Check for burst arrival
 	if state.current_day >= state.speculator_next_burst_tick:
 		_fire_speculator_burst(state)
@@ -207,19 +201,20 @@ func tick_rivals(state: GameState) -> Array:
 
 
 func _fire_speculator_burst(state: GameState) -> void:
-	state.speculator_target = _choose_speculator_target(state)
+	var target: String = _choose_speculator_target(state)
 	var size_min: int = int(_dcfg("speculator_burst_size_min"))
 	var size_max: int = int(_dcfg("speculator_burst_size_max"))
 	var growth: float = _dcfg("speculator_burst_growth")
 	var burst: float = float(randi_range(size_min, size_max)) * pow(growth, float(state.speculator_burst_number))
-	state.speculator_count += burst
+	state.speculators[target] = state.speculators.get(target, 0.0) + burst
+	state.speculators_ever_seen[target] = true
 	var int_min: int = int(_dcfg("speculator_burst_interval_min"))
 	var int_max: int = int(_dcfg("speculator_burst_interval_max"))
 	var interval_mult: float = state.get_modifier("speculator_burst_interval_mult")
 	state.speculator_next_burst_tick = state.current_day + int(randi_range(int_min, int_max) * interval_mult)
 	state.speculator_burst_number += 1
 	# Push speculator burst notification to launch history
-	var res_display: String = _get_resource_display_name(state.speculator_target)
+	var res_display: String = _get_resource_display_name(target)
 	var msg: String = "Speculator surge — %d speculators target %s" % [int(burst), res_display]
 	var note := GameState.LaunchRecord.new()
 	note.tick = state.current_day

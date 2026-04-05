@@ -52,7 +52,7 @@ class ProgramData:
 
 
 class LaunchPadData:
-	var resource_type: String = "he3"
+	var resource_type: String = "none"
 	var cargo_loaded: float = 0.0
 	var status: int = 0   # use GameState.PAD_* constants
 	var cooldown_ticks: int = 0
@@ -69,13 +69,8 @@ class LaunchPadData:
 
 	static func from_dict(data: Dictionary) -> LaunchPadData:
 		var pad := LaunchPadData.new()
-		pad.resource_type = data.get("resource_type", "he3")
-		# Migrate legacy "none" resource_type to paused state
-		if pad.resource_type == "none":
-			pad.resource_type = "he3"
-			pad.paused = true
-		else:
-			pad.paused = bool(data.get("paused", false))
+		pad.resource_type = data.get("resource_type", "none")
+		pad.paused = bool(data.get("paused", false))
 		pad.cargo_loaded = float(data.get("cargo_loaded", 0.0))
 		pad.status = int(data.get("status", 0))
 		pad.cooldown_ticks = int(data.get("cooldown_ticks", 0))
@@ -217,12 +212,11 @@ var demand_perlin_seeds: Dictionary = {}       # resource → float noise offset
 var demand_perlin_freq: Dictionary = {}        # resource → float noise frequency
 var demand_history: Dictionary = {}            # resource → Array of last ~200 demand values
 
-var speculator_count: float = 0.0
-var speculator_target: String = ""
+var speculators: Dictionary = {}              # resource → float pool count (independent per-resource)
+var speculators_ever_seen: Dictionary = {}    # resource → bool, reset on retirement
 var speculator_burst_number: int = 0
 var speculator_next_burst_tick: int = 200
 var speculator_target_scores: Dictionary = {}   # resource → float score (higher = more likely target)
-var speculator_revenue_tracking: Dictionary = {}  # kept for save/load compatibility only
 
 var rival_next_dump_tick: Dictionary = {}      # rival_id → int tick
 
@@ -325,12 +319,11 @@ func to_dict() -> Dictionary:
 		"overclock_states": overclock_states.duplicate(true),
 
 		# Speculators
-		"speculator_count": speculator_count,
-		"speculator_target": speculator_target,
+		"speculators": speculators.duplicate(),
+		"speculators_ever_seen": speculators_ever_seen.duplicate(),
 		"speculator_burst_number": speculator_burst_number,
 		"speculator_next_burst_tick": speculator_next_burst_tick,
 		"speculator_target_scores": speculator_target_scores.duplicate(),
-		"speculator_revenue_tracking": speculator_revenue_tracking.duplicate(),
 
 		# Rivals
 		"rival_next_dump_tick": rival_next_dump_tick.duplicate(),
@@ -409,12 +402,11 @@ static func from_dict(data: Dictionary) -> GameState:
 	s.overclock_states = data.get("overclock_states", [])
 
 	# Speculators
-	s.speculator_count = float(data.get("speculator_count", 0.0))
-	s.speculator_target = data.get("speculator_target", "")
+	s.speculators = data.get("speculators", {})
+	s.speculators_ever_seen = data.get("speculators_ever_seen", {})
 	s.speculator_burst_number = int(data.get("speculator_burst_number", 0))
 	s.speculator_next_burst_tick = int(data.get("speculator_next_burst_tick", 200))
 	s.speculator_target_scores = data.get("speculator_target_scores", {})
-	s.speculator_revenue_tracking = data.get("speculator_revenue_tracking", {})
 
 	# Rivals
 	s.rival_next_dump_tick = data.get("rival_next_dump_tick", {})

@@ -112,6 +112,7 @@ func _build_ui() -> void:
 		_resource_opt.add_theme_color_override("font_hover_color", black)
 		_resource_opt.add_theme_color_override("font_pressed_color", black)
 		_resource_opt.add_theme_color_override("font_focus_color", black)
+	_resource_opt.add_item("None")
 	for res: String in TRADEABLE:
 		_resource_opt.add_item(GameManager.get_resource_display_name(res))
 	_resource_opt.item_selected.connect(_on_resource_selected)
@@ -195,9 +196,9 @@ func _build_ui() -> void:
 func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 	_updating_ui = true
 
-	# Sync dropdown (index 0-N = TRADEABLE)
+	# Sync dropdown (index 0 = None, 1-N = TRADEABLE)
 	var res_idx: int = TRADEABLE.find(pad_data.resource_type)
-	var opt_idx: int = maxi(0, res_idx)
+	var opt_idx: int = res_idx + 1 if res_idx >= 0 else 0
 	if _resource_opt.selected != opt_idx:
 		_resource_opt.selected = opt_idx
 
@@ -218,12 +219,22 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 	else:
 		modulate = Color(1, 1, 1, 1.0)
 
-	# Card background: yellow tint when paused, normal otherwise
+	# Card background: yellow tint when paused or no resource selected, normal otherwise
 	var dark: bool = GameSettings.is_dark_mode
-	if pad_data.paused:
+	if pad_data.paused or pad_data.resource_type == "none":
 		_card_style.bg_color = Color(0.24, 0.22, 0.00) if dark else Color(1.0, 0.992, 0.906)
 	else:
 		_card_style.bg_color = Color(0.12, 0.12, 0.16) if dark else Color(1.0, 1.0, 1.0)
+
+	if pad_data.resource_type == "none":
+		_set_bar_fill(0.0)
+		_cargo_label.text = "—"
+		_value_label.text = ""
+		_status_label.text = "No resource selected"
+		_status_label.add_theme_color_override("font_color", _c_text_muted())
+		_set_launch_btn(false, "")
+		_updating_ui = false
+		return
 
 	match status:
 		GameState.PAD_EMPTY:
@@ -316,8 +327,10 @@ func _set_launch_btn(enabled: bool, _hint: String) -> void:
 func _on_resource_selected(index: int) -> void:
 	if _updating_ui:
 		return
-	if index < TRADEABLE.size():
-		GameManager.set_pad_resource(_pad_idx, TRADEABLE[index])
+	if index == 0:
+		GameManager.set_pad_resource(_pad_idx, "none")
+	elif index - 1 < TRADEABLE.size():
+		GameManager.set_pad_resource(_pad_idx, TRADEABLE[index - 1])
 
 
 func _on_pause_pressed() -> void:

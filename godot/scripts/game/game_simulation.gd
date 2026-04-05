@@ -533,7 +533,6 @@ func buy_building(state: GameState, short_name: String) -> void:
 	recalculate_caps(state)
 	if short_name == "launch_pad":
 		var pad := GameState.LaunchPadData.new()
-		pad.resource_type = state.loading_priority[0] if not state.loading_priority.is_empty() else "he3"
 		state.pads.append(pad)
 
 
@@ -683,17 +682,23 @@ func _effect_demand_nudge(state: GameState, effect: Dictionary) -> void:
 	if res in GameState.TRADEABLE_RESOURCES:
 		var half_pt: float = demand_system.get_config("speculator_half_point")
 		var effectiveness: float = 1.0
-		if state.speculator_target == res and state.speculator_count > 0.0:
+		var pool: float = state.speculators.get(res, 0.0)
+		if pool > 0.0:
 			var damp: float = demand_system.get_config("promote_speculator_dampening")
-			effectiveness = 1.0 - damp * (state.speculator_count / (state.speculator_count + half_pt))
+			effectiveness = 1.0 - damp * (pool / (pool + half_pt))
 		var base_eff: float = float(effect.get("value", demand_system.get_config("promote_base_effect")))
 		base_eff *= state.get_modifier("promote_effectiveness_mult")
 		state.demand_promote[res] = state.demand_promote.get(res, 0.0) + base_eff * effectiveness
 
 
 func _effect_spec_reduce(state: GameState) -> void:
+	# Target the first resource in the loading priority list that has speculators > 0.
+	# One execution = one pool targeted. If no priority resource has speculators, the execution is wasted.
 	var reduce: float = randf_range(demand_system.get_config("disrupt_speculators_min"), demand_system.get_config("disrupt_speculators_max"))
-	state.speculator_count = maxf(0.0, state.speculator_count - reduce)
+	for res: String in state.loading_priority:
+		if state.speculators.get(res, 0.0) > 0.0:
+			state.speculators[res] = maxf(0.0, state.speculators[res] - reduce)
+			break
 	if not state.flags.get("used_disrupt_speculators", false):
 		state.flags["used_disrupt_speculators"] = true
 

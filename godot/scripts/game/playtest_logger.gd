@@ -82,9 +82,16 @@ func log_snapshot(state: GameState, demand_system: DemandSystem) -> void:
 	if not demand_dict.is_empty():
 		data["demand"] = demand_dict
 
-	# Speculators: only if count > 0
-	if state.speculator_count >= 0.5:
-		data["spec"] = [roundi(state.speculator_count), state.speculator_target]
+	# Speculators: only if any pool > 0
+	var spec_total: float = 0.0
+	var spec_dict: Dictionary = {}
+	for res: String in GameState.TRADEABLE_RESOURCES:
+		var pool: float = state.speculators.get(res, 0.0)
+		if pool >= 0.5:
+			spec_dict[res] = roundi(pool)
+			spec_total += pool
+	if spec_total >= 0.5:
+		data["spec"] = spec_dict
 
 	# Processors: only if any assigned
 	if state.total_processors > 0:
