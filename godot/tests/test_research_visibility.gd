@@ -211,19 +211,19 @@ func _test_quest_gate(gm: Node) -> void:
 		"quest gate: geopolitical_intelligence not visible without Q5")
 
 	# Via career (prior-run retirement path)
-	gm.career.completed_quest_ids.append("q5_market_awareness")
+	gm.career.completed_quest_ids.append("qmarket_awareness")
 	_assert_true(gm.is_research_item_visible("geopolitical_intelligence"),
 		"quest gate: geopolitical_intelligence visible after Q5 in career")
 
 	# Via current-run event_instances (same run Q5 was completed — before retirement)
 	gm.career.completed_quest_ids.clear()
-	gm.state.event_instances.append({"id": "q5_market_awareness", "state": "completed"})
+	gm.state.event_instances.append({"id": "qmarket_awareness", "state": "completed"})
 	_assert_true(gm.is_research_item_visible("geopolitical_intelligence"),
 		"quest gate: geopolitical_intelligence visible when Q5 completed in current run")
 
 	# Incomplete instance does not count
 	gm.state.event_instances.clear()
-	gm.state.event_instances.append({"id": "q5_market_awareness", "state": "active"})
+	gm.state.event_instances.append({"id": "qmarket_awareness", "state": "active"})
 	_assert_false(gm.is_research_item_visible("geopolitical_intelligence"),
 		"quest gate: geopolitical_intelligence not visible when Q5 only active (not completed)")
 

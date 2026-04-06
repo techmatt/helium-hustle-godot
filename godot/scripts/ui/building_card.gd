@@ -313,7 +313,7 @@ func _build_requires_label(parent: VBoxContainer) -> void:
 func _build_production(parent: VBoxContainer) -> void:
 	for res: String in _bdef.production:
 		var lbl := Label.new()
-		lbl.text = "  +%.1f %s/s" % [float(_bdef.production[res]), GameManager.get_resource_display_name(res)]
+		lbl.text = "  +%.1f %s/day" % [float(_bdef.production[res]), GameManager.get_resource_display_name(res)]
 		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 16)
@@ -324,7 +324,7 @@ func _build_production(parent: VBoxContainer) -> void:
 func _build_upkeep(parent: VBoxContainer) -> void:
 	for res: String in _bdef.upkeep:
 		var lbl := Label.new()
-		lbl.text = "  \u2212%.1f %s/s" % [float(_bdef.upkeep[res]), GameManager.get_resource_display_name(res)]
+		lbl.text = "  \u2212%.1f %s/day" % [float(_bdef.upkeep[res]), GameManager.get_resource_display_name(res)]
 		lbl.mouse_filter = Control.MOUSE_FILTER_PASS
 		lbl.add_theme_font_override("font", _font_exo2_regular)
 		lbl.add_theme_font_size_override("font_size", 16)

@@ -146,7 +146,7 @@ func _test_project_visibility() -> void:
 		"chemical_energy visibility: not enabled before Q6")
 
 	# Becomes visible when Q6 is in event_instances (quest active)
-	state.event_instances.append({"id": "q6_open_horizons", "state": "active"})
+	state.event_instances.append({"id": "qhorizon_open_horizons", "state": "active"})
 	pm.tick(state, career)
 	_assert_true(state.enabled_projects.has("chemical_energy"),
 		"chemical_energy visibility: enabled when Q6 instance active")
@@ -154,7 +154,7 @@ func _test_project_visibility() -> void:
 	# Also visible via seen_event_ids (completed this run)
 	var state2 := TF.fresh_state_isolated(sim)
 	var career2 := CareerState.new()
-	state2.seen_event_ids.append("q6_open_horizons")
+	state2.seen_event_ids.append("qhorizon_open_horizons")
 	pm.tick(state2, career2)
 	_assert_true(state2.enabled_projects.has("chemical_energy"),
 		"chemical_energy visibility: enabled when Q6 in seen_event_ids")
@@ -162,7 +162,7 @@ func _test_project_visibility() -> void:
 	# Also visible via career.completed_quest_ids (prior run)
 	var state3 := TF.fresh_state_isolated(sim)
 	var career3 := CareerState.new()
-	career3.completed_quest_ids.append("q6_open_horizons")
+	career3.completed_quest_ids.append("qhorizon_open_horizons")
 	pm.tick(state3, career3)
 	_assert_true(state3.enabled_projects.has("chemical_energy"),
 		"chemical_energy visibility: enabled when Q6 in career.completed_quest_ids")

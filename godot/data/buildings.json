@@ -1,8 +1,38 @@
 [
   {
+    "name": "Data Center",
+    "short_name": "data_center",
+    "category": "Core",
+    "ideology": "humanist",
+    "requires": {
+      "type": "building",
+      "value": "fabricator"
+    },
+    "land": 2,
+    "cost_scaling": 1.5,
+    "costs": {
+      "cred": 150.0,
+      "cir": 8.0,
+      "ti": 20.0
+    },
+    "production": {},
+    "upkeep": {
+      "eng": 4.0
+    },
+    "effects": [
+      {
+        "prefix": "grant",
+        "resource": "proc",
+        "operator": "+",
+        "value": 1.0
+      }
+    ],
+    "description": "Grants a processor. Fast cost scaling \u2014 many processors is expensive."
+  },
+  {
     "name": "Solar Panel",
     "short_name": "panel",
-    "category": "Power",
+    "category": "Core",
     "ideology": "",
     "requires": {
       "type": "none"
@@ -27,7 +57,7 @@
     "ideology": "",
     "requires": {
       "type": "quest",
-      "value": "Q1",
+      "value": "QPower",
       "label": "Q1 — Boot Sequence"
     },
     "land": 1,
@@ -177,8 +207,8 @@
     "ideology": "nationalist",
     "requires": {
       "type": "quest",
-      "value": "Q2",
-      "label": "First Extraction (Q2)"
+      "value": "QExtract",
+      "label": "First Extraction (QExtract)"
     },
     "land": 4,
     "cost_scaling": 1.5,
@@ -219,36 +249,6 @@
     },
     "effects": [],
     "description": "Produces science. Gated behind Fabricator \u2014 circuits are the bottleneck."
-  },
-  {
-    "name": "Data Center",
-    "short_name": "data_center",
-    "category": "Processors",
-    "ideology": "humanist",
-    "requires": {
-      "type": "building",
-      "value": "fabricator"
-    },
-    "land": 2,
-    "cost_scaling": 1.5,
-    "costs": {
-      "cred": 150.0,
-      "cir": 8.0,
-      "ti": 20.0
-    },
-    "production": {},
-    "upkeep": {
-      "eng": 4.0
-    },
-    "effects": [
-      {
-        "prefix": "grant",
-        "resource": "proc",
-        "operator": "+",
-        "value": 1.0
-      }
-    ],
-    "description": "Grants a processor. Fast cost scaling \u2014 many processors is expensive."
   },
   {
     "name": "Battery",
@@ -365,7 +365,7 @@
   {
     "name": "Fuel Cell Array",
     "short_name": "fuel_cell",
-    "category": "Power",
+    "category": "Core",
     "ideology": "nationalist",
     "requires": {
       "type": "flag",
@@ -390,7 +390,7 @@
   {
     "name": "Microwave Receiver",
     "short_name": "microwave_receiver",
-    "category": "Power",
+    "category": "Core",
     "ideology": "nationalist",
     "requires": {
       "type": "flag",
@@ -413,11 +413,11 @@
   {
     "name": "Recreation Dome",
     "short_name": "recreation_dome",
-    "category": "Infrastructure",
+    "category": "Storage",
     "ideology": "humanist",
     "requires": {
       "type": "quest",
-      "value": "Q6",
+      "value": "QHorizon",
       "label": "Q6 — Open Horizons (start)"
     },
     "land": 3,

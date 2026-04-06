@@ -343,7 +343,7 @@ func get_commands_data() -> Array:
 # Resources visible in the sidebar. Always-visible set plus resources unlocked
 # by owning a building this run or in a prior run, or by ever running a buy command.
 const _ALWAYS_VISIBLE_RESOURCES: Array[String] = [
-	"boredom", "eng", "proc", "land", "cred", "ti", "reg"
+	"boredom", "eng", "proc", "land", "cred", "reg", "ti"
 ]
 const _RESOURCE_UNLOCK_BUILDING: Dictionary = {
 	"ice":  "ice_extractor",

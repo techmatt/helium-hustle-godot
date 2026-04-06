@@ -393,9 +393,9 @@ func _add_resource_row(parent: VBoxContainer, sn: String, display_name: String, 
 	row.add_child(val_lbl)
 
 	var rate_lbl: Label = null
-	if sn != "proc" and sn != "land":
+	if sn != "proc":
 		rate_lbl = Label.new()
-		rate_lbl.text = "0/day"
+		rate_lbl.text = "0 free" if sn == "land" else "0/day"
 		rate_lbl.custom_minimum_size = Vector2(72, 0)
 		rate_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		rate_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -428,6 +428,18 @@ func update_resource_display() -> void:
 				assigned += p.processors_assigned
 			val_lbl.text = "%d / %d" % [assigned, st.total_processors]
 			val_lbl.remove_theme_color_override("font_color")
+			continue
+
+		if sn == "land":
+			var free_land: int = int(st.amounts.get("land", 0.0))
+			var total_land: int = GameManager.sim.get_total_land(st)
+			var used_land: int = total_land - free_land
+			val_lbl.text = "%d / %d" % [used_land, total_land]
+			val_lbl.remove_theme_color_override("font_color")
+			var rate_lbl: Label = labels.get("rate", null)
+			if rate_lbl != null:
+				rate_lbl.text = "%d free" % free_land
+				rate_lbl.remove_theme_color_override("font_color")
 			continue
 
 		var amount: float = st.amounts.get(sn, 0.0)

@@ -286,7 +286,7 @@ func _add_persists_line() -> void:
 	m.add_theme_constant_override("margin_top", 2)
 	m.add_theme_constant_override("margin_bottom", 2)
 	var lbl := Label.new()
-	lbl.text = "Events, statistics, and project progress carry over to your next run."
+	lbl.text = "Events, statistics, and long-term project progress carry over to your next run."
 	lbl.add_theme_font_override("font", _font_exo2_regular)
 	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", Color(0.65, 0.65, 0.70) if GameSettings.is_dark_mode else Color(0.40, 0.40, 0.40))

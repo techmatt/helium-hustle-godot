@@ -465,7 +465,9 @@ func get_building_requires_text(_state: GameState, short_name: String) -> String
 					return "Requires: %d %s" % [count, b.get("name", needed)]
 			return "Requires: %d %s" % [count, needed]
 		"research":
-			return "Requires: Research " + req.get("value", "")
+			var rid: String = req.get("value", "")
+			var rdata: Dictionary = _research_data.get(rid, {})
+			return "Requires: " + rdata.get("name", rid)
 	return "Requires: " + req.get("value", "")
 
 

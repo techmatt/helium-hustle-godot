@@ -194,6 +194,11 @@ func reapply_career_unlocks(state: GameState, career: CareerState) -> void:
 		var eid: String = def.get("id", "")
 		if eid.is_empty():
 			continue
+		# Silent events are background mechanics (e.g. recreation_dome_unlock) —
+		# their unlocks must not be re-applied on run start, because the gating
+		# condition (e.g. QHorizon being active) has not been re-established yet.
+		if def.get("silent", false):
+			continue
 		if not (career.seen_event_ids.has(eid) or career.completed_quest_ids.has(eid)):
 			continue
 		for effect in def.get("unlocks", []):

@@ -149,6 +149,8 @@ func _rebuild_items() -> void:
 	var ongoing: Array = []
 	for inst: Dictionary in em.get_active_events("ongoing", st):
 		var def: Dictionary = em.get_event_def(inst.get("id", ""))
+		if def.get("silent", false):
+			continue
 		var trigger_type: String = def.get("trigger", {}).get("type", "")
 		var cond_type: String = def.get("condition", {}).get("type", "")
 		if trigger_type == "game_start" and cond_type != "immediate":
@@ -159,6 +161,8 @@ func _rebuild_items() -> void:
 	var completed: Array = []
 	for inst: Dictionary in all_completed:
 		var def: Dictionary = em.get_event_def(inst.get("id", ""))
+		if def.get("silent", false):
+			continue
 		if def.get("category", "") != "story":
 			completed.append(inst)
 
@@ -217,9 +221,15 @@ func _set_header_text(btn: Button, title: String, count: int, expanded: bool) ->
 
 # ── Event row ─────────────────────────────────────────────────────────────────
 
-func _build_event_row(inst: Dictionary, is_completed: bool, st: GameState, em: EventManager) -> Button:
+func _build_event_row(inst: Dictionary, is_completed: bool, st: GameState, em: EventManager) -> Control:
 	var event_id: String = inst.id
 	var def: Dictionary = em.get_event_def(event_id)
+
+	# Active all_of story quests get expanded sub-objective display
+	if not is_completed and def.get("category", "") == "story":
+		var cond: Dictionary = def.get("condition", {})
+		if cond.get("type", "") == "all_of":
+			return _build_all_of_row(inst, def, st, em)
 
 	var btn := Button.new()
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -263,6 +273,101 @@ func _build_event_row(inst: Dictionary, is_completed: bool, st: GameState, em: E
 
 	btn.button_down.connect(_on_row_pressed.bind(event_id))
 	return btn
+
+
+func _build_all_of_row(inst: Dictionary, def: Dictionary, st: GameState, em: EventManager) -> Control:
+	var event_id: String = inst.id
+	var career: CareerState = GameManager.career
+	var dark: bool = GameSettings.is_dark_mode
+	var cond: Dictionary = def.get("condition", {})
+	var sub_objectives: Array = cond.get("sub_objectives", [])
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 1)
+
+	# Title row — quest name + [X/total] counter, clickable
+	var title_btn := Button.new()
+	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	title_btn.focus_mode = Control.FOCUS_NONE
+	title_btn.add_theme_font_override("font", _font_exo2_semibold)
+	title_btn.add_theme_font_size_override("font_size", 15)
+	var progress_str: String = em.get_condition_display(event_id, st)
+	title_btn.text = def.get("title", event_id) + "  [" + progress_str + "]"
+	var title_style := StyleBoxFlat.new()
+	title_style.bg_color = Color(0.12, 0.22, 0.12) if dark else Color(0.910, 0.957, 0.910)
+	title_style.content_margin_left = 8
+	title_style.content_margin_right = 8
+	title_style.content_margin_top = 3
+	title_style.content_margin_bottom = 3
+	title_btn.add_theme_stylebox_override("normal", title_style)
+	title_btn.add_theme_stylebox_override("hover", title_style)
+	var title_text_color: Color = Color.WHITE if dark else Color(0.1, 0.1, 0.1)
+	title_btn.add_theme_color_override("font_color", title_text_color)
+	title_btn.add_theme_color_override("font_hover_color", title_text_color)
+	title_btn.button_down.connect(_on_row_pressed.bind(event_id))
+	vbox.add_child(title_btn)
+
+	# Sub-objective rows
+	for sub: Dictionary in sub_objectives:
+		var sub_key: String = event_id + ":" + sub.get("id", "")
+		var sub_done: bool = career.completed_sub_objectives.has(sub_key)
+		var sub_cond: String = sub.get("condition", "")
+		var sub_cond_data: Dictionary = sub.get("condition_data", {})
+
+		var row_btn := Button.new()
+		row_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		row_btn.focus_mode = Control.FOCUS_NONE
+		row_btn.add_theme_font_override("font", _font_exo2_regular)
+		row_btn.add_theme_font_size_override("font_size", 13)
+
+		var icon: String = "  ✓ " if sub_done else "  ○ "
+		var label_text: String = sub.get("label", "")
+		var prog_text: String = ""
+		if not sub_done:
+			match sub_cond:
+				"days_survived":
+					var threshold: int = int(sub_cond_data.get("threshold", 0))
+					prog_text = "  %s / %s" % [_fmt_int(st.current_day), _fmt_int(threshold)]
+				"credits_earned":
+					var threshold: float = float(sub_cond_data.get("threshold", 0))
+					var current: float = st.cumulative_resources_earned.get("cred", 0.0)
+					prog_text = "  ¢%s / %s" % [_fmt_int(int(current)), _fmt_int(int(threshold))]
+		row_btn.text = icon + label_text + prog_text
+
+		var row_style := StyleBoxFlat.new()
+		row_style.bg_color = Color(0.10, 0.18, 0.10) if dark else Color(0.94, 0.97, 0.94)
+		row_style.content_margin_left = 8
+		row_style.content_margin_right = 8
+		row_style.content_margin_top = 2
+		row_style.content_margin_bottom = 2
+		row_btn.add_theme_stylebox_override("normal", row_style)
+		row_btn.add_theme_stylebox_override("hover", row_style)
+		var row_color: Color
+		if sub_done:
+			row_color = Color(0.35, 0.55, 0.35) if dark else Color(0.25, 0.55, 0.25)
+		else:
+			row_color = Color(0.70, 0.70, 0.70) if dark else Color(0.35, 0.35, 0.35)
+		row_btn.add_theme_color_override("font_color", row_color)
+		row_btn.add_theme_color_override("font_hover_color", row_color)
+		row_btn.button_down.connect(_on_row_pressed.bind(event_id))
+		vbox.add_child(row_btn)
+
+	return vbox
+
+
+func _fmt_int(n: int) -> String:
+	var s := str(n)
+	var result := ""
+	var count := 0
+	for i in range(s.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = s[i] + result
+		count += 1
+	return result
 
 
 func _on_row_pressed(event_id: String) -> void:

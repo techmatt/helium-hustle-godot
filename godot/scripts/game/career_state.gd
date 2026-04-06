@@ -41,7 +41,7 @@ var seen_event_ids: Array[String] = []   # events seen in any prior run
 
 # Quest persistence
 var completed_quest_ids: Array[String] = []  # quests completed in any prior run
-var completed_sub_objectives: Array = []     # e.g., ["q6_open_horizons:ideology_rank_5"]
+var completed_sub_objectives: Array = []     # e.g., ["qhorizon_open_horizons:ideology_rank_5"]
 
 # Persistent project progress (for future use — empty for now)
 var project_progress: Dictionary = {}    # project_id → float (accumulated drain)

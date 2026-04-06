@@ -112,7 +112,7 @@
     "tier": "persistent",
     "unlock_condition": {
       "type": "quest_active",
-      "quest_id": "q6_open_horizons"
+      "quest_id": "qhorizon_open_horizons"
     },
     "costs": {
       "cred": 2000,

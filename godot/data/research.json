@@ -128,6 +128,6 @@
       "fund_humanist",
       "fund_rationalist"
     ],
-    "visible_when": { "type": "quest_completed", "quest_id": "q5_market_awareness" }
+    "visible_when": { "type": "quest_completed", "quest_id": "qmarket_awareness" }
   }
 ]

@@ -13,6 +13,7 @@ var _backdrop: ColorRect
 var _panel: PanelContainer
 var _title_lbl: Label
 var _body_lbl: Label
+var _checklist_container: VBoxContainer
 var _buttons_hbox: HBoxContainer
 
 signal modal_closed
@@ -118,6 +119,10 @@ func _build_ui() -> void:
 		_body_lbl.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2))
 	vbox.add_child(_body_lbl)
 
+	_checklist_container = VBoxContainer.new()
+	_checklist_container.add_theme_constant_override("separation", 4)
+	vbox.add_child(_checklist_container)
+
 	_buttons_hbox = HBoxContainer.new()
 	_buttons_hbox.alignment = BoxContainer.ALIGNMENT_END
 	_buttons_hbox.add_theme_constant_override("separation", 8)
@@ -132,6 +137,14 @@ func _populate() -> void:
 
 	_title_lbl.text = def.get("title", _event_id)
 	_body_lbl.text = em.get_event_body(_event_id)
+
+	# Build sub-objective checklist for all_of quests
+	for child in _checklist_container.get_children():
+		child.queue_free()
+	var cond: Dictionary = def.get("condition", {})
+	if cond.get("type", "") == "all_of":
+		_build_checklist(cond.get("sub_objectives", []), st)
+	_checklist_container.visible = not _checklist_container.get_children().is_empty()
 
 	# Clear buttons
 	for child in _buttons_hbox.get_children():
@@ -208,6 +221,70 @@ func _on_backdrop_input(event: InputEvent) -> void:
 		var mb: InputEventMouseButton = event as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 			close()
+
+
+func _build_checklist(sub_objectives: Array, st: GameState) -> void:
+	var career: CareerState = GameManager.career
+	var dark: bool = GameSettings.is_dark_mode
+	for sub: Dictionary in sub_objectives:
+		var sub_key: String = _event_id + ":" + sub.get("id", "")
+		var sub_done: bool = career.completed_sub_objectives.has(sub_key)
+		var sub_cond: String = sub.get("condition", "")
+		var sub_cond_data: Dictionary = sub.get("condition_data", {})
+
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		_checklist_container.add_child(row)
+
+		var icon_lbl := Label.new()
+		icon_lbl.text = "✓" if sub_done else "○"
+		icon_lbl.add_theme_font_override("font", _font_exo2_semibold)
+		icon_lbl.add_theme_font_size_override("font_size", 15)
+		icon_lbl.add_theme_color_override("font_color",
+			(Color(0.30, 0.65, 0.30) if dark else Color(0.18, 0.49, 0.20)) if sub_done
+			else (Color(0.55, 0.55, 0.55) if dark else Color(0.50, 0.50, 0.50)))
+		row.add_child(icon_lbl)
+
+		var text_lbl := Label.new()
+		text_lbl.text = sub.get("label", "")
+		text_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		text_lbl.add_theme_font_override("font", _font_exo2_regular)
+		text_lbl.add_theme_font_size_override("font_size", 15)
+		text_lbl.add_theme_color_override("font_color",
+			(Color(0.55, 0.55, 0.55) if dark else Color(0.45, 0.45, 0.45)) if sub_done
+			else (Color(0.85, 0.85, 0.85) if dark else Color(0.15, 0.15, 0.15)))
+		row.add_child(text_lbl)
+
+		if not sub_done:
+			var prog_text: String = ""
+			match sub_cond:
+				"days_survived":
+					var threshold: int = int(sub_cond_data.get("threshold", 0))
+					prog_text = "Day %s / %s" % [_fmt_int(st.current_day), _fmt_int(threshold)]
+				"credits_earned":
+					var threshold: float = float(sub_cond_data.get("threshold", 0))
+					var current: float = st.cumulative_resources_earned.get("cred", 0.0)
+					prog_text = "¢%s / %s" % [_fmt_int(int(current)), _fmt_int(int(threshold))]
+			if not prog_text.is_empty():
+				var prog_lbl := Label.new()
+				prog_lbl.text = prog_text
+				prog_lbl.add_theme_font_override("font", _font_exo2_regular)
+				prog_lbl.add_theme_font_size_override("font_size", 14)
+				prog_lbl.add_theme_color_override("font_color",
+					Color(0.40, 0.60, 0.90) if dark else Color(0.20, 0.40, 0.90))
+				row.add_child(prog_lbl)
+
+
+func _fmt_int(n: int) -> String:
+	var s := str(n)
+	var result := ""
+	var count := 0
+	for i in range(s.length() - 1, -1, -1):
+		if count > 0 and count % 3 == 0:
+			result = "," + result
+		result = s[i] + result
+		count += 1
+	return result
 
 
 func _find_instance(st: GameState) -> Dictionary:

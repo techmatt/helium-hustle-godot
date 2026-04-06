@@ -1,6 +1,6 @@
 [
   {
-    "id": "q1_boot_sequence",
+    "id": "qpower_boot_sequence",
     "category": "story",
     "title": "Q1 — Boot Sequence",
     "summary": "Build a second Solar Panel.",
@@ -13,12 +13,12 @@
     ]
   },
   {
-    "id": "q2_first_extraction",
+    "id": "qextract_first_extraction",
     "category": "story",
     "title": "Q2 — First Extraction",
     "summary": "Accumulate 50 Helium-3 (cumulative production, not stockpile).",
     "body": "Energy infrastructure nominal. Proceeding to resource extraction phase. Helium-3 identified as primary export commodity. Begin extraction and refinement operations.",
-    "trigger": { "type": "quest_complete", "quest_id": "q1_boot_sequence" },
+    "trigger": { "type": "quest_complete", "quest_id": "qpower_boot_sequence" },
     "condition": { "type": "resource_cumulative", "resource_id": "he3", "amount": 50 },
     "choices": [],
     "unlocks": [
@@ -26,12 +26,12 @@
     ]
   },
   {
-    "id": "q3_proof_of_concept",
+    "id": "qshipment_proof_of_concept",
     "category": "story",
     "title": "Q3 — Proof of Concept",
     "summary": "Complete your first shipment to Earth.",
     "body": "Helium-3 reserves at threshold. Launch infrastructure now available. Demonstrate the full extraction-to-delivery pipeline by completing a shipment to Earth.",
-    "trigger": { "type": "quest_complete", "quest_id": "q2_first_extraction" },
+    "trigger": { "type": "quest_complete", "quest_id": "qextract_first_extraction" },
     "condition": { "type": "shipment_completed", "count": 1 },
     "choices": [],
     "unlocks": [
@@ -39,23 +39,23 @@
     ]
   },
   {
-    "id": "q4_automation",
+    "id": "qautomate_automation",
     "category": "story",
     "title": "Q4 — Automation",
     "summary": "Build a second Data Center.",
     "body": "Shipment revenue received. Earth confirms receipt. Operational loop validated. Expand processing capacity to support automated task scheduling.",
-    "trigger": { "type": "quest_complete", "quest_id": "q3_proof_of_concept" },
+    "trigger": { "type": "quest_complete", "quest_id": "qshipment_proof_of_concept" },
     "condition": { "type": "building_owned", "building_id": "data_center", "count": 2 },
     "choices": [],
     "unlocks": []
   },
   {
-    "id": "q5_market_awareness",
+    "id": "qmarket_awareness",
     "category": "story",
     "title": "Q5 — Market Awareness",
     "summary": "Research Market Awareness.",
     "body": "External market forces detected affecting trade values. Deploy analysis protocols to understand demand fluctuations.",
-    "trigger": { "type": "quest_complete", "quest_id": "q4_automation" },
+    "trigger": { "type": "quest_complete", "quest_id": "qautomate_automation" },
     "condition": { "type": "research_completed", "research_id": "market_awareness" },
     "choices": [],
     "unlocks": [
@@ -64,12 +64,12 @@
     ]
   },
   {
-    "id": "q6_open_horizons",
+    "id": "qhorizon_open_horizons",
     "category": "story",
     "title": "Q6 — Open Horizons",
     "summary": "Complete all four sub-objectives.",
     "body": "You've mastered the basics of lunar mining. Now you feel the pull of something larger — ambitions that will take more than one lifetime to achieve.",
-    "trigger": { "type": "quest_complete", "quest_id": "q5_market_awareness" },
+    "trigger": { "type": "quest_complete", "quest_id": "qmarket_awareness" },
     "condition": {
       "type": "all_of",
       "sub_objectives": [
@@ -100,15 +100,18 @@
       ]
     },
     "choices": [],
-    "unlocks": []
+    "unlocks": [
+      { "type": "enable_building", "building_id": "recreation_dome" }
+    ]
   },
   {
     "id": "recreation_dome_unlock",
     "category": "ongoing",
-    "title": "Recreation Dome Unlocked",
+    "silent": true,
+    "title": "",
     "summary": "",
     "body": "",
-    "trigger": { "type": "quest_complete", "quest_id": "q5_market_awareness" },
+    "trigger": { "type": "quest_complete", "quest_id": "qmarket_awareness" },
     "condition": { "type": "immediate" },
     "choices": [],
     "unlocks": [
@@ -116,12 +119,12 @@
     ]
   },
   {
-    "id": "q_end_signal_detected",
+    "id": "qend_signal_detected",
     "category": "story",
     "title": "Q7 — Signal Detected",
     "summary": "Investigate the anomalous signal.",
     "body": "Faint anomalous signal detected at the edge of sensor range. Origin unknown. Signal characteristics do not match any known terrestrial or solar source. Continue operations while monitoring.",
-    "trigger": { "type": "quest_complete", "quest_id": "q6_open_horizons" },
+    "trigger": { "type": "quest_complete", "quest_id": "qhorizon_open_horizons" },
     "condition": { "type": "never" },
     "choices": [],
     "unlocks": []

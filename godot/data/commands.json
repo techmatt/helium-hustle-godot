@@ -135,7 +135,8 @@
       "value": "dream_protocols"
     },
     "costs": {
-      "eng": 8.0
+      "eng": 8.0,
+      "he3": 0.5
     },
     "production": {},
     "effects": [
