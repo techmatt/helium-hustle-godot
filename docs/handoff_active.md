@@ -4,51 +4,46 @@
 
 ## Changes Since Last Design Session
 
+- 2026-04-06: Speculator per-resource pools redesign prompted — 4 independent 
+  pools (one per tradeable resource), remove bleedover, Disrupt targets loading 
+  priority order, 4-line Adversaries sidebar, Arbitrage Engine applies to all 
+  pools, Speculator Intelligence updated.
+- 2026-04-06: Buy Power scaling formula fix prompted — changed from 
+  `1.0 + floor(peak/20) * 0.25` to `1.0 + max(0, peak - 100) * 0.01`. No 
+  bonus until peak energy production exceeds 100.
+- 2026-04-06: Rate display units prompted — all player-facing rates changed 
+  from `/s` and `/tick` to `/day`.
+- 2026-04-06: Boredom cap reduction + Recreation Dome prompted — base cap 
+  1000→500, Recreation Dome building (+100 cap per active unit, Humanist, 
+  300cr/30circuits/3land, gated on QHorizon), Dream Protocols threshold 300→200.
+- 2026-04-06: Quest ID rename + multi-objective sidebar prompted — all quest 
+  IDs changed to semantic names (QPower, QExtract, QShipment, QAutomate, 
+  QMarket, QHorizon, QEnd), Events sidebar shows sub-objective checklist for 
+  multi-objective quests, click-to-open dialog shows sub-objectives.
+- 2026-04-06: Building display fixes prompted — research requirement shows 
+  display name, Recreation Dome gated on QHorizon (not visible at start), 
+  moved to Storage category, Infrastructure category removed.
+- 2026-04-06: Retirement summary modal pause fix prompted — game must pause 
+  when modal appears, verify forced retirement uses dynamic boredom cap.
+- 2026-04-06: Retirement panel redesign prompted — merged This Run + Career 
+  Records into single section with RECORD badges, hide inactive bonuses, 
+  source hints on bonus lines.
+- 2026-04-06: Bonus building active count bug fix prompted — bonus buildings 
+  should have active_count incremented on grant.
+- 2026-04-06: Data Center Fabricator requirement removal prompted.
+- 2026-04-06: Building category merge prompted — Power + Processors → Core.
+- 2026-04-06: Game speed control bar improvement prompted — icon pause button, 
+  spacing, active highlight, remove section header.
+- 2026-04-06: Launch pad pause/play icon toggle prompted — replace text button 
+  with SVG icon toggle using pause.svg/play.svg.
 - 2026-04-05: Handoff file restructure — split `handoff_systems.md` into 7 
   domain-specific files. Added `handoff_index.md` as the opening document.
 - 2026-04-05: Fuel Cell Array building + Chemical Energy Initiative project 
   prompted — new building (propellant → energy), gated on persistent project, 
-  gated on Q6 active. Nationalist alignment.
+  gated on QHorizon active. Nationalist alignment.
 - 2026-04-05: Quest chain revision prompted — removed old Q5 (Revenue Target), 
   Q7 (First Legacy), Q8 (Influence). Renumbered Market Awareness → Q5. Added 
   Q6 (Open Horizons) multi-objective quest with 4 sub-goals.
-- 2026-04-04: Command boredom cost tracking fix prompted — generic tracking of 
-  command boredom costs in `lifetime_boredom_sources` (e.g., Sell Cloud Compute 
-  0.1 boredom/execution). Clarified that command boredom costs are base command 
-  properties, NOT gated on AI Consciousness Act.
-- 2026-04-04: Building resolution epsilon prompted — `RESOURCE_EPSILON = 0.001` 
-  tolerance on Phase 1 upkeep affordability checks to prevent floating point 
-  false stalls.
-- 2026-04-04: Command rate tracking fix prompted — all command resource effects 
-  (boredom, credits, resources) should appear in Stats panel instantaneous/rolling 
-  avg breakdown, not just energy.
-- 2026-04-04: Launch pad pause toggle prompted — replaces "None (disabled)" 
-  dropdown with per-pad pause button. Paused pads skip Load/Launch commands, 
-  retain resource+cargo, manual Launch still works, yellow tint. Saved/loaded, 
-  resets on retirement.
-- 2026-04-04: Progressive disclosure re-gating prompted — nav buttons (Launch Pads, 
-  Research) gate on current-run ownership only (no lifetime override). Building 
-  visibility lifetime override does NOT override research/event gates. Resources 
-  and commands keep lifetime visibility.
-- 2026-04-04: "New" item indicators prompted — gold/amber dot on nav buttons, 
-  gold left accent bar on cards/rows when items transition hidden→visible mid-run. 
-  Cleared on click/hover. Ephemeral, not saved.
-- 2026-04-04: Retirement panel UI polish prompted — card-style career bonus rows 
-  with colored accent bars, green "▲ NEW" badges, compact "What Persists", section 
-  header backgrounds.
-- 2026-04-04: Research purchase bug prompted — affordability check not recognizing 
-  sufficient science for purchase.
-- 2026-04-04: Production overhaul prompted (prior session) — multi-pass building 
-  resolution, overflow model, command partial production, command output-cap skip, 
-  end-of-tick clamp.
-- 2026-04-04: Nav progressive disclosure prompted (prior session) — Launch Pads 
-  and Research nav button gating.
-- 2026-04-04: Retirement panel bug fixes prompted (prior session) — dark mode 
-  dialog, Buy Power format string.
-- 2026-04-04: Consistent resource display names prompted (prior session).
-- 2026-04-04: Ideology nav visibility fix prompted (prior session).
-- 2026-04-04: Lifetime stats cards prompted (prior session).
-- 2026-04-04: Milestone boredom reduction system removed (prior session).
 
 ---
 
@@ -103,6 +98,22 @@
 ### Prompted But Not Yet Verified
 These Claude Code prompts have been produced but implementation may be in progress 
 or not yet confirmed working:
+- Speculator per-resource pools (4 pools, no bleedover, Disrupt loading priority)
+- Buy Power scaling formula fix (threshold 100, coefficient 0.01)
+- Rate display units (/day everywhere)
+- Boredom cap 500 + Recreation Dome (+100/dome, QHorizon gated, Storage category)
+- Dream Protocols visibility threshold (300→200)
+- Quest ID rename (semantic IDs: QPower through QEnd)
+- Multi-objective quest sidebar display (sub-objective checklist in Events panel)
+- Retirement panel redesign (merged sections, RECORD badges, source hints)
+- Retirement summary modal pause fix
+- Bonus building active count bug fix
+- Data Center Fabricator requirement removal
+- Building category merge (Power + Processors → Core)
+- Game speed control bar improvement (icon pause, spacing, highlight)
+- Launch pad pause/play icon toggle
+- Building research requirement display names
+- Recreation Dome visibility gating (QHorizon)
 - Quest chain revision (Q5 removed, Market Awareness→Q5, Q6 Open Horizons 
   multi-objective, Q7/Q8 removed)
 - Fuel Cell Array building + Chemical Energy Initiative project
@@ -137,7 +148,9 @@ or not yet confirmed working:
 1. **Land all prompted changes** — verify the prompted changes above are 
    implemented and tests pass, then do a clean playtest
 2. **Playtest pass & pacing tuning** — manual Run 1-2-3 playthrough needed with 
-   telemetry to validate pacing, progressive disclosure flow, career bonus feel
+   telemetry to validate pacing, progressive disclosure flow, career bonus feel. 
+   Note: boredom phase curve was calibrated for 0–1000 cap and may need retuning 
+   for the new 500 base cap.
 
 ### Important for Arc 1 Completeness
 3. **More achievements** — Programmer category, additional Miner/Trader, Scholar, 
@@ -151,8 +164,8 @@ or not yet confirmed working:
    reset (design details TBD: auto-apply? multiple named loadouts?)
 
 ### Polish & UI Enhancement
-8. **Speculator Intelligence UI** — display burst timing/targets/size after 
-   research (data exists in GameState, needs UI design decisions)
+8. **Speculator Intelligence UI** — display per-resource pool counts and 
+   suppression amounts after research (data exists in GameState, needs UI)
 9. **Recent Launches color coding** — color by profitability or demand tier
 10. **Retirement forecast display** — "retire in ~N days" on status bar
 11. **Ideology UI polish** — low priority
@@ -199,46 +212,43 @@ shipment → Data Centers → Research Lab → Retirement ~tick 805.
 
 **Known issues:** Optimizer does not model demand system, ideology bonuses, 
 proportional speculator decay, multi-pass building resolution, overflow model, 
-command partial production, or propellant gating. Needs full sync before 
-re-running. The `he3_50` objective is structurally broken (violates objective 
-design principle #6). Boredom parameters need updating. Ideology formula has 
-changed (see `handoff_progression.md`). Milestone system has been removed.
+command partial production, per-resource speculator pools, dynamic boredom cap, 
+or propellant gating. Needs full sync before re-running. The `he3_50` objective 
+is structurally broken (violates objective design principle #6). Boredom 
+parameters need updating (cap now 500 base). Ideology formula has changed (see 
+`handoff_progression.md`). Milestone system has been removed.
 
 ---
 
 ## Claude Code Prompts Produced This Session
 
-### Current session (quest chain + fuel cell + restructure)
-1. `quest_chain_revision.md` — revised quest chain: remove Q5/Q7/Q8, renumber 
-   Market Awareness→Q5, add Q6 Open Horizons multi-objective quest
-2. `fuel_cell_array.md` — Fuel Cell Array building + Chemical Energy Initiative 
-   persistent project
+### Current session (2026-04-06)
+1. `speculator_per_resource_pools.md` — 4 independent per-resource speculator 
+   pools, remove bleedover, Disrupt targets loading priority order
+2. `fix_buy_power_scaling.md` — formula: `1.0 + max(0, peak - 100) * 0.01`
+3. `retirement_panel_redesign.md` — merged sections, RECORD badges, source hints, 
+   hide inactive bonuses
+4. `rate_display_units.md` — all player-facing rates to /day
+5. `boredom_cap_recreation_dome.md` — cap 1000→500, Recreation Dome +100/dome, 
+   Dream Protocols threshold 300→200
+6. `quest_id_rename_and_sidebar.md` — semantic quest IDs, multi-objective sidebar
+7. `building_display_fixes.md` — research requirement names, Recreation Dome 
+   gating + Storage category
+8. `merge_building_categories.md` — Power + Processors → Core
+9. `fix_retirement_modal_pause.md` — pause on modal, verify dynamic cap
+10. `fix_bonus_building_active.md` — active_count increment on bonus grant
+11. `fix_data_center_requirement.md` — remove Fabricator requirement
+12. `pause_play_icon_toggle.md` — launch pad pause/play SVG icons
+13. `improve_speed_controls.md` — icon pause, spacing, highlight, remove header
 
-### Prior session (playtest + polish)
-3. `fix_command_boredom_tracking.md` — generic command boredom cost tracking in 
-   `lifetime_boredom_sources`
-4. `fix_building_stall_epsilon.md` — floating point epsilon for building upkeep 
-   affordability checks
-5. `fix_command_rate_tracking.md` — all command resource effects in Stats panel 
-   instantaneous/rolling avg breakdown
-6. `launch_pad_pause_toggle.md` — pause button replacing "None (disabled)" dropdown
-7. `fix_progressive_disclosure_regating.md` — current-run nav gating, event-gate 
-   respect for building visibility
-8. `new_item_indicators.md` — gold dot/accent bar "new" indicators
-9. `retirement_panel_polish.md` — card-style career bonuses, section headers, 
-   compact layout
-10. `fix_research_purchase.md` — research affordability check bug
+### Prior session (2026-04-05)
+14. `quest_chain_revision.md` — revised quest chain
+15. `fuel_cell_array.md` — Fuel Cell Array building + Chemical Energy Initiative
 
-### Earlier session (production overhaul + cleanup)
-11. `production_overhaul.md` — multi-pass building resolution, overflow model, 
-    command partial production, command output-cap skip, end-of-tick clamp
-12. `nav_progressive_disclosure.md` — Launch Pads and Research nav button gating
-13. `fix_retirement_panel.md` — dark mode dialog fix, Buy Power format string fix
-14. `consistent_resource_names.md` — display names from JSON, "Circuit Boards" 
-    canonical name
-15. `fix_ideology_nav.md` — Ideologies button and sidebar hidden until unlock
-16. `lifetime_stats.md` — Boredom and Credits lifetime breakdown cards in Stats
-17. `remove_milestones.md` — remove milestone boredom reduction system
+### Earlier prompts (see prior handoff_active.md for full list)
+16–30. Production overhaul, building fixes, progressive disclosure, retirement 
+    panel polish, research bug, nav gating, ideology fix, lifetime stats, 
+    milestone removal, etc.
 
 ---
 

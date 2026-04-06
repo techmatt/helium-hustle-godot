@@ -71,14 +71,13 @@ After ALL building and command processing, a single clamp pass runs:
   set current = cap.
 - If current < 0 (rare transient from epsilon-tolerance consumption), clamp to 0.
 - Accumulate overflow into per-resource rolling averages for Stats display.
+- Boredom clamped to effective boredom cap (500 + Recreation Dome bonus).
 
 GameState fields:
 - `overflow_this_tick: Dictionary` — resource_id → float, reset each tick
 - `overflow_rolling_avg: Dictionary` — resource_id → float, rolling average
 
-This is the ONLY place resources are clamped to storage caps. Boredom uses the 
-same clamp path — its effective cap (base 500 + Recreation Dome bonus) triggers 
-forced retirement when reached.
+This is the ONLY place resources are clamped to storage caps.
 
 ## Partial Production (Input-Constrained)
 
@@ -106,7 +105,21 @@ Buildings granted free by persistent projects (e.g., Foundation Grant) or
 achievements (e.g., Powerhouse) track `bonus_count` separately. Cost scaling uses 
 `max(0, owned_count - bonus_count)`. Bonus buildings are granted on run start, 
 with `owned_count`, `active_count`, and `bonus_count` all incremented. Storage 
-caps are recalculated after granting.
+caps (including dynamic boredom cap) are recalculated after granting.
+
+## Building Categories
+
+| Category | Buildings |
+|----------|-----------|
+| Core | Solar Panel, Microwave Receiver, Fuel Cell Array, Data Center |
+| Storage | Battery, Storage Depot, Recreation Dome |
+| Extraction | Regolith Excavator, Ice Extractor |
+| Processing | Smelter, Refinery, Fabricator, Electrolysis Plant |
+| Trade | Launch Pad, Arbitrage Engine |
+| Science | Research Lab |
+
+Categories display in this order. Category headers hide when they contain zero 
+visible buildings.
 
 ## Building Alignment
 
@@ -120,6 +133,17 @@ discount `pow(0.97, rank)`.
 Ideology alignment labels are hidden on building cards until the Ideologies nav 
 panel is unlocked.
 
+## Recreation Dome
+
+Humanist-aligned building in the Storage category. Raises the dynamic boredom 
+cap by +100 per active unit. No production, no upkeep.
+
+- **Cost:** 300 credits, 30 circuit boards, 3 land
+- **Cost scaling:** 1.5x per purchased unit (standard formula)
+- **Effect:** +100 boredom cap per active unit
+- **Unlock:** Gated on QHorizon (Open Horizons) quest being active. Not visible 
+  before QHorizon activates. Lifetime tracking does NOT override this quest gate.
+
 ## Unlock Requirements
 
 Buildings with a non-empty `requires` field or gated by `enable_building` event 
@@ -127,26 +151,34 @@ effects are not purchasable until requirements are met. The `requires` field
 supports `building_id` (own at least 1) and `building_id:N` (own at least N). 
 GameSimulation enforces this (defense in depth).
 
+Notable requires gates: Research Lab requires `data_center:2`. Smelter requires 
+Regolith Excavator. Fabricator requires Smelter. Data Center has no building 
+prerequisites.
+
 ## Building Visibility (Progressive Disclosure)
 
 A building is visible if:
 1. It has no `requires` field AND is not gated by an `enable_building` event 
-   effect → always visible
+   effect or quest gate → always visible
 2. Its `requires` building-prerequisite condition is currently satisfied → visible
 3. Its ID is in `career_state.lifetime_owned_building_ids` AND the building is 
-   NOT gated behind an `enable_building` event effect → visible (lifetime override 
-   for building prereqs only, not for research/event gates)
+   NOT gated behind an `enable_building` event effect or quest gate → visible 
+   (lifetime override for building prereqs only, not for research/event/quest gates)
 4. Its `enable_building` event gate has been satisfied (event has fired this run 
    or unlock effects re-applied from `seen_event_ids` on run start) → visible
+5. Its quest gate is satisfied (quest is active or completed this run) → visible
 
 **Key rule:** `lifetime_owned_building_ids` overrides building-prerequisite gates 
-(like "Smelter requires Excavator") but does NOT override research or event gates 
-(like Ice Extractor/Electrolysis Plant behind Propellant Synthesis research chain, 
-or Fuel Cell Array behind Chemical Energy Initiative project). The player must 
-progress through research/event/project chains again each run.
+(like "Smelter requires Excavator") but does NOT override research, event, or 
+quest gates (like Electrolysis Plant behind Propellant Synthesis research chain, 
+Fuel Cell Array behind Chemical Energy Initiative project, or Recreation Dome 
+behind QHorizon). The player must progress through these chains again each run.
 
 Category headers hide when they contain zero visible buildings. The "Show All 
 Cards" debug toggle overrides all visibility gating.
 
-Notable requires gates: Research Lab requires `data_center:2` (player starts 
-with 1). Smelter requires Regolith Excavator. Fabricator requires Smelter.
+## Building Requirement Display
+
+Building cards that show research unlock requirements display the research item's 
+player-facing display name (from `research.json`), not the internal ID. Example: 
+"Requires: Propellant Synthesis" not "Requires: Research propellant_synthesis".

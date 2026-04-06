@@ -831,8 +831,10 @@ func start_new_run() -> void:
 			"starting_buildings":
 				for bsn: String in reward.get("buildings", {}):
 					var count: int = int((reward.get("buildings", {}) as Dictionary).get(bsn, 0))
-					state.buildings_owned[bsn] = state.buildings_owned.get(bsn, 0) + count
-					state.buildings_active[bsn] = state.buildings_active.get(bsn, 0) + count
+					var prev_owned: int = state.buildings_owned.get(bsn, 0)
+					var prev_active: int = state.buildings_active.get(bsn, prev_owned)
+					state.buildings_owned[bsn] = prev_owned + count
+					state.buildings_active[bsn] = prev_active + count
 					state.buildings_bonus[bsn] = state.buildings_bonus.get(bsn, 0) + count
 					for bdef: Dictionary in _buildings_data:
 						if bdef.short_name == bsn:

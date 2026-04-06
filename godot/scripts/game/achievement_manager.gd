@@ -99,8 +99,10 @@ func apply_reward(state: GameState, achievement_id: String, buildings_data: Arra
 			var count: int = int(rparams.get("count", 0))
 			if bsn.is_empty() or count <= 0:
 				return
-			state.buildings_owned[bsn] = state.buildings_owned.get(bsn, 0) + count
-			state.buildings_active[bsn] = state.buildings_active.get(bsn, 0) + count
+			var prev_owned: int = state.buildings_owned.get(bsn, 0)
+			var prev_active: int = state.buildings_active.get(bsn, prev_owned)
+			state.buildings_owned[bsn] = prev_owned + count
+			state.buildings_active[bsn] = prev_active + count
 			state.buildings_bonus[bsn] = state.buildings_bonus.get(bsn, 0) + count
 			for bdef: Dictionary in buildings_data:
 				if bdef.get("short_name", "") == bsn:

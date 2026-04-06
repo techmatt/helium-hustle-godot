@@ -7,10 +7,25 @@ For exact numbers (costs, rates, thresholds), see `handoff_constants.md`.
 ## Boredom & Retirement
 
 ### Boredom Model
-Boredom accumulates via discrete phase steps. Base hard cutoff at 1000 — immediate 
-forced retirement. The effective cap is dynamic: 1000 + (100 × active Recreation Dome 
-count). Phase transitions determined by day counter using boredom curve 
-(see `handoff_constants.md` for phase table).
+Boredom accumulates via discrete phase steps. Dynamic cap: base 500 + 100 per 
+active Recreation Dome. Forced retirement when boredom reaches effective cap. 
+Phase transitions determined by day counter using boredom curve (see 
+`handoff_constants.md` for phase table).
+
+**Note:** The boredom phase curve was originally calibrated for a 0–1000 cap. 
+It may need retuning for the 500 base cap after playtesting.
+
+### Dynamic Boredom Cap
+```
+effective_boredom_cap = 500 + (active_recreation_dome_count * 100)
+```
+
+Recalculated when buildings are bought/sold/enabled/disabled (same as storage 
+caps). Forced retirement triggers when `boredom >= effective_boredom_cap`. 
+End-of-tick clamp uses effective cap. Sidebar displays `boredom / effective_cap`.
+
+If Recreation Domes are sold or disabled mid-run (lowering cap below current 
+boredom), forced retirement triggers on the next tick.
 
 ### Boredom Rate Modifiers (all stack multiplicatively)
 - **Stress Tolerance** research: ×0.85
@@ -32,8 +47,9 @@ NOT by special-casing in boredom tracking or the Stats panel. Creates tradeoff:
 -15% base boredom rate vs operational boredom tax.
 
 ### Retirement
-- Forced at boredom >= effective cap (base 1000, +100 per active Recreation Dome). Current tick finishes processing first.
-- Voluntary via Retirement nav panel (unlocked by Q3).
+- Forced at effective boredom cap. Current tick finishes processing first. Game 
+  simulation pauses when retirement summary modal appears.
+- Voluntary via Retirement nav panel (unlocked by QShipment).
 - **Persists:** CareerState (lifetime stats, seen_event_ids, completed_quest_ids, 
   completed_sub_objectives, max ideology ranks, max ideology scores, 
   lifetime_researched_ids, lifetime_owned_building_ids, 
@@ -43,7 +59,8 @@ NOT by special-casing in boredom tracking or the Stats panel. Creates tradeoff:
   ideology values (reset to head-start scores, see Career Bonuses), demand state, 
   boredom, day counter, land, personal projects, event instances, cumulative 
   counters, building stall status, overflow tracking, lifetime source accumulators, 
-  active modifiers (re-derived from CareerState on next run start)
+  active modifiers (re-derived from CareerState on next run start), 
+  speculators (all 4 pools to 0), speculators_ever_seen
 - **Programs:** Slots kept, command queues emptied, pointers and assignments reset.
 
 ### Career Bonuses (applied on run start)
@@ -57,17 +74,45 @@ balance. Rewards mastering the trade loop.
 At 800 days: ~1% reduction. At 1500 days: ~1.9%. Stacks multiplicatively with 
 other boredom modifiers in `_get_boredom_multiplier()`.
 
-**Buy Power Scaling** — `buy_power_mult = 1.0 + floor(peak_power_production / 20.0) * 0.25`. 
+**Buy Power Scaling** — `buy_power_mult = 1.0 + max(0, peak_power_production - 100) * 0.01`. 
 Multiplies both Buy Power energy output and credit cost. Same energy-per-credit 
-ratio, better energy-per-processor-tick. At peak 20: 1.25x. At peak 80: 2.0x. 
-Stored in `active_modifiers` as `buy_power_mult`, re-derived from CareerState on 
-run start.
+ratio, better energy-per-processor-tick. At peak 100 or below: 1.0x (no bonus). 
+At peak 150: 1.5x. At peak 200: 2.0x. At peak 300: 3.0x. Stored in 
+`active_modifiers` as `buy_power_mult`, re-derived from CareerState on run start.
 
 **Ideology Head Start** — on run start, each axis begins with a score derived from 
 career-best scores: `starting_score = score_for_rank(continuous_rank * 0.2)` where 
 `continuous_rank = continuous_rank_for_score(max_ideology_score_for_axis)`. Best 
 Humanist rank 5 (score 1319) → start at rank 1.0 (score 100). Best rank 10 → 
 start at rank 2.0 (score 250).
+
+### Pre-Retirement Panel
+The "Retire" nav button opens a center panel with two sections:
+
+**THIS RUN (DAY N)** — single merged section showing current-run stats with 
+inline RECORD badges:
+- Credits earned, Shipments completed, Buildings built, Peak energy production 
+  (energy/day), Research completed (current/total), Highest ideology rank 
+  (hidden if None), Run length (days)
+- On Run 2+: stats that beat previous career bests show "▲ RECORD (prev: X)"
+- On Run 1: RECORD badges suppressed (everything is implicitly a first record)
+
+**NEXT RUN BONUSES** — each visible bonus shows value with delta, plus a source 
+hint line in muted text:
+- Starting credits: "↳ increases with best career revenue"
+- Boredom resilience: "↳ increases with longest run"
+- Buy Power scaling: "↳ increases with peak energy production" (hidden when 1.0x)
+- Ideology head start: "↳ increases with highest ideology ranks" (hidden when 
+  all axes start at 0)
+
+"Retire Now" button with confirmation dialog.
+
+### Retirement Summary Modal
+Shown on forced/voluntary retirement. Same merged stat section with RECORD 
+badges, same bonus display with source hints, same hide-when-inactive rules. 
+Game simulation must be fully paused when this modal is displayed. Card-style 
+bonus rows with colored accent bars and "▲ NEW" badges when bonus improved this 
+run. "WHAT PERSISTS" compact single line. "Continue" button starts next run.
 
 ### Run Initialization Sequence
 1. Load CareerState from save
@@ -80,41 +125,8 @@ start at rank 2.0 (score 250).
 8. Re-apply achievement rewards (existing logic)
 9. Re-apply completed event unlock effects (existing logic)
 10. Grant bonus buildings (Foundation Grant, achievements)
-11. Recalculate storage caps
+11. Recalculate storage caps (including dynamic boredom cap)
 12. Quest chain picks up from first incomplete quest
-
-### Pre-Retirement Panel
-The "Retire" nav button opens a center panel showing: This Run stats (live), 
-Career Records (with NEW indicators when this run sets records), Next Run Bonuses 
-preview (projected values with deltas showing improvement from this run), and a 
-"Retire Now" button with confirmation dialog.
-
-### Retirement Summary Panel UI
-The retirement summary modal (shown on forced/voluntary retirement) uses styled 
-sections and card-based layout for career bonuses:
-
-**Title area:** "Retirement — Boredom Limit Reached" (or "Voluntary Retirement") 
-with a styled subtitle: "Run N — X days survived" in secondary/muted color.
-
-**Section headers:** "THIS RUN", "CAREER TOTALS", "WHAT PERSISTS", "CAREER BONUSES 
-(NEXT RUN)" each get a subtle background fill spanning full width (light gray in 
-light mode, slightly lighter dark in dark mode).
-
-**What Persists:** Compact single line: "Events, statistics, and project progress 
-carry over to your next run." (replaces three bullet points).
-
-**Career Bonuses — card-style rows:** Each bonus rendered as a card row with:
-- 4px colored left accent bar (Starting Credits: green/credits color, Boredom 
-  Resilience: gray/boredom color, Buy Power Scaling: yellow-orange/energy color, 
-  Ideology Head Start: purple or teal)
-- Bonus name left-aligned, bonus value right-aligned in bold/larger text
-- Explanation text below name in smaller/muted color
-- Green "▲ NEW" badge next to value when this run set a new record for that bonus
-- Rows with NEW indicator get a very faint green background tint
-- "none yet" state displayed in muted/italic text
-- Small gap (4-8px) between rows
-
-All colors work in both light and dark mode.
 
 ### Future: Consciousness Mechanic (DO NOT IMPLEMENT)
 Dream and boredom-reducing effects secretly accumulate a hidden "consciousness" 
@@ -167,7 +179,7 @@ Per-item `visible_when` conditions in `research.json`. Supported condition types
 | Speculator Analysis | Market Awareness purchased |
 | Trade Promotion | Market Awareness purchased |
 | Shipping Efficiency | >= 10 total shipments (career + current run) |
-| Geopolitical Intelligence | Q7 completed |
+| Geopolitical Intelligence | QAutomate completed |
 | Propellant Synthesis | event_seen gating (Propellant Discovery event) |
 
 An item is also visible if its ID is in `career_state.lifetime_researched_ids` 
@@ -290,7 +302,7 @@ each tick by ProjectManager).
 
 ### Chemical Energy Initiative
 Persistent project. Costs 2,000 credits, 1,000 science, 1,000 propellant. Gated 
-on Q6 (Open Horizons) being active (`quest_active` condition). On completion, 
+on QHorizon (Open Horizons) being active (`quest_active` condition). On completion, 
 unlocks the Fuel Cell Array building via `enable_building` effect. Completion 
 carries across retirements; `enable_building` reward re-applied on run start.
 

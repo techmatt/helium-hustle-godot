@@ -93,7 +93,7 @@
   "land": {
     "base_cost": 200,
     "cost_scaling": 1.5,
-    "land_per_purchase": 10
+    "land_per_purchase": 15
   },
   "ideology": {
     "push_amount": 1,

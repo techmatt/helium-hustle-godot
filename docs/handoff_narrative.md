@@ -14,7 +14,7 @@ modal and pause; previously-seen events appear silently. Clicking any event entr
 in the Events panel opens the EventModal with that event's text (does not pause).
 
 ### Event Panel Visibility Rules
-- **Quest chain events** (Q1–Q_END): The currently active quest shows in Story 
+- **Quest chain events** (QPower–QEnd): The currently active quest shows in Story 
   with progress indicator. Completed quests displayed in Story panel instead.
 - **Standalone condition_met events** (Propellant Discovery, Ideology Unlock, 
   etc.): Hidden from the Events panel entirely until they trigger. They should 
@@ -40,12 +40,12 @@ etc.) remain in the Events panel as before.
 `days_survived`, `credits_earned`.
 
 ### `all_of` Compound Condition
-Used by Q6 (Open Horizons). Wraps multiple sub-objectives that must all be 
+Used by QHorizon (Open Horizons). Wraps multiple sub-objectives that must all be 
 satisfied. Each sub-objective has its own `condition` and `condition_data`. When 
 a sub-objective is satisfied, it is latched permanently in 
 `career_state.completed_sub_objectives` using a namespaced key 
-(`quest_id:sub_objective_id`, e.g., `"Q6:ideology_rank_5"`). The quest completes 
-when all sub-objectives are latched.
+(`quest_id:sub_objective_id`, e.g., `"QHorizon:ideology_rank_5"`). The quest 
+completes when all sub-objectives are latched.
 
 ### Unlock Effect Types
 `enable_building`, `enable_nav_panel`, `enable_project`, `set_flag`.
@@ -61,23 +61,27 @@ project availability, and flags survive retirement.
 
 ### Design Principles
 Quests track player accomplishments (not passive events). There must always be an 
-active quest (Q_END cap ensures this). Quests labeled "Q1 —", "Q2 —", etc. Not 
-strictly linear — system supports forks and multi-objective quests. Progress 
-indicators for threshold conditions.
+active quest (QEnd cap ensures this). Not strictly linear — system supports forks 
+and multi-objective quests. Progress indicators for threshold conditions.
 
-### Quest Sequence
+### Quest IDs
+All quests use semantic IDs (not numeric). This allows inserting new quests 
+without renumbering:
 
-| Quest | Name | Condition | Unlocks |
-|-------|------|-----------|---------|
-| Q1 | Boot Sequence | Own 2 Solar Panels | — |
-| Q2 | First Extraction | 50 cumulative He-3 | Launch Pad |
-| Q3 | Proof of Concept | 1 shipment completed | Foundation Grant, Retirement, Projects |
-| Q4 | Automation | Own 2 Data Centers | — |
-| Q5 | Market Awareness | Complete Market Awareness research | — |
-| Q6 | Open Horizons | `all_of` (4 sub-objectives, see below) | — |
-| Q_END | Signal Detected | `never` | Arc 2 transition |
+| Quest ID | Display Name | Condition | Unlocks |
+|----------|-------------|-----------|---------|
+| QPower | Boot Sequence | Own 2 Solar Panels | — |
+| QExtract | First Extraction | 50 cumulative He-3 | Launch Pad |
+| QShipment | Proof of Concept | 1 shipment completed | Foundation Grant, Retirement, Projects |
+| QAutomate | Automation | Own 2 Data Centers | — |
+| QMarket | Market Awareness | Complete Market Awareness research | — |
+| QHorizon | Open Horizons | `all_of` (4 sub-objectives, see below) | — |
+| QEnd | Signal Detected | `never` | Arc 2 transition |
 
-### Q6 — Open Horizons
+Player-facing display shows the display name, not the quest ID. Display format: 
+"Q6 — Open Horizons" (sequential number + display name).
+
+### QHorizon — Open Horizons
 
 Flavor text: "You've mastered the basics of lunar mining. Now you feel the pull 
 of something larger — ambitions that will take more than one lifetime to achieve."
@@ -92,11 +96,11 @@ Four sub-objectives, all required, any order, across multiple runs:
 | `credits_100k` | Earn 100,000 credits in one lifetime | `credits_earned` | 100000 | Current-run `state.lifetime_credits_earned` |
 
 Sub-objective completion is stored in `career_state.completed_sub_objectives` as 
-namespaced keys (e.g., `"Q6:ideology_rank_5"`). Persists across retirements.
+namespaced keys (e.g., `"QHorizon:ideology_rank_5"`). Persists across retirements.
 
 `persistent_project_completed_any` checks `career_state.completed_projects`, so 
-if a player completed a persistent project before Q6 became active, it latches 
-immediately when Q6 activates.
+if a player completed a persistent project before QHorizon became active, it 
+latches immediately when QHorizon activates.
 
 On Run 2+, quest chain picks up from first incomplete quest. Completed quests' 
 unlock effects re-applied on run start.
@@ -107,6 +111,45 @@ unlock effects re-applied on run start.
 - **Ideology Unlock:** Triggers when Geopolitical Intelligence research completed, 
   enables Ideologies nav panel. Hidden from Events panel until it fires.
 - **Boredom Phase events:** Fire on phase transitions.
+
+---
+
+## Events Panel — Multi-Objective Sidebar Display
+
+When the active quest uses an `all_of` condition (has sub-objectives), the Events 
+panel sidebar expands to show each sub-objective with individual progress:
+
+```
+▼ Story (1)
+  Open Horizons                                    [1/4]
+    ✓ Reach rank 5 in any ideology axis
+    ○ Complete a persistent project
+    ○ Survive 10 years               1,450 / 3,650
+    ○ Earn 100,000 credits              6,558 / 100,000
+```
+
+Rules:
+- Quest display name on the first line with `[completed/total]` counter
+- Each sub-objective indented below
+- Completed: ✓ prefix, muted text style
+- Incomplete: ○ prefix, normal text
+- Quantitative sub-objectives show inline progress `current / target`
+- Boolean sub-objectives show only ✓ or ○
+- Progress for single-run conditions shows current-run values; latched 
+  sub-objectives always show ✓ regardless of current-run state
+
+For quests WITHOUT sub-objectives, sidebar display is unchanged (single line).
+
+### Click-to-Open Dialog
+Clicking the active quest in the Events sidebar opens the EventModal showing:
+- Quest display name as title
+- Quest flavor text
+- Full sub-objective checklist with progress (same layout as sidebar but with 
+  more room for labels and values)
+- "Continue" button to close
+
+This rendering is general — driven by the `all_of` condition structure, not 
+hardcoded to QHorizon.
 
 ---
 
@@ -148,7 +191,7 @@ The "Story" nav button (left sidebar) opens a center panel with two sections:
 Primary Objectives and Achievements.
 
 ### Primary Objectives
-Displays the quest chain (Q1–Q_END) as a vertical list. Completed quests show 
+Displays the quest chain (QPower–QEnd) as a vertical list. Completed quests show 
 checkmark, name, one-sentence summary, and what they unlocked. The active quest 
 shows highlighted with condition text and progress indicator. The "Active" label 
 should match the size of section headers. Future quests beyond the active one are 
@@ -157,10 +200,10 @@ completely hidden.
 Clicking a completed quest opens the EventModal with the full original event text 
 (does not pause the game).
 
-**Q6 (Open Horizons) special layout:** When active, displays a checklist of 
+**QHorizon (Open Horizons) special layout:** When active, displays a checklist of 
 sub-objectives instead of a single progress indicator:
 ```
-► Q6 — Open Horizons                              [2/4]
+► Open Horizons                                    [2/4]
   "You've mastered the basics of lunar mining..."
 
   ✓ Reach rank 5 in any ideology axis
@@ -204,10 +247,11 @@ Conditionally visible:
 - **Ideologies** — visible when Ideologies nav panel is unlocked (via Ideology 
   Unlock event, which fires on Geopolitical Intelligence research completion). 
   Re-gates each run since research resets.
-- **Retirement** — unlocked by Q3 quest completion. Stays permanently visible 
-  once Q3 is completed in any run (unlock effects re-applied from `seen_event_ids`).
-- **Projects** — unlocked by Q3 quest completion. Stays permanently visible 
-  once Q3 is completed in any run.
+- **Retirement** — unlocked by QShipment quest completion. Stays permanently 
+  visible once QShipment is completed in any run (unlock effects re-applied from 
+  `seen_event_ids`).
+- **Projects** — unlocked by QShipment quest completion. Stays permanently visible 
+  once QShipment is completed in any run.
 
 Hidden nav buttons do not leave gaps — remaining buttons fill the grid naturally.
 
@@ -231,8 +275,9 @@ A building is visible if:
 
 **Key rule:** Lifetime tracking does NOT override research or event gates. Buildings 
 behind research chains (Ice Extractor, Electrolysis Plant via Propellant Synthesis) 
-or project chains (Fuel Cell Array via Chemical Energy Initiative) stay hidden until 
-the player progresses through that chain again each run.
+or project chains (Fuel Cell Array via Chemical Energy Initiative) or quest gates 
+(Recreation Dome via QHorizon) stay hidden until the player progresses through that 
+chain again each run.
 
 Category headers hide when empty.
 

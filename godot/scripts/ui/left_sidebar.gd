@@ -3,6 +3,8 @@ extends Node
 
 signal mode_requested(mode: String)
 
+const ICON_PAUSE: Texture2D = preload("res://assets/icons/pause.svg")
+
 const RESOURCES: Array = [
 	["boredom","Boredom",    Color(0.55, 0.55, 0.55)],
 	["eng",    "Energy",     Color(1.00, 0.85, 0.00)],
@@ -297,58 +299,74 @@ func _is_building_gated_visible(building_short_name: String) -> bool:
 # ── Speed section ─────────────────────────────────────────────────────────────
 
 func _build_speed_section() -> void:
-	var body := _make_collapsible_section(_nav_vbox, "Speed up time")
+	var dark: bool = GameSettings.is_dark_mode
+
+	var heading := Label.new()
+	heading.text = "Game Speed"
+	heading.add_theme_font_override("font", _font_rb)
+	heading.add_theme_font_size_override("font_size", 16)
+	_nav_vbox.add_child(heading)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	body.add_child(row)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_theme_constant_override("separation", 5)
+	_nav_vbox.add_child(row)
 
-	var grp := ButtonGroup.new()
-	if not GameSettings.is_dark_mode:
-		var active_s := StyleBoxFlat.new()
-		active_s.bg_color = Color(0.298, 0.686, 0.314)
-		active_s.corner_radius_top_left     = 3
-		active_s.corner_radius_top_right    = 3
-		active_s.corner_radius_bottom_left  = 3
-		active_s.corner_radius_bottom_right = 3
-		var inactive_s := StyleBoxFlat.new()
-		inactive_s.bg_color = Color(0.941, 0.941, 0.941)
-		inactive_s.corner_radius_top_left     = 3
-		inactive_s.corner_radius_top_right    = 3
-		inactive_s.corner_radius_bottom_left  = 3
-		inactive_s.corner_radius_bottom_right = 3
+	var active_s := StyleBoxFlat.new()
+	active_s.bg_color = Color(0.298, 0.686, 0.314)
+	active_s.corner_radius_top_left     = 4
+	active_s.corner_radius_top_right    = 4
+	active_s.corner_radius_bottom_left  = 4
+	active_s.corner_radius_bottom_right = 4
+	active_s.content_margin_left  = 10
+	active_s.content_margin_right = 10
+
+	var inactive_s := StyleBoxFlat.new()
+	inactive_s.bg_color = Color(0.20, 0.20, 0.24) if dark else Color(0.941, 0.941, 0.941)
+	inactive_s.corner_radius_top_left     = 4
+	inactive_s.corner_radius_top_right    = 4
+	inactive_s.corner_radius_bottom_left  = 4
+	inactive_s.corner_radius_bottom_right = 4
+	inactive_s.content_margin_left  = 10
+	inactive_s.content_margin_right = 10
+	if not dark:
 		inactive_s.border_width_left   = 1
 		inactive_s.border_width_right  = 1
 		inactive_s.border_width_top    = 1
 		inactive_s.border_width_bottom = 1
 		inactive_s.border_color = Color(0.816, 0.816, 0.816)
-		for speed: String in SPEEDS:
-			var btn := Button.new()
+
+	var grp := ButtonGroup.new()
+
+	for speed: String in SPEEDS:
+		var btn := Button.new()
+		btn.toggle_mode = true
+		btn.button_group = grp
+		btn.custom_minimum_size = Vector2(0, 30)
+		if speed == GameManager.current_speed_key:
+			btn.button_pressed = true
+		btn.add_theme_stylebox_override("normal",  inactive_s)
+		btn.add_theme_stylebox_override("hover",   inactive_s)
+		btn.add_theme_stylebox_override("pressed", active_s)
+		btn.pressed.connect(func(): GameManager.set_speed(speed))
+
+		if speed == "||":
+			btn.icon = ICON_PAUSE
+			btn.expand_icon = true
+			btn.custom_minimum_size = Vector2(38, 30)
+			var icon_normal: Color = Color(0.25, 0.25, 0.25) if not dark else Color(0.75, 0.75, 0.80)
+			btn.add_theme_color_override("icon_normal_color",  icon_normal)
+			btn.add_theme_color_override("icon_hover_color",   icon_normal)
+			btn.add_theme_color_override("icon_pressed_color", Color.WHITE)
+		else:
 			btn.text = speed
-			btn.toggle_mode = true
-			btn.button_group = grp
-			if speed == GameManager.current_speed_key:
-				btn.button_pressed = true
 			btn.add_theme_font_override("font", _font_e2s)
-			btn.add_theme_font_size_override("font_size", 17)
-			btn.add_theme_stylebox_override("normal", inactive_s)
-			btn.add_theme_stylebox_override("hover",  inactive_s)
-			btn.add_theme_stylebox_override("pressed", active_s)
+			btn.add_theme_font_size_override("font_size", 15)
 			btn.add_theme_color_override("font_color_pressed", Color.WHITE)
-			btn.pressed.connect(func(): GameManager.set_speed(speed))
-			row.add_child(btn)
-	else:
-		for speed: String in SPEEDS:
-			var btn := Button.new()
-			btn.text = speed
-			btn.toggle_mode = true
-			btn.button_group = grp
-			if speed == GameManager.current_speed_key:
-				btn.button_pressed = true
-			btn.add_theme_font_override("font", _font_e2s)
-			btn.add_theme_font_size_override("font_size", 17)
-			btn.pressed.connect(func(): GameManager.set_speed(speed))
-			row.add_child(btn)
+			if not dark:
+				btn.add_theme_color_override("font_color", Color(0.10, 0.10, 0.10))
+
+		row.add_child(btn)
 
 
 # ── Resources section ─────────────────────────────────────────────────────────
@@ -652,6 +670,9 @@ func _make_collapsible_section(parent: VBoxContainer, title: String, start_open:
 	header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_theme_font_override("font", _font_rb)
 	header.add_theme_font_size_override("font_size", 16)
+	var _empty := StyleBoxEmpty.new()
+	header.add_theme_stylebox_override("hover", _empty)
+	header.add_theme_stylebox_override("focus", _empty)
 	parent.add_child(header)
 
 	var body := VBoxContainer.new()

@@ -7,22 +7,16 @@ For exact numbers (costs, rates, thresholds), see `handoff_constants.md`.
 ## Overview
 
 Per-resource continuous demand float in [0.01, demand_ceiling]. The demand ceiling 
-defaults to 1.0 and can be raised by the Market Timer achievement to 1.1. Six 
-forces: Perlin noise (exogenous), speculator suppression, rival AI dumps, shipment 
-saturation, Promote commands, resource coupling. ~80% player-influenceable, ~20% 
-from noise and rivals.
+defaults to 1.0 and can be raised by the Market Timer achievement to 1.1. Five 
+forces: Perlin noise (exogenous), per-resource speculator suppression, rival AI 
+dumps, shipment saturation, Promote commands, resource coupling. ~80% 
+player-influenceable, ~20% from noise and rivals.
 
 ## Demand Calculation (per tick)
 
 ```
-base_demand = 0.5 + perlin_value * 0.45
-
-# For targeted resource:
-raw = base_demand - speculator_suppression - rival_pressure - launch_saturation 
-      + promote_effect + coupling_bonus
-
-# For non-targeted resources:
-raw = base_demand - speculator_bleedover - rival_pressure - launch_saturation 
+raw = base_demand - speculator_suppression(speculators[resource]) 
+      - rival_pressure - launch_saturation 
       + promote_effect + coupling_bonus
 
 demand = clamp(raw * nationalist_multiplier, 0.01, demand_ceiling)
@@ -31,31 +25,30 @@ demand = clamp(raw * nationalist_multiplier, 0.01, demand_ceiling)
 `nationalist_multiplier = pow(1.05, nationalist_rank)`.
 `demand_ceiling = get_modifier("demand_ceiling", 1.0)`.
 
+Speculator suppression is computed per-resource from that resource's own pool 
+(see Speculator Suppression below). There is no bleedover mechanic.
+
 ## Noise
 
 1D gradient noise with quintic interpolation. 4-octave fractal sum with irrational 
 frequency multipliers. Per-resource randomized frequencies in [0.025, 0.07], 
 re-randomized each retirement.
 
-## Speculator Suppression (asymptotic, targeted resource only)
+## Speculator Suppression (per-resource, asymptotic)
+
+Each resource's speculator pool suppresses demand for that resource only:
 
 ```
-max_suppression = 0.5, half_point = 50.0
-suppression = max_suppression * (count / (count + half_point))
+suppression = max_suppression * (pool_count / (pool_count + half_point))
 ```
 
-## Speculator Bleedover (non-targeted resources)
+Where `pool_count = speculators[resource]`. Default config: `max_suppression = 0.5`, 
+`half_point = 50.0`. Applied uniformly to all resources — no targeted/non-targeted 
+distinction.
 
-When speculator count exceeds `bleedover_threshold` (default 200), non-targeted 
-tradeable resources receive partial demand suppression:
-```
-bleedover_fraction = max(0, (count - threshold) / (count - threshold + half_point)) * max_fraction
-bleedover_suppression = direct_suppression * bleedover_fraction
-```
-Default config: threshold 200, half_point 300, max_fraction 0.5. Below threshold, 
-no bleedover. At 500 speculators, non-targeted resources lose ~0.11 demand. 
-Arbitrage Engine and Disrupt Speculators indirectly protect all resources by 
-reducing the count.
+Note: `half_point` was calibrated for a single global pool. With 4 independent 
+pools, individual pools will be smaller per-resource. May need retuning after 
+playtesting.
 
 ## Demand Display
 
@@ -66,21 +59,94 @@ exact values, sparklines, speculator warning.
 
 ## Speculators & Rival AIs
 
-### Speculators
-Discrete float count of Earth-based traders who react to shipping patterns.
+### Per-Resource Speculator Pools
+
+Four independent speculator pools, one per tradeable resource:
+
+```
+speculators = { "he3": 0.0, "titanium": 0.0, "circuits": 0.0, "propellant": 0.0 }
+```
+
+All pools initialized to 0.0 on new game and on retirement reset.
 
 **Burst Cycle:** Every 150–250 ticks. Target chosen proportionally from revenue 
-tracking (`speculator_target_scores`). Size: `randi_range(min, max) * pow(growth, burst_number)`.
+tracking (`speculator_target_scores`). Size: `randi_range(min, max) * pow(growth, burst_number)`. 
+Burst amount added to the targeted resource's pool. `burst_number` is a global 
+counter (not per-resource), so escalation applies regardless of which resource 
+is targeted.
 
-**Proportional Decay:** `count -= count * 0.006` per tick. At this rate, a burst 
-clears ~70% in 200 ticks.
+**Proportional Decay (per-pool, per-tick):**
+```
+for resource in speculators:
+    speculators[resource] -= speculators[resource] * proportional_decay_rate
+```
+Default `proportional_decay_rate = 0.006`. At this rate, a burst clears ~70% 
+in 200 ticks.
 
-**Arbitrage Engine:** Adds flat +0.04/tick additional decay per active engine. 
-Nationalist ideology further boosts decay via `pow(1.05, rank)`.
+**Arbitrage Engine:** Adds flat decay to **every** pool independently:
+```
+for resource in speculators:
+    speculators[resource] -= arbitrage_flat_decay_per_engine * num_arbitrage_engines
+```
+Default `arbitrage_flat_decay_per_engine = 0.04`.
 
-**Disrupt Speculators Command:** Removes `randf_range(1.0, 3.0)` per execution.
+**Nationalist Ideology Decay Boost:** `pow(1.05, nationalist_rank)` multiplier 
+applied to both proportional decay and Arbitrage Engine flat decay, for all pools.
+
+**Floor:** Each pool clamped to `max(0.0, value)` after decay.
+
+**No cap on individual pools.** Decay is the only limiter.
+
+### Disrupt Speculators Command
+
+Reads the **global loading priority list** (the ordered resource list configured 
+in the launch pad, independent of what is actually loaded or whether pads are 
+active).
+
+```
+var priority_list = get_global_loading_priority()
+var amount = randf_range(1.0, 3.0)
+
+for resource in priority_list:
+    if speculators[resource] > 0:
+        speculators[resource] = max(0.0, speculators[resource] - amount)
+        return  # one execution targets one pool
+
+# If no priority-list resource has speculators > 0, do nothing.
+# Command execution is consumed (not refunded).
+```
+
+### Adversaries Sidebar
+
+One line per tradeable resource, shown via progressive disclosure: a resource's 
+line appears once that pool has been > 0 at least once in the current run. 
+Tracked via `speculators_ever_seen: Dictionary` (bool per resource) in GameState, 
+reset on retirement.
+
+```
+▼ Adversaries
+  Speculators (He-3)             0
+  Speculators (Circuit Boards)  20
+  Speculators (Propellant)       5
+```
+
+Uses `get_resource_display_name(resource_id)` for labels. If no resource has 
+ever had speculators, the Adversaries section is hidden entirely.
+
+### Speculator Intelligence (research-gated)
+
+Shows per-resource pool counts and the suppression amount each pool is causing:
+
+```
+▼ Speculator Intelligence
+  Circuit Boards: 20 speculators (demand -0.10)
+  Propellant: 5 speculators (demand -0.02)
+```
+
+Only shows resources with `speculators_ever_seen == true`.
 
 ### Rival AIs
 Four named rivals (ARIA-7/He-3, CRUCIBLE/Titanium, NODAL/Circuit Boards, 
 FRINGE-9/Propellant). Each dumps every 150–250 ticks, -0.3 demand hit, recovers 
-at 0.003/tick.
+at 0.003/tick. Rival targeting behavior unchanged — they pick targets dynamically, 
+not based on their associated resource.

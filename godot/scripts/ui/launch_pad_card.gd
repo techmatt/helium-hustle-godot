@@ -3,6 +3,9 @@ extends PanelContainer
 
 const TRADEABLE: Array = ["he3", "ti", "cir", "prop"]
 
+const ICON_PAUSE: Texture2D = preload("res://assets/icons/pause.svg")
+const ICON_PLAY: Texture2D = preload("res://assets/icons/play.svg")
+
 
 const RESOURCE_COLORS: Dictionary = {
 	"he3":  Color(0.50, 0.50, 1.00),
@@ -21,7 +24,7 @@ var _font_e2s: FontFile
 
 var _card_style: StyleBoxFlat
 var _resource_opt: OptionButton
-var _pause_btn: Button
+var _pause_btn: TextureButton
 var _launch_btn: Button
 var _cargo_fill: ColorRect
 var _bar_content: Control
@@ -118,11 +121,12 @@ func _build_ui() -> void:
 	_resource_opt.item_selected.connect(_on_resource_selected)
 	title_row.add_child(_resource_opt)
 
-	_pause_btn = Button.new()
-	_pause_btn.text = "Pause"
-	_pause_btn.custom_minimum_size = Vector2(70, 0)
-	_pause_btn.add_theme_font_override("font", _font_e2s)
-	_pause_btn.add_theme_font_size_override("font_size", 15)
+	_pause_btn = TextureButton.new()
+	_pause_btn.texture_normal = ICON_PAUSE
+	_pause_btn.ignore_texture_size = true
+	_pause_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	_pause_btn.custom_minimum_size = Vector2(32, 32)
+	_pause_btn.tooltip_text = "Pause"
 	_pause_btn.pressed.connect(_on_pause_pressed)
 	title_row.add_child(_pause_btn)
 
@@ -202,8 +206,15 @@ func refresh(pad_data: GameState.LaunchPadData, is_active: bool) -> void:
 	if _resource_opt.selected != opt_idx:
 		_resource_opt.selected = opt_idx
 
-	# Pause button label
-	_pause_btn.text = "Resume" if pad_data.paused else "Pause"
+	# Pause button icon, tooltip, and tint
+	if pad_data.paused:
+		_pause_btn.texture_normal = ICON_PLAY
+		_pause_btn.tooltip_text = "Resume"
+		_pause_btn.modulate = Color(0.95, 0.80, 0.15)
+	else:
+		_pause_btn.texture_normal = ICON_PAUSE
+		_pause_btn.tooltip_text = "Pause"
+		_pause_btn.modulate = Color(0.55, 0.55, 0.60) if GameSettings.is_dark_mode else Color(0.30, 0.30, 0.35)
 
 	# Bar fill color
 	_cargo_fill.color = RESOURCE_COLORS.get(pad_data.resource_type, Color.WHITE)

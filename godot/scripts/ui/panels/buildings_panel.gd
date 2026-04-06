@@ -1,7 +1,7 @@
 class_name BuildingsPanel
 extends VBoxContainer
 
-const CATEGORY_ORDER: Array = ["Mining", "Power", "Storage", "Processors"]
+const CATEGORY_ORDER: Array = ["Core", "Storage", "Extraction", "Processing", "Trade", "Science"]
 
 var _font_rb: FontFile
 var _font_e2r: FontFile

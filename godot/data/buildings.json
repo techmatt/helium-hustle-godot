@@ -4,10 +4,6 @@
     "short_name": "data_center",
     "category": "Core",
     "ideology": "humanist",
-    "requires": {
-      "type": "building",
-      "value": "fabricator"
-    },
     "land": 2,
     "cost_scaling": 1.5,
     "costs": {
@@ -17,7 +13,7 @@
     },
     "production": {},
     "upkeep": {
-      "eng": 4.0
+      "eng": 2.0
     },
     "effects": [
       {
