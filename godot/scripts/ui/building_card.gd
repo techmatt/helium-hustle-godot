@@ -135,7 +135,7 @@ func refresh() -> void:
 			_stall_lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.000))
 		else:
 			_stall_lbl.text = "At storage cap"
-			_stall_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+			_stall_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	else:
 		_stall_lbl.text = ""
 

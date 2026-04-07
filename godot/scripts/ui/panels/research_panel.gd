@@ -237,7 +237,7 @@ func _build_card(item: Dictionary) -> PanelContainer:
 			gs.corner_radius_bottom_right = 4
 			btn.add_theme_stylebox_override("normal", gs)
 			var gs_hover := StyleBoxFlat.new()
-			gs_hover.bg_color = Color(0.180, 0.490, 0.196)
+			gs_hover.bg_color = Color(0.12, 0.40, 0.14)
 			gs_hover.corner_radius_top_left     = 4
 			gs_hover.corner_radius_top_right    = 4
 			gs_hover.corner_radius_bottom_left  = 4

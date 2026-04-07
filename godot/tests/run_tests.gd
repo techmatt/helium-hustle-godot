@@ -29,6 +29,8 @@ const _SUITES: Array = [
 	preload("res://tests/test_career_bonuses.gd"),
 	preload("res://tests/test_quest_chain.gd"),
 	preload("res://tests/test_fuel_cell_array.gd"),
+	preload("res://tests/test_market_log.gd"),
+	preload("res://tests/test_launch_pad_resource_switch.gd"),
 ]
 
 var _done := false

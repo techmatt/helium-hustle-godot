@@ -241,7 +241,7 @@ func _build_checklist(sub_objectives: Array, st: GameState) -> void:
 		icon_lbl.add_theme_font_override("font", _font_exo2_semibold)
 		icon_lbl.add_theme_font_size_override("font_size", 15)
 		icon_lbl.add_theme_color_override("font_color",
-			(Color(0.30, 0.65, 0.30) if dark else Color(0.18, 0.49, 0.20)) if sub_done
+			(Color(0.30, 0.65, 0.30) if dark else Color(0.12, 0.40, 0.14)) if sub_done
 			else (Color(0.55, 0.55, 0.55) if dark else Color(0.50, 0.50, 0.50)))
 		row.add_child(icon_lbl)
 

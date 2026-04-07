@@ -85,7 +85,7 @@ func _build_ui() -> void:
 	_btn.add_theme_font_override("font", _font_exo2_semibold)
 	_btn.add_theme_font_size_override("font_size", 15)
 	var btn_style := StyleBoxFlat.new()
-	btn_style.bg_color = Color(0.18, 0.49, 0.20)
+	btn_style.bg_color = Color(0.12, 0.40, 0.14)
 	btn_style.corner_radius_top_left     = 4
 	btn_style.corner_radius_top_right    = 4
 	btn_style.corner_radius_bottom_left  = 4
@@ -286,7 +286,7 @@ func _add_persists_line() -> void:
 	m.add_theme_constant_override("margin_top", 2)
 	m.add_theme_constant_override("margin_bottom", 2)
 	var lbl := Label.new()
-	lbl.text = "Events, statistics, and long-term project progress carry over to your next run."
+	lbl.text = "Story events and long-term projects carry over to your next run."
 	lbl.add_theme_font_override("font", _font_exo2_regular)
 	lbl.add_theme_font_size_override("font_size", 14)
 	lbl.add_theme_color_override("font_color", Color(0.65, 0.65, 0.70) if GameSettings.is_dark_mode else Color(0.40, 0.40, 0.40))

@@ -21,9 +21,14 @@ var _completed_container: VBoxContainer
 var _completed_header: Button
 var _completed_items: VBoxContainer
 
+var _activity_container: VBoxContainer
+var _activity_header: Button
+var _activity_items: VBoxContainer
+
 var _story_expanded: bool = true
 var _ongoing_expanded: bool = false
 var _completed_expanded: bool = false
+var _activity_expanded: bool = true
 
 var _refresh_accum: float = 0.0
 
@@ -39,6 +44,7 @@ func setup(font_rb: FontFile, font_e2r: FontFile, font_e2s: FontFile) -> void:
 	GameManager.event_manager.event_triggered.connect(func(_id: String) -> void: _rebuild_items())
 	GameManager.event_manager.event_completed.connect(func(_id: String) -> void: _rebuild_items())
 	GameManager.event_manager.notification_added.connect(func() -> void: _rebuild_items())
+	GameManager.state.market_log_updated.connect(func() -> void: _fill_activity_items())
 	_rebuild_items()
 
 
@@ -82,6 +88,14 @@ func _build_structure() -> void:
 	_completed_items = _make_items_vbox()
 	_completed_items.visible = _completed_expanded
 	_completed_container.add_child(_completed_items)
+
+	_activity_container = _make_section_container()
+	add_child(_activity_container)
+	_activity_header = _make_header_btn("activity")
+	_activity_container.add_child(_activity_header)
+	_activity_items = _make_items_vbox()
+	_activity_items.visible = _activity_expanded
+	_activity_container.add_child(_activity_items)
 
 
 func _make_section_container() -> VBoxContainer:
@@ -135,6 +149,10 @@ func _on_header_pressed(section_key: String) -> void:
 			_completed_expanded = not _completed_expanded
 			_completed_items.visible = _completed_expanded
 			_set_header_text(_completed_header, "Completed", _completed_items.get_child_count(), _completed_expanded)
+		"activity":
+			_activity_expanded = not _activity_expanded
+			_activity_items.visible = _activity_expanded
+			_set_header_text(_activity_header, "Recent Activity", _activity_items.get_child_count(), _activity_expanded)
 
 
 # ── Item rebuild — only touches rows inside items vboxes ──────────────────────
@@ -172,6 +190,28 @@ func _rebuild_items() -> void:
 		"Ongoing", ongoing, em.notifications, _ongoing_expanded, st, em)
 	_fill_items(_completed_container, _completed_header, _completed_items,
 		"Completed", completed, true, _completed_expanded, st, em)
+	_fill_activity_items()
+
+
+func _fill_activity_items() -> void:
+	var st: GameState = GameManager.state
+	var count: int = mini(6, st.launch_history.size())
+	_activity_container.visible = count > 0
+	_set_header_text(_activity_header, "Recent Activity", count, _activity_expanded)
+	for child in _activity_items.get_children():
+		child.free()
+	for i in range(count):
+		var record: GameState.LaunchRecord = st.launch_history[i]
+		var lbl := Label.new()
+		if not record.notification_message.is_empty():
+			lbl.text = "Day %d: %s" % [record.tick, record.notification_message]
+		else:
+			var res_name: String = GameManager.get_resource_display_name(record.resource_type)
+			lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
+		lbl.add_theme_color_override("font_color", UIPalette.launch_entry_color(record.entry_type))
+		lbl.add_theme_font_override("font", _font_exo2_regular)
+		lbl.add_theme_font_size_override("font_size", 15)
+		_activity_items.add_child(lbl)
 
 
 func _fill_items(
@@ -382,7 +422,7 @@ func _build_notification_row(title: String) -> Label:
 	lbl.add_theme_font_size_override("font_size", 15)
 	var dark: bool = GameSettings.is_dark_mode
 	lbl.add_theme_color_override("font_color",
-		Color(0.60, 0.85, 0.60) if dark else Color(0.18, 0.49, 0.20))
+		Color(0.60, 0.85, 0.60) if dark else Color(0.12, 0.40, 0.14))
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.10, 0.20, 0.10) if dark else Color(0.91, 0.96, 0.91)
 	style.content_margin_left = 8

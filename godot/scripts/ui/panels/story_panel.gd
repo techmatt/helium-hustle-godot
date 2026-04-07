@@ -250,7 +250,7 @@ func _build_quest_row(
 	var prefix_lbl := Label.new()
 	if is_completed:
 		prefix_lbl.text = "✓"
-		prefix_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+		prefix_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	else:
 		prefix_lbl.text = "▶"
 		prefix_lbl.add_theme_color_override("font_color", Color(0.20, 0.40, 0.90))
@@ -294,7 +294,7 @@ func _build_quest_row(
 			unlocks_lbl.text = "Unlocked: " + unlocks_text
 			unlocks_lbl.add_theme_font_override("font", _font_e2r)
 			unlocks_lbl.add_theme_font_size_override("font_size", 14)
-			unlocks_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+			unlocks_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 			unlocks_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			inner.add_child(unlocks_lbl)
 
@@ -353,7 +353,7 @@ func _build_all_of_checklist(inner: VBoxContainer, qid: String, def: Dictionary,
 		icon_lbl.add_theme_font_override("font", _font_e2s)
 		icon_lbl.add_theme_font_size_override("font_size", 14)
 		if sub_done:
-			icon_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+			icon_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 		else:
 			icon_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 		row.add_child(icon_lbl)
@@ -526,7 +526,7 @@ func _build_achievement_row(def: Dictionary, is_done: bool) -> Control:
 	name_lbl.add_theme_font_override("font", _font_e2s)
 	name_lbl.add_theme_font_size_override("font_size", 15)
 	if is_done:
-		name_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+		name_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	left_vbox.add_child(name_lbl)
 
 	var cond_lbl := Label.new()
@@ -543,7 +543,7 @@ func _build_achievement_row(def: Dictionary, is_done: bool) -> Control:
 	reward_lbl.add_theme_font_override("font", _font_e2s)
 	reward_lbl.add_theme_font_size_override("font_size", 14)
 	if is_done:
-		reward_lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+		reward_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	else:
 		reward_lbl.add_theme_color_override("font_color", UIPalette.p("text_muted"))
 	reward_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

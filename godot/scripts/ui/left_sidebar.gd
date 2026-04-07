@@ -10,13 +10,13 @@ const RESOURCES: Array = [
 	["eng",    "Energy",     Color(1.00, 0.85, 0.00)],
 	["proc",   "Processors", Color(0.80, 0.20, 0.80)],
 	["land",   "Land",       Color(0.40, 0.70, 0.30)],
+	["cred",   "Credits",    Color(0.20, 0.85, 0.20)],
 	["reg",    "Regolith",   Color(0.60, 0.42, 0.22)],
 	["ice",    "Ice",        Color(0.70, 0.92, 1.00)],
 	["he3",    "Helium-3",   Color(0.50, 0.50, 1.00)],
 	["ti",     "Titanium",   Color(0.80, 0.80, 0.80)],
 	["cir",    "Circuit Boards", Color(0.30, 0.80, 0.70)],
 	["prop",   "Propellant", Color(0.40, 0.70, 0.95)],
-	["cred",   "Credits",    Color(0.20, 0.85, 0.20)],
 	["sci",    "Science",    Color(0.70, 0.50, 0.90)],
 ]
 
@@ -468,7 +468,7 @@ func update_resource_display() -> void:
 		else:
 			val_lbl.text = "%d / %d" % [int(amount), int(cap)]
 			if amount >= cap:
-				val_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+				val_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 			elif amount <= 0.0:
 				val_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 			else:
@@ -479,7 +479,7 @@ func update_resource_display() -> void:
 			var net: float = rt.get_net_instant(sn)
 			rate_lbl.text = fmt_sidebar_rate(net)
 			if net > 0.005:
-				rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+				rate_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 			elif net < -0.005:
 				rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 			else:
@@ -640,7 +640,7 @@ func update_ideology_display() -> void:
 			var rate: float = _ideology_rate_ema[axis]
 			rate_lbl.text = fmt_sidebar_rate(rate)
 			if rate > 0.005:
-				rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+				rate_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 			elif rate < -0.005:
 				rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 			else:

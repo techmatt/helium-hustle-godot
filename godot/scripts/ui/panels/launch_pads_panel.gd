@@ -3,7 +3,7 @@ extends VBoxContainer
 
 const DEMAND_TIERS: Array = [
 	[0.85, "VERY HIGH", Color(0.10, 0.80, 0.30)],
-	[0.55, "HIGH",      Color(0.18, 0.49, 0.20)],
+	[0.55, "HIGH",      Color(0.12, 0.40, 0.14)],
 	[0.25, "MEDIUM",    Color(0.0,  0.0,  0.0,  0.0)],
 	[0.0,  "LOW",       Color(0.78, 0.16, 0.16)],
 ]
@@ -157,16 +157,12 @@ func _refresh_launch_history() -> void:
 		return
 	for record: GameState.LaunchRecord in st.launch_history:
 		var lbl := Label.new()
-		var src: String = record.source_type
 		if not record.notification_message.is_empty():
 			lbl.text = "Day %d: %s" % [record.tick, record.notification_message]
-			if src == "speculator":
-				lbl.add_theme_color_override("font_color", Color(0.902, 0.318, 0.0))
-			else:
-				lbl.add_theme_color_override("font_color", Color(0.40, 0.40, 0.40))
 		else:
 			var res_name: String = RESOURCE_META.get(record.resource_type, [record.resource_type.capitalize()])[0]
 			lbl.text = "Day %d: %s × %d → %d credits" % [record.tick, res_name, int(record.quantity), int(record.credits_earned)]
+		lbl.add_theme_color_override("font_color", UIPalette.launch_entry_color(record.entry_type))
 		lbl.add_theme_font_override("font", _font_e2r)
 		lbl.add_theme_font_size_override("font_size", 15)
 		_launch_history_vbox.add_child(lbl)

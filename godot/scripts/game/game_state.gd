@@ -84,6 +84,7 @@ class LaunchRecord:
 	var tick: int = 0
 	var notification_message: String = ""  # non-empty = notification, not a player launch
 	var source_type: String = ""  # "player", "speculator", "rival" — empty means "player" for compat
+	var entry_type: String = "neutral"  # "player_launch", "rival_flood", "speculator_surge", "neutral"
 
 	func to_dict() -> Dictionary:
 		return {
@@ -93,6 +94,7 @@ class LaunchRecord:
 			"tick": tick,
 			"notification_message": notification_message,
 			"source_type": source_type,
+			"entry_type": entry_type,
 		}
 
 	static func from_dict(data: Dictionary) -> LaunchRecord:
@@ -103,8 +105,11 @@ class LaunchRecord:
 		r.tick = int(data.get("tick", 0))
 		r.notification_message = data.get("notification_message", "")
 		r.source_type = data.get("source_type", "")
+		r.entry_type = data.get("entry_type", "neutral")
 		return r
 
+
+signal market_log_updated
 
 const TRADEABLE_RESOURCES: Array = ["he3", "ti", "cir", "prop"]
 
@@ -150,7 +155,7 @@ var current_day: int = 0
 var programs: Array = []              # Array of ProgramData, always 5 slots
 var pads: Array = []                  # Array of LaunchPadData
 var loading_priority: Array = ["he3", "ti", "cir", "prop"]
-var launch_history: Array = []        # Array of LaunchRecord, max 5
+var launch_history: Array = []        # Array of LaunchRecord, max 15
 var completed_research: Array = []    # Array of String research IDs purchased this run
 var land_purchases: int = 0           # number of times Buy Land has been used this run
 

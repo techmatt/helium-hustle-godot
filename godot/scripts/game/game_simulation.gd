@@ -613,6 +613,7 @@ func set_pad_resource(state: GameState, pad_idx: int, resource_type: String) -> 
 		return
 	if pad.cargo_loaded > 0.0 and (pad.status == GameState.PAD_LOADING or pad.status == GameState.PAD_FULL):
 		state.amounts[pad.resource_type] = state.amounts.get(pad.resource_type, 0.0) + pad.cargo_loaded
+		_clamp_safe(state)
 		pad.cargo_loaded = 0.0
 		pad.status = GameState.PAD_EMPTY
 	pad.resource_type = resource_type
@@ -746,9 +747,11 @@ func _record_launch(state: GameState, pad: GameState.LaunchPadData, payout: floa
 	record.credits_earned = payout
 	record.tick = state.current_day
 	record.source_type = "player"
+	record.entry_type = "player_launch"
 	state.launch_history.push_front(record)
-	if state.launch_history.size() > 5:
+	if state.launch_history.size() > 15:
 		state.launch_history.pop_back()
+	state.market_log_updated.emit()
 	state.total_shipments_completed += 1
 	state.cumulative_resources_earned["cred"] = state.cumulative_resources_earned.get("cred", 0.0) + payout
 	if rate_tracker != null:

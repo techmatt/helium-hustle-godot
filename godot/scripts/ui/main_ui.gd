@@ -318,7 +318,7 @@ func _setup_status_bar() -> void:
 	bd_lbl.add_theme_font_size_override("font_size", 15)
 	boredom_hbox.add_child(bd_lbl)
 
-	var bd := _make_status_bar_bar(Color(0.180, 0.490, 0.196))
+	var bd := _make_status_bar_bar(Color(0.12, 0.40, 0.14))
 	_boredom_bar    = bd[0]
 	_boredom_bar_lbl = bd[1]
 	_boredom_fill   = bd[2]
@@ -387,7 +387,7 @@ func _update_status_bar() -> void:
 
 	var boredom_pct: float = current_boredom / boredom_max * 100.0
 	if boredom_pct < 25.0:
-		_boredom_fill.bg_color = Color(0.180, 0.490, 0.196)
+		_boredom_fill.bg_color = Color(0.12, 0.40, 0.14)
 	elif boredom_pct < 50.0:
 		_boredom_fill.bg_color = Color(0.976, 0.659, 0.145)
 	elif boredom_pct < 75.0:
@@ -397,7 +397,7 @@ func _update_status_bar() -> void:
 
 	_boredom_rate_lbl.text = _left_sidebar.fmt_sidebar_rate(boredom_rate)
 	if boredom_rate <= 0.005:
-		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	else:
 		_boredom_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 
@@ -410,7 +410,7 @@ func _update_status_bar() -> void:
 	var energy_rate: float = GameManager.last_deltas.get("eng", 0.0)
 	_energy_rate_lbl.text = _left_sidebar.fmt_sidebar_rate(energy_rate)
 	if energy_rate >= 0.0:
-		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.180, 0.490, 0.196))
+		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	else:
 		_energy_rate_lbl.add_theme_color_override("font_color", Color(0.776, 0.157, 0.157))
 

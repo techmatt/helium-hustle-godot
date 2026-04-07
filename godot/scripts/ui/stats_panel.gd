@@ -621,7 +621,7 @@ func _fmt_rate(value: float) -> String:
 
 func _rate_color(value: float) -> Color:
 	if value > 0.005:
-		return Color(0.180, 0.490, 0.196)   # #2E7D32
+		return Color(0.12, 0.40, 0.14)
 	elif value < -0.005:
 		return Color(0.776, 0.157, 0.157)   # #C62828
 	return Color(0.400, 0.400, 0.400)       # #666666

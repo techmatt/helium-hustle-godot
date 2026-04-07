@@ -26,7 +26,7 @@ const PALETTE: Dictionary = {
 		"grip":            Color(0.50,  0.50,  0.50 ),
 	},
 	"light": {
-		"text_positive":   Color(0.180, 0.490, 0.196),
+		"text_positive":   Color(0.12, 0.40, 0.14),
 		"text_negative":   Color(0.776, 0.157, 0.157),
 		"text_zero":       Color(0.400, 0.400, 0.400),
 		"text_muted":      Color(0.400, 0.400, 0.400),
@@ -44,7 +44,7 @@ const PALETTE: Dictionary = {
 		"bg_cmd_active":   Color(0.878, 0.961, 0.886, 0.90),
 		"bg_cmd_failed":   Color(0.988, 0.878, 0.878, 0.90),
 		"fill_normal":     Color(0.298, 0.686, 0.314),
-		"fill_active":     Color(0.180, 0.490, 0.196),
+		"fill_active":     Color(0.12, 0.40, 0.14),
 		"fill_failed":     Color(0.776, 0.157, 0.157),
 		"bg_drag_preview": Color(0.298, 0.686, 0.314, 0.92),
 		"grip":            Color(0.620, 0.620, 0.620),
@@ -53,3 +53,13 @@ const PALETTE: Dictionary = {
 
 static func p(key: String) -> Color:
 	return PALETTE["dark" if GameSettings.is_dark_mode else "light"][key]
+
+
+static func launch_entry_color(entry_type: String) -> Color:
+	match entry_type:
+		"player_launch":
+			return Color(0.25, 0.75, 0.25)
+		"rival_flood", "speculator_surge":
+			return Color(0.9, 0.35, 0.2)
+		_:
+			return p("text_muted")

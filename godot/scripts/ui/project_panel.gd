@@ -229,7 +229,7 @@ func _build_completed_card(pdef: Dictionary) -> PanelContainer:
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.add_theme_font_override("font", _font_e2r)
 	lbl.add_theme_font_size_override("font_size", 15)
-	lbl.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+	lbl.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	card.add_child(lbl)
 
 	return card

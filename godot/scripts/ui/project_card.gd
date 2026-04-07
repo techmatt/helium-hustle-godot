@@ -75,7 +75,7 @@ func refresh() -> void:
 			bar.value = frac
 			# Green when complete, accent when in-progress
 			var fill_style: StyleBoxFlat = StyleBoxFlat.new()
-			fill_style.bg_color = Color(0.18, 0.49, 0.20) if frac >= 1.0 else Color(0.298, 0.686, 0.314)
+			fill_style.bg_color = Color(0.12, 0.40, 0.14) if frac >= 1.0 else Color(0.298, 0.686, 0.314)
 			bar.add_theme_stylebox_override("fill", fill_style)
 
 		if _progress_labels.has(res):

@@ -293,7 +293,7 @@ func _set_value_label_color(demand: float) -> void:
 	if demand >= 0.85:
 		_value_label.add_theme_color_override("font_color", Color(0.10, 0.80, 0.30))
 	elif demand >= 0.55:
-		_value_label.add_theme_color_override("font_color", Color(0.18, 0.49, 0.20))
+		_value_label.add_theme_color_override("font_color", Color(0.12, 0.40, 0.14))
 	elif demand >= 0.25:
 		_value_label.remove_theme_color_override("font_color")
 	else:

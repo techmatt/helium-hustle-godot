@@ -188,9 +188,11 @@ func tick_rivals(state: GameState) -> Array:
 			note.tick = state.current_day
 			note.notification_message = msg
 			note.source_type = "rival"
+			note.entry_type = "rival_flood"
 			state.launch_history.push_front(note)
-			if state.launch_history.size() > 5:
+			if state.launch_history.size() > 15:
 				state.launch_history.pop_back()
+			state.market_log_updated.emit()
 			notifications.append({
 				"tick": state.current_day,
 				"rival_name": rival.get("name", rid),
@@ -220,9 +222,11 @@ func _fire_speculator_burst(state: GameState) -> void:
 	note.tick = state.current_day
 	note.notification_message = msg
 	note.source_type = "speculator"
+	note.entry_type = "speculator_surge"
 	state.launch_history.push_front(note)
-	if state.launch_history.size() > 5:
+	if state.launch_history.size() > 15:
 		state.launch_history.pop_back()
+	state.market_log_updated.emit()
 	# Roll fresh random bases for the next cycle
 	_reset_target_scores(state)
 
