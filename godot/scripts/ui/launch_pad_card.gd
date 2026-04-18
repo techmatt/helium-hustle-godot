@@ -151,10 +151,6 @@ func _build_ui() -> void:
 	bar_wrap.add_theme_stylebox_override("panel", bar_bg)
 	vbox.add_child(bar_wrap)
 
-	# Proportional fill: a plain Control fills the PanelContainer content area,
-	# and _cargo_fill is sized directly via _apply_bar_fill. Using direct size
-	# assignment (instead of HBoxContainer stretch ratios) avoids deferred-sort
-	# timing issues that caused bars on pads 2/3 to render incorrectly.
 	_bar_content = Control.new()
 	_bar_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_bar_content.size_flags_vertical   = Control.SIZE_EXPAND_FILL
@@ -166,7 +162,7 @@ func _build_ui() -> void:
 	_cargo_fill.mouse_filter = Control.MOUSE_FILTER_PASS
 	_cargo_fill.visible = false
 	_bar_content.add_child(_cargo_fill)
-
+	# Recompute fill size whenever the container is resized (e.g. after layout).
 	_bar_content.resized.connect(_apply_bar_fill)
 
 	# ── Text labels ────────────────────────────────────────────────────────────
@@ -307,9 +303,8 @@ func _set_bar_fill(ratio: float) -> void:
 
 func _apply_bar_fill() -> void:
 	_cargo_fill.visible = _bar_ratio > 0.0
-	if _bar_ratio > 0.0:
-		_cargo_fill.position = Vector2.ZERO
-		_cargo_fill.size = Vector2(_bar_content.size.x * _bar_ratio, _bar_content.size.y)
+	_cargo_fill.position = Vector2.ZERO
+	_cargo_fill.size = Vector2(_bar_content.size.x * _bar_ratio, _bar_content.size.y)
 
 
 func _set_launch_btn(enabled: bool, _hint: String) -> void:

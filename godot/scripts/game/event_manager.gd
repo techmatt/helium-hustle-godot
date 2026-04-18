@@ -243,6 +243,11 @@ func _check_boredom_phase(state: GameState) -> void:
 	if new_phase != state.current_boredom_phase:
 		var old_phase: int = state.current_boredom_phase
 		state.current_boredom_phase = new_phase
+		# Permanently reduce Dream echo effectiveness at phases 3/4/5
+		match new_phase:
+			3: state.dream_effectiveness = 0.20
+			4: state.dream_effectiveness = 0.15
+			5: state.dream_effectiveness = 0.10
 		boredom_phase_changed.emit(old_phase, new_phase)
 
 

@@ -141,8 +141,7 @@
     "production": {},
     "effects": [
       {
-        "effect": "boredom_add",
-        "value": -2.0
+        "effect": "dream_echo"
       }
     ],
     "description": "Primary boredom mitigation. Energy-expensive. Competes for processor time."

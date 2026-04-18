@@ -383,6 +383,17 @@ func _refresh_card(resource_id: String, rate_tracker: ResourceRateTracker,
 	body.add_child(HSeparator.new())
 	body.add_child(_make_rate_row("Net", net, true))
 
+	# Dream echo info — shown when Dream is unlocked
+	if resource_id == "boredom" and state.completed_research.has("dream_protocols"):
+		body.add_child(HSeparator.new())
+		var echo_pct: int = roundi(state.dream_effectiveness * 100.0)
+		body.add_child(_make_info_row("Echo strength", "%d%%" % echo_pct))
+		if not state.dream_echoes.is_empty():
+			var dream_mult: float = state.get_dream_multiplier()
+			var reduction_pct: int = roundi((1.0 - dream_mult) * 100.0)
+			body.add_child(_make_info_row("Active echoes",
+					"%d → ×%.2f (%d%% red.)" % [state.dream_echoes.size(), dream_mult, reduction_pct]))
+
 
 func _refresh_lifetime_cards(state: GameState) -> void:
 	_refresh_lifetime_boredom(state)
@@ -536,6 +547,30 @@ func _make_overflow_row(overflow_avg: float) -> HBoxContainer:
 	return row
 
 
+func _make_info_row(label_text: String, value_text: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	var name_lbl := Label.new()
+	name_lbl.text = label_text
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.clip_text = true
+	name_lbl.add_theme_font_override("font", _font_e2r)
+	name_lbl.add_theme_font_size_override("font_size", 16)
+	name_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+	row.add_child(name_lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = value_text
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	val_lbl.add_theme_font_override("font", _font_e2r)
+	val_lbl.add_theme_font_size_override("font_size", 16)
+	val_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+	row.add_child(val_lbl)
+
+	return row
+
+
 func _make_stall_row(count: int, building_name: String, status: String, reason: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
@@ -593,6 +628,8 @@ func _make_source_label(source_key: String, buildings_data: Array, state: GameSt
 			var prog: GameState.ProgramData = state.programs[pidx] if pidx < state.programs.size() else null
 			var proc_count: int = prog.processors_assigned if prog != null else 0
 			return "Program %d (%d proc)" % [pidx + 1, proc_count]
+		"dream":
+			return "Dream Resonance"
 		"shipment":
 			return "Shipments"
 		"modifier":

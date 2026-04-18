@@ -393,7 +393,7 @@
       "value": "microwave_power_active",
       "label": "Microwave Power Initiative (persistent project)"
     },
-    "land": 30,
+    "land": 15,
     "cost_scaling": 1.0,
     "max_count": 1,
     "costs": {

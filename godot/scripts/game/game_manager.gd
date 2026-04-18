@@ -75,6 +75,13 @@ func get_resource_display_name(short_name: String) -> String:
 	return short_name
 
 
+func get_building_display_name(short_name: String) -> String:
+	for bdef: Dictionary in _buildings_data:
+		if bdef.get("short_name", "") == short_name:
+			return bdef.get("name", short_name)
+	return short_name
+
+
 func _ready() -> void:
 	var resources_data: Array = _load_json("res://data/resources.json")
 	_resources_data = resources_data

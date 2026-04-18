@@ -286,19 +286,25 @@ func _make_stepper_btn(symbol: String) -> Button:
 
 
 func _format_reward(reward: Dictionary) -> String:
+	var tier: String = _pdef.get("tier", "personal")
 	match reward.get("type", ""):
 		"modifier":
 			var key: String = reward.get("modifier_key", "")
 			var val: float = float(reward.get("modifier_value", 1.0))
-			return _modifier_description(key, val)
+			var desc: String = _modifier_description(key, val)
+			if tier == "persistent":
+				return "permanent: " + desc
+			return desc
 		"starting_buildings":
 			var parts: Array = []
 			for bsn: String in reward.get("buildings", {}):
-				parts.append("+%d %s" % [int(reward.buildings[bsn]), bsn])
-			return "Start future runs with " + ", ".join(parts)
+				parts.append("+%d %s" % [int(reward.buildings[bsn]), GameManager.get_building_display_name(bsn)])
+			return ", ".join(parts) + " at game start"
+		"unlock", "boredom_modifiers", "research_discount":
+			return reward.get("description", "")
 		"stub":
 			return reward.get("description", "Coming soon")
-	return "Unknown"
+	return ""
 
 
 func _modifier_description(key: String, value: float) -> String:

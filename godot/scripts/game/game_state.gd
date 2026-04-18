@@ -236,6 +236,19 @@ var ideology_values: Dictionary = {
 # Decremented each tick; removed when ticks reach 0.
 var overclock_states: Array = []
 
+# Dream echo system — transient, reset on retirement (new GameState is created each run)
+var dream_echoes: Array = []           # Array of {base_reduction: float, ticks_remaining: int}
+var dream_effectiveness: float = 0.25 # Reduced by boredom phase 3/4/5 events
+
+
+func get_dream_multiplier() -> float:
+	var mult: float = 1.0
+	for echo: Dictionary in dream_echoes:
+		var decay_frac: float = float(int(echo.get("ticks_remaining", 0)) + 1) / 4.0
+		var echo_mult: float = 1.0 - float(echo.get("base_reduction", 0.0)) * decay_frac
+		mult *= echo_mult
+	return maxf(mult, 0.0)
+
 # Milestones fired this run — reset on retirement.
 var triggered_milestones: Array[String] = []
 

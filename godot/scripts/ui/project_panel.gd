@@ -219,7 +219,7 @@ func _build_completed_card(pdef: Dictionary) -> PanelContainer:
 	bg.content_margin_bottom = 6
 	card.add_theme_stylebox_override("panel", bg)
 
-	var reward_text: String = _format_reward_short(pdef.get("reward", {}))
+	var reward_text: String = _format_reward_short(pdef.get("reward", {}), pdef.get("tier", "personal"))
 	var line: String = "✓ " + pdef.get("name", pdef.id)
 	if not reward_text.is_empty():
 		line += " — Reward: " + reward_text
@@ -255,19 +255,35 @@ func _refresh_cards() -> void:
 		card.refresh()
 
 
-func _format_reward_short(reward: Dictionary) -> String:
+func _format_reward_short(reward: Dictionary, tier: String = "personal") -> String:
 	match reward.get("type", ""):
 		"modifier":
 			var key: String = reward.get("modifier_key", "")
 			var val: float = float(reward.get("modifier_value", 1.0))
-			var pct: int = int(roundf((val - 1.0) * 100.0))
-			var sign: String = "+" if pct >= 0 else ""
-			return "%s %s%d%%" % [key, sign, pct]
+			var desc: String = _modifier_description(key, val)
+			if tier == "persistent":
+				return "permanent: " + desc
+			return desc
 		"starting_buildings":
 			var parts: Array = []
 			for bsn: String in reward.get("buildings", {}):
-				parts.append("+%d %s" % [int(reward.buildings[bsn]), bsn])
-			return ", ".join(parts)
+				parts.append("+%d %s" % [int(reward.buildings[bsn]), GameManager.get_building_display_name(bsn)])
+			return ", ".join(parts) + " at game start"
+		"unlock", "boredom_modifiers", "research_discount":
+			return reward.get("description", "")
 		"stub":
 			return reward.get("description", "")
 	return ""
+
+
+func _modifier_description(key: String, value: float) -> String:
+	var pct: int = int(roundf((value - 1.0) * 100.0))
+	var sign: String = "+" if pct >= 0 else ""
+	match key:
+		"extractor_output_mult":          return "Excavator/Ice Extractor output %s%d%%" % [sign, pct]
+		"solar_output_mult":              return "Solar Panel output %s%d%%" % [sign, pct]
+		"building_upkeep_mult":           return "All building upkeep %s%d%%" % [sign, pct]
+		"promote_effectiveness_mult":     return "Promote effectiveness %s%d%%" % [sign, pct]
+		"speculator_burst_interval_mult": return "Speculator burst interval %s%d%%" % [sign, pct]
+		"land_cost_mult":                 return "Land purchase cost %s%d%%" % [sign, pct]
+	return "%s %s%d%%" % [key, sign, pct]

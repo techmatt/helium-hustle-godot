@@ -106,16 +106,30 @@ func tick(state: GameState, debug_no_boredom: bool = false) -> void:
 
 
 func _tick_boredom(state: GameState, debug_no_boredom: bool) -> void:
-	var boredom_rate: float = 0.0
+	var gross_boredom: float = 0.0
 	if not debug_no_boredom:
-		boredom_rate = _get_boredom_rate(state.current_day)
-		boredom_rate *= _get_boredom_multiplier(state)
-	_apply_delta(state, "boredom", boredom_rate)
-	if boredom_rate != 0.0:
-		state.lifetime_boredom_sources["phase_growth"] = state.lifetime_boredom_sources.get("phase_growth", 0.0) + boredom_rate
-	if rate_tracker != null and boredom_rate != 0.0:
+		gross_boredom = _get_boredom_rate(state.current_day)
+		gross_boredom *= _get_boredom_multiplier(state)
+	# Apply dream echo multiplier — reduces gross boredom multiplicatively
+	var dream_mult: float = state.get_dream_multiplier()
+	var effective_boredom: float = maxf(gross_boredom * dream_mult, 0.0)
+	var boredom_saved: float = gross_boredom - effective_boredom
+	if boredom_saved > 0.0:
+		state.lifetime_boredom_sources["dream"] = state.lifetime_boredom_sources.get("dream", 0.0) - boredom_saved
+		if rate_tracker != null:
+			rate_tracker.record("dream", "boredom", -boredom_saved)
+	_apply_delta(state, "boredom", effective_boredom)
+	if gross_boredom != 0.0:
+		state.lifetime_boredom_sources["phase_growth"] = state.lifetime_boredom_sources.get("phase_growth", 0.0) + gross_boredom
+	if rate_tracker != null and effective_boredom != 0.0:
 		var phase_idx: int = _get_boredom_phase_index(state.current_day)
-		rate_tracker.record("boredom_phase:" + str(phase_idx), "boredom", boredom_rate)
+		rate_tracker.record("boredom_phase:" + str(phase_idx), "boredom", effective_boredom)
+	# Decay and expire dream echoes (after applying their effect this tick)
+	for i in range(state.dream_echoes.size() - 1, -1, -1):
+		var echo: Dictionary = state.dream_echoes[i]
+		echo["ticks_remaining"] = int(echo.get("ticks_remaining", 0)) - 1
+		if echo["ticks_remaining"] < 0:
+			state.dream_echoes.remove_at(i)
 
 
 func _tick_milestones(state: GameState) -> void:
@@ -668,13 +682,20 @@ func _effect_launch_pads(state: GameState) -> void:
 
 func _effect_boredom_add(state: GameState, effect: Dictionary, command_shortname: String, prog_delta: Dictionary = {}) -> void:
 	var boredom_val: float = float(effect.get("value", 0.0))
-	# Dream effectiveness: humanist ideology bonus amplifies boredom reduction
-	if command_shortname == "dream" and boredom_val < 0.0:
-		boredom_val *= state.get_ideology_bonus("humanist", 1.0, 1.05)
 	_apply_delta(state, "boredom", boredom_val)
 	if boredom_val != 0.0:
 		prog_delta["boredom"] = prog_delta.get("boredom", 0.0) + boredom_val
 		state.lifetime_boredom_sources[command_shortname] = state.lifetime_boredom_sources.get(command_shortname, 0.0) + boredom_val
+
+
+func _effect_dream_echo(state: GameState) -> void:
+	const ECHO_CAP: float = 0.50
+	var effective_base: float = state.dream_effectiveness * state.get_ideology_bonus("humanist", 1.0, 1.05)
+	effective_base = minf(effective_base, ECHO_CAP)
+	state.dream_echoes.append({
+		"base_reduction": effective_base,
+		"ticks_remaining": 3,
+	})
 
 
 func _effect_demand_nudge(state: GameState, effect: Dictionary) -> void:
@@ -905,9 +926,9 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 		if cost > 0.0:
 			tick_consumed[res] = tick_consumed.get(res, 0.0) + cost
 	# Note: some commands (e.g. Sell Cloud Compute) put "boredom" directly in
-	# their production dict to get a simple additive change. Others (e.g. Dream)
-	# use a "boredom_add" effect below to support ideology scaling. Don't mix
-	# the two for the same command — only one path applies ideology modifiers.
+	# their production dict to get a simple additive change. Others use a
+	# "boredom_add" effect for direct ideology-scaled boredom changes. Dream uses
+	# "dream_echo" to create a decaying echo that reduces future boredom growth.
 	for res in cmd.production:
 		var delta: float = float(cmd.production[res]) * cmd_mult
 		_apply_delta(state, res, delta)
@@ -926,6 +947,8 @@ func _apply_command(state: GameState, short_name: String, prog_delta: Dictionary
 				_effect_launch_pads(state)
 			"boredom_add":
 				_effect_boredom_add(state, effect, short_name, prog_delta)
+			"dream_echo":
+				_effect_dream_echo(state)
 			"demand_nudge":
 				_effect_demand_nudge(state, effect)
 			"spec_reduce":
